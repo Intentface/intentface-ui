@@ -39,8 +39,8 @@ import {
 import { interpretAskUserKey } from "./keyboard";
 import type {
   AskUserQuestion,
-  ComposerAnswerEntry,
   ComposerEditorHandle,
+  ComposerSubmitData,
   RegisteredEditor,
 } from "./types";
 
@@ -166,6 +166,13 @@ export type ComposerStore = {
   // Clears `present` on native panel slices whose `active` is false — the Panel calls
   // this once its close animation finishes, so closing content stays mounted until then.
   finalizePanelClose: () => void;
+  /**
+   * Sends the composer: advances the question step while questions are open,
+   * otherwise delivers the message through the mounted Root's onSubmit and
+   * clears the editor and attachments. Enter, Composer.Submit, and
+   * AskUser.Continue all send through it.
+   */
+  submit: () => Promise<void>;
   reset: () => void;
   // The store's editor engine: registered by the mounted Textarea as a
   // RegisteredEditor adapter, driven through the controller (a null-safe port
@@ -180,7 +187,7 @@ export type ComposerStore = {
   containerRef: RefObject<HTMLElement | null>;
   // Co-located refs the mounted Composer wires up at runtime.
   attachmentConfigRef: RefObject<AttachmentStoreConfig>;
-  submitAnswersRef: RefObject<((answers: ComposerAnswerEntry[]) => void) | null>;
+  onSubmitRef: RefObject<((data: ComposerSubmitData) => void | Promise<void>) | null>;
   // The mounted Submit's stop while generating; Composer.Root calls it on Escape.
   stopGeneratingRef: RefObject<(() => void) | null>;
   // Invokes the active list's current selection. Registered by the mounted
@@ -318,7 +325,7 @@ export const createComposerStore = (): ComposerStore => {
       destroy: revokeAttachmentUrl,
     },
   };
-  const submitAnswersRef: RefObject<((answers: ComposerAnswerEntry[]) => void) | null> = {
+  const onSubmitRef: RefObject<((data: ComposerSubmitData) => void | Promise<void>) | null> = {
     current: null,
   };
   const commandSelectRef: RefObject<(() => void) | null> = { current: null };
@@ -442,7 +449,7 @@ export const createComposerStore = (): ComposerStore => {
           optionsRef.current?.resetHighlight();
           break;
         case "submit-answers":
-          submitAnswersRef.current?.(effect.answers);
+          onSubmitRef.current?.({ kind: "answers", answers: effect.answers });
           break;
       }
     }
@@ -555,6 +562,36 @@ export const createComposerStore = (): ComposerStore => {
     },
   };
 
+  const submit = async () => {
+    const { askUser, attachments, isSubmitting } = snapshot;
+
+    if (askUser.questions?.length) {
+      askUser.continueStep(controller.getText());
+      return;
+    }
+
+    if (isSubmitting) return;
+
+    const serialized = controller.serialize();
+    const trimmedText = serialized.text.trim();
+    if (!trimmedText && !attachments.items.length) return;
+
+    // Emit the generic attachment descriptors; the consumer's onSubmit adapts
+    // them to its wire format (e.g. FilePart via prepareAttachmentsForSend).
+    // Text may be empty on an attachments-only submit — any placeholder copy
+    // is the consumer's.
+    const files = attachments.items;
+
+    dispatchAttachments({ type: "reset" });
+    controller.clear();
+
+    await onSubmitRef.current?.({
+      kind: "message",
+      text: trimmedText,
+      files,
+    });
+  };
+
   // Pristine state for reset() — slice actions and refs are reused, so action
   // identities stay stable across resets.
   const initialSnapshot = snapshot;
@@ -606,13 +643,14 @@ export const createComposerStore = (): ComposerStore => {
     resetAttachments: () => dispatchAttachments({ type: "reset" }),
     activateAskUser,
     finalizePanelClose,
+    submit,
     reset,
     editorRef,
     controller,
     registerEditor,
     containerRef,
     attachmentConfigRef,
-    submitAnswersRef,
+    onSubmitRef,
     stopGeneratingRef,
     commandSelectRef,
   };

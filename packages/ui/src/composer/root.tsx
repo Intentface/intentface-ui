@@ -1,9 +1,10 @@
 "use client";
 
-// Composer.Root — the form element that owns the submit flow, prop→store
-// bridges, drag-drop scope, and the per-instance store resolution: an explicit
-// Composer.createStore() handle via the store prop, or an instance created for
-// this mount. Every bare <Composer> is fully isolated.
+// Composer.Root — the div that owns the prop→store bridges, drag-drop scope,
+// and the per-instance store resolution: an explicit Composer.createStore()
+// handle via the store prop, or an instance created for this mount. Every bare
+// <Composer> is fully isolated. It is not a form, so it can sit inside a
+// consumer's own; render={<form />} makes it one.
 
 import { useEffect, useId, useMemo, useRef, useSyncExternalStore } from "react";
 import type { PrimitiveProps } from "../internal/primitive-props";
@@ -34,7 +35,7 @@ export type ComposerRootState = {
   dragging: boolean;
 };
 
-export type ComposerRootProps = Omit<PrimitiveProps<"form", ComposerRootState>, "onSubmit"> & {
+export type ComposerRootProps = Omit<PrimitiveProps<"div", ComposerRootState>, "onSubmit"> & {
   onSubmit?: (data: ComposerSubmitData) => void | Promise<void>;
   isSubmitting?: boolean;
   commands?: ComposerCommandsMap;
@@ -74,21 +75,19 @@ export const ComposerRoot = ({
     return { store: resolved, ownsStore: !storeProp };
   }).current;
 
-  const formRef = useRef<HTMLFormElement | null>(null);
+  const rootRef = useRef<HTMLElement | null>(null);
 
   const onSubmitRef = useAsRef(onSubmit);
 
-  // Register this mount on the store: answers submit through this mount's
-  // onSubmit. React also runs the cleanup without a real unmount (StrictMode,
-  // a hidden <Activity>), where the state lives on, so it only resets an owned
-  // store once React has removed the form — that happens on a real unmount only.
+  // React also runs this cleanup without a real unmount (StrictMode, a hidden
+  // <Activity>), where the state lives on, so it only resets an owned store
+  // once React has removed the root — that happens on a real unmount only.
   useEffect(() => {
-    const form = formRef.current;
-    store.submitAnswersRef.current = (answers) =>
-      onSubmitRef.current?.({ kind: "answers", answers });
+    const root = rootRef.current;
+    store.onSubmitRef.current = (data) => onSubmitRef.current?.(data);
     return () => {
-      store.submitAnswersRef.current = null;
-      if (ownsStore && form && !form.isConnected) store.reset();
+      store.onSubmitRef.current = null;
+      if (ownsStore && root && !root.isConnected) store.reset();
     };
   }, [store, ownsStore]);
 
@@ -116,7 +115,7 @@ export const ComposerRoot = ({
   const { getRegisteredPrefixes } = useCommandRegistry(commands);
 
   useDragDropFiles({
-    rootRef: formRef,
+    rootRef,
     globalDropRef,
     onFiles: addAttachments,
     setDragging: store.setDragging,
@@ -129,40 +128,16 @@ export const ComposerRoot = ({
     onValueChange,
   });
 
-  const handleFormSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
+  const handleFormSubmit = (event: React.SubmitEvent<HTMLElement>) => {
+    const isFromNestedForm = event.target !== event.currentTarget;
+    if (isFromNestedForm) return;
     event.preventDefault();
-    const { askUser, attachments } = store.getSnapshot();
-
-    if (askUser.questions?.length) {
-      askUser.continueStep(store.controller.getText());
-      return;
-    }
-
-    if (isSubmitting) return;
-
-    const serialized = store.controller.serialize();
-    const trimmedText = serialized.text.trim();
-    if (!trimmedText && !attachments.items.length) return;
-
-    // Emit the generic attachment descriptors; the consumer's onSubmit adapts
-    // them to its wire format (e.g. FilePart via prepareAttachmentsForSend).
-    // Text may be empty on an attachments-only submit — any placeholder copy
-    // is the consumer's.
-    const files = attachments.items;
-
-    store.resetAttachments();
-    store.controller.clear();
-
-    await onSubmitRef.current?.({
-      kind: "message",
-      text: trimmedText,
-      files,
-    });
+    void store.submit();
   };
 
   // Escape stops generating. React bubbles keys from portaled parts (a positioned
   // Panel) here too; a consumer's onKeyDown can skip it with preventPrimitiveHandler().
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     const stopGenerating = store.stopGeneratingRef.current;
     if (event.key !== "Escape" || event.defaultPrevented || !stopGenerating) return;
     // While a question is open, Escape dismisses its step instead.
@@ -180,12 +155,12 @@ export const ComposerRoot = ({
     [commands, getRegisteredPrefixes, reportEditorUpdate],
   );
 
-  const formElement = useRenderElement(
-    "form",
+  const rootElement = useRenderElement(
+    "div",
     { className, render, style },
     {
       state: { submitting: isSubmitting, dragging: isDragging },
-      ref: formRef,
+      ref: rootRef,
       props: [
         { "data-composer-root": "", onSubmit: handleFormSubmit, onKeyDown: handleKeyDown },
         elementProps,
@@ -195,7 +170,7 @@ export const ComposerRoot = ({
 
   return (
     <ComposerStoreContext value={store}>
-      <ComposerInternalsContext value={internalsValue}>{formElement}</ComposerInternalsContext>
+      <ComposerInternalsContext value={internalsValue}>{rootElement}</ComposerInternalsContext>
     </ComposerStoreContext>
   );
 };
