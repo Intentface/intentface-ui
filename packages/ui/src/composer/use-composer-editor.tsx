@@ -773,7 +773,10 @@ export const useComposerEditor = (options: UseComposerEditorOptions): UseCompose
     },
     onKeyDown: (event) => {
       dependenciesRef.current.options.onKeyDown?.(event);
-      if (!event.defaultPrevented) engine.handleKeyDown(event.nativeEvent);
+      if (event.defaultPrevented) return;
+      engine.handleKeyDown(event.nativeEvent);
+      const isHandledByEngine = event.nativeEvent.defaultPrevented;
+      if (isHandledByEngine) event.preventDefault();
     },
     onKeyUp: (event) => {
       dependenciesRef.current.options.onKeyUp?.(event);
