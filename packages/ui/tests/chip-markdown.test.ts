@@ -51,6 +51,20 @@ describe("encodeChipMarkdown / parseChipSegments round trip", () => {
     expect(segments[0]).toMatchObject({ type: "chip", value: "a & b? 100%" });
   });
 
+  test.each([
+    ["brackets", "Q3 [draft].md"],
+    ["parentheses", "Notes (final).md"],
+    ["a backslash", "back\\slash"],
+    ["a trailing backslash", "C:\\dir\\"],
+  ])("labels with %s survive the round trip", (_name, label) => {
+    const token = encodeChipMarkdown({ prefix: "@", value: "file:fid_abc", label });
+    expect(parseChipSegments(`see ${token} here`)).toEqual([
+      { type: "text", text: "see " },
+      { type: "chip", label, prefix: "@", value: "file:fid_abc" },
+      { type: "text", text: " here" },
+    ]);
+  });
+
   test("legacy un-encoded values do not throw", () => {
     const segments = parseChipSegments("[label](chip:file:100%raw)");
     expect(segments[0]).toMatchObject({ type: "chip", value: "100%raw" });
@@ -89,6 +103,20 @@ describe("encodeChipMarkdown / parseChipSegments round trip", () => {
     const elapsed = performance.now() - started;
 
     expect(segments.every((segment) => segment.type === "text")).toBe(true);
+    expect(elapsed).toBeLessThan(100);
+  });
+
+  // The third: an escaped "[" belongs to its label, so retrying each one as a
+  // token start re-reads the rest of the run. ~1.5s at 40k with a pattern that
+  // requires the chip tail.
+  test("a run of escaped brackets does not blow up (ReDoS regression)", () => {
+    const started = performance.now();
+    const segments = parseChipSegments(`[${"\\[".repeat(100_000)} [ada](chip:user:ada)`);
+    const elapsed = performance.now() - started;
+
+    expect(segments.filter((s) => s.type === "chip")).toEqual([
+      { type: "chip", label: "ada", prefix: "user", value: "ada" },
+    ]);
     expect(elapsed).toBeLessThan(100);
   });
 });
