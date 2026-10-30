@@ -175,6 +175,12 @@ export const ComposerRoot = ({
     stopGenerating();
   };
 
+  // React bubbles focus from portaled parts (a positioned Panel) here too, so
+  // the store can tell a focused part of this composer from the rest of the page.
+  const handleFocus = (event: React.FocusEvent<HTMLFormElement>) => {
+    store.lastFocusedPartRef.current = event.target;
+  };
+
   const internalsValue = useMemo<ComposerInternalsValue>(
     () => ({
       commands,
@@ -191,7 +197,12 @@ export const ComposerRoot = ({
       state: { submitting: isSubmitting, dragging: isDragging },
       ref: formRef,
       props: [
-        { "data-composer-root": "", onSubmit: handleFormSubmit, onKeyDown: handleKeyDown },
+        {
+          "data-composer-root": "",
+          onSubmit: handleFormSubmit,
+          onKeyDown: handleKeyDown,
+          onFocus: handleFocus,
+        },
         elementProps,
       ],
     },

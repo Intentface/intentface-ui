@@ -557,3 +557,64 @@ describe("Continue", () => {
     expect(store.controller.getText()).toBe("my unfinished draft");
   });
 });
+
+describe("ending a flow", () => {
+  const elsewhere = {
+    "another composer": (store: ComposerStore) => (
+      <Composer.Root store={store}>
+        <Composer.Textarea aria-label="Elsewhere" />
+      </Composer.Root>
+    ),
+    "an input": () => <input aria-label="Elsewhere" />,
+    "a button outside the composer": () => <button type="button" aria-label="Elsewhere" />,
+  };
+
+  test.each(Object.entries(elsewhere))(
+    "leaves focus in %s when the host removes questions, and brings the message back",
+    async (_, renderElsewhere) => {
+      const store = Composer.createStore();
+      const other = Composer.createStore();
+      const Page = ({ questions }: { questions?: ComposerQuestion[] }) => (
+        <>
+          <Harness store={store} questions={questions} />
+          {renderElsewhere(other)}
+        </>
+      );
+      const { rerender } = render(<Page />);
+      type(store, "a message");
+      rerender(<Page questions={TWO} />);
+      await flushFrames();
+
+      const target = screen.getByLabelText("Elsewhere");
+      act(() => target.focus());
+      rerender(<Page />);
+
+      expect(document.activeElement).toBe(target);
+      expect(store.controller.getText()).toBe("a message");
+    },
+  );
+
+  test("returns the caret from a part of the composer in a positioned panel", async () => {
+    const store = Composer.createStore();
+    const { submitted, onSubmit } = collect();
+    render(
+      <Composer.Root store={store} questions={TWO.slice(0, 1)} onSubmit={onSubmit}>
+        <Composer.Panel>
+          <Prompt />
+        </Composer.Panel>
+        <Composer.Container>
+          <Composer.Textarea aria-label="Message" />
+        </Composer.Container>
+      </Composer.Root>,
+    );
+    await flushFrames();
+    const continueButton = screen.getByRole("button", { name: "Continue" });
+    expect(continueButton.closest("[data-composer-root]")).toBeNull();
+
+    act(() => continueButton.focus());
+    click(continueButton);
+
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
+    expect(document.activeElement).toBe(editor());
+  });
+});

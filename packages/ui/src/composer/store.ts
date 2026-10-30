@@ -207,6 +207,9 @@ export type ComposerStore = {
   // Invokes the active list's current selection. Registered by the mounted
   // CommandList via a callback ref (commit-time), not an effect.
   commandSelectRef: RefObject<(() => void) | null>;
+  // The element in this composer's React tree, portaled parts included, that
+  // last took focus. Composer.Root records it.
+  lastFocusedPartRef: RefObject<Element | null>;
 };
 
 // ---------------------------------------------------------------------------
@@ -242,18 +245,27 @@ const isEventForComposer = (
 };
 
 // Where focus sits when the question flow is about to move it: this
-// composer's editor, another field the user is typing in, or anything else.
-type FocusOwner = "editor" | "field" | "other";
+// composer's editor, another field the user is typing in, another part of
+// this composer, or elsewhere on the page. The page body counts as the
+// composer's: focus drops there when the focused option goes away.
+type FocusOwner = "editor" | "field" | "composer" | "page";
 
 const isEditableElement = (element: Element) =>
   element instanceof HTMLElement &&
   (element.isContentEditable || element.matches("input, textarea, select"));
 
-const getFocusOwner = (editorDom: HTMLElement | null): FocusOwner => {
+const getFocusOwner = ({
+  editorDom,
+  lastFocusedPart,
+}: {
+  editorDom: HTMLElement | null;
+  lastFocusedPart: Element | null;
+}): FocusOwner => {
   const active = document.activeElement;
-  if (active === null) return "other";
+  if (active === null || active === document.body) return "composer";
   if (active === editorDom) return "editor";
-  return isEditableElement(active) ? "field" : "other";
+  if (isEditableElement(active)) return "field";
+  return active === lastFocusedPart ? "composer" : "page";
 };
 
 // The editor's content with its plain text, captured in one read so the text
@@ -363,6 +375,7 @@ export const createComposerStore = (): ComposerStore => {
   };
   const commandSelectRef: RefObject<(() => void) | null> = { current: null };
   const stopGeneratingRef: RefObject<(() => void) | null> = { current: null };
+  const lastFocusedPartRef: RefObject<Element | null> = { current: null };
 
   // Canonical machine states; the snapshot mirrors them on every update.
   let attachmentState = INITIAL_ATTACHMENT_STATE;
@@ -478,6 +491,12 @@ export const createComposerStore = (): ComposerStore => {
     };
   };
 
+  const readFocusOwner = () =>
+    getFocusOwner({
+      editorDom: editorRef.current?.getRootElement() ?? null,
+      lastFocusedPart: lastFocusedPartRef.current,
+    });
+
   // The Options part renders in reaction to setQuestions' notify, one commit
   // after the swap, so the entry focus defers a frame.
   let entryFocusFrame = 0;
@@ -499,22 +518,23 @@ export const createComposerStore = (): ComposerStore => {
     // an early ArrowDown already moved to.
     cancelAnimationFrame(entryFocusFrame);
     entryFocusFrame = requestAnimationFrame(() => {
-      const owner = getFocusOwner(editorRef.current?.getRootElement() ?? null);
+      const owner = readFocusOwner();
       if (owner === "editor") optionsRef.current?.clearHighlight();
-      if (owner === "other") optionsRef.current?.focusHighlighted();
+      if (owner === "composer" || owner === "page") optionsRef.current?.focusHighlighted();
     });
   };
 
-  // questions → message: show the parked message again and hand it the caret.
-  // Idempotent, so a host that clears `questions` after the answers went out
-  // does not restore twice.
+  // questions → message: show the parked message again, and hand it the caret
+  // while the user is still in this composer. Idempotent, so a host that
+  // clears `questions` after the answers went out does not restore twice.
   const endQuestions = () => {
     if (mode.kind !== "questions") return;
     cancelAnimationFrame(entryFocusFrame);
+    const owner = readFocusOwner();
     const { savedMessage } = mode;
     mode = { kind: "message" };
     loadEditorSnapshot(savedMessage);
-    controller.focus(FOCUS_IN_PLACE);
+    if (owner === "editor" || owner === "composer") controller.focus(FOCUS_IN_PLACE);
   };
 
   const setMessageSnapshot = (snapshot: ComposerSnapshot) => {
@@ -724,6 +744,7 @@ export const createComposerStore = (): ComposerStore => {
     submitAnswersRef,
     stopGeneratingRef,
     commandSelectRef,
+    lastFocusedPartRef,
   };
 };
 
