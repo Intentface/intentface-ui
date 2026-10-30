@@ -51,7 +51,7 @@ import {
   segmentsFromChipSegments,
   segmentsFromParagraphJSON,
   segmentsFromText,
-  segmentsToParagraphJSON,
+  segmentsToSnapshot,
   serializeSegments,
   sliceSegments,
   spliceSegments,
@@ -62,7 +62,7 @@ import {
 } from "./segments";
 import { type ComposerStore, useComposer, useComposerContextStore } from "./store";
 import { closeActiveToken, trackActiveToken } from "./trigger-tracker";
-import type { ComposerSnapshot, RegisteredEditor } from "./types";
+import type { RegisteredEditor } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -148,6 +148,8 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     for (const listener of listeners) listener();
   };
 
+  const isFocused = () => root !== null && root.ownerDocument.activeElement === root;
+
   // --- Commit — the single funnel every state change flows through: tracker,
   // badge, store mirrors, value callbacks, version bump.
 
@@ -205,7 +207,8 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
   };
 
   // Make the badge span match the tracker state; a DOM change moves the
-  // selection, so the logical caret is rewritten afterwards. Never during
+  // selection, so the logical caret is rewritten afterwards, while the
+  // selection is the editor's to move (see applyDocument). Never during
   // composition — reparenting the composition's text node aborts the IME
   // session.
   const syncBadgeAndCaret = () => {
@@ -220,7 +223,7 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
           }
         : null,
     );
-    if (changed) writeCaretToDom(root, caret.start, caret.end);
+    if (changed && isFocused()) writeCaretToDom(root, caret.start, caret.end);
   };
 
   const mirrorCommandState = () => {
@@ -234,7 +237,17 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
   // --- Programmatic pipeline — every model-initiated edit renders the
   // canonical DOM, restores the caret, and commits.
 
-  const applyDocument = (nextDoc: SegmentDoc, caretPosition: number, change: TextChange | null) => {
+  // A load shows a saved buffer rather than editing at the caret. Into an
+  // editor without focus it leaves the DOM selection where it is: Blink and
+  // WebKit move focus into a contenteditable whose selection is written, which
+  // would pull focus out of whatever field the user is typing in.
+  const applyDocument = (
+    nextDoc: SegmentDoc,
+    caretPosition: number,
+    change: TextChange | null,
+    { isLoad = false }: { isLoad?: boolean } = {},
+  ) => {
+    const movesSelection = !isLoad || isFocused();
     // The registry must know new chips before the next DOM read resolves them.
     chipRegistry = new Map(
       nextDoc.flatMap((segment) =>
@@ -243,10 +256,10 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     );
     if (root) {
       chipElements = renderDocumentToDom(root, nextDoc);
-      writeCaretToDom(root, caretPosition);
+      if (movesSelection) writeCaretToDom(root, caretPosition);
     }
     commit(nextDoc, { start: caretPosition, end: caretPosition }, change, true);
-    if (root) scrollCaretIntoView(root);
+    if (root && movesSelection) scrollCaretIntoView(root);
   };
 
   const spliceAndApply = (from: number, to: number, insert: SegmentDoc) => {
@@ -621,22 +634,19 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     getText: () => getPlainText(doc),
     setText: setTextContent,
     serialize: () => serializeSegments(doc),
-    isFocused: () => root !== null && root.ownerDocument.activeElement === root,
+    isFocused,
     getRootElement: () => root,
-    getSnapshot: () =>
-      ({
-        __doc: { type: "doc", content: segmentsToParagraphJSON(doc) },
-        __brand: "ComposerSnapshot",
-      }) as ComposerSnapshot,
+    getSnapshot: () => segmentsToSnapshot(doc),
     applySnapshot: (snapshot) => {
       const snapshotDoc = snapshot.__doc as { content?: SnapshotParagraphNode[] };
       const nextDoc = segmentsFromParagraphJSON(snapshotDoc.content ?? []);
       const previousLength = documentLength(doc);
-      applyDocument(nextDoc, documentLength(nextDoc), {
-        rangeStart: 0,
-        rangeEnd: previousLength,
-        insertedLength: documentLength(nextDoc),
-      });
+      applyDocument(
+        nextDoc,
+        documentLength(nextDoc),
+        { rangeStart: 0, rangeEnd: previousLength, insertedLength: documentLength(nextDoc) },
+        { isLoad: true },
+      );
     },
     // Replace the active trigger token with the chip, plus a trailing space
     // so the user can keep typing — unless one already follows.

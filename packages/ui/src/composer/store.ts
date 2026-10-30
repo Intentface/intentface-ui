@@ -38,6 +38,7 @@ import {
   type QuestionsEffect,
   transitionQuestions,
 } from "./question-machine";
+import { segmentsToSnapshot } from "./segments";
 import type {
   ComposerAnswer,
   ComposerEditorHandle,
@@ -217,6 +218,8 @@ export type ComposerStore = {
 // an option. The composer is on screen already, and the browser's
 // focus-scroll would also move the page around an embedded composer.
 const FOCUS_IN_PLACE: FocusOptions = { preventScroll: true };
+
+const EMPTY_BUFFER = segmentsToSnapshot([]);
 
 // Scope a document-level listener to this composer: keystrokes aimed at
 // another editable or inside another composer's options are theirs; our own
@@ -438,12 +441,12 @@ export const createComposerStore = (): ComposerStore => {
   };
 
   // --- Editor buffers
-  // Show a buffer in the editor; null shows an empty one. Input-content state
-  // is the editor engine's own job: engines report programmatic writes
-  // through their update path.
+  // Show a buffer in the editor; null shows an empty one. A load never moves
+  // focus, so whoever needs the caret afterwards focuses the editor itself.
+  // Input-content state is the editor engine's own job: engines report
+  // programmatic writes through their update path.
   const loadEditorSnapshot = (snapshot: ComposerSnapshot | null) => {
-    if (snapshot) editorRef.current?.applySnapshot(snapshot);
-    else controller.clear();
+    editorRef.current?.applySnapshot(snapshot ?? EMPTY_BUFFER);
   };
 
   // An editor that mounts mid-flow (a remount with an explicit store) shows

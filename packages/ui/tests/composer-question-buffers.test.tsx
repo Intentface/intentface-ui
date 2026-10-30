@@ -436,6 +436,39 @@ describe("a controlled composer", () => {
     expect(store.controller.getText()).toBe("first");
     expect(reported.length).toBeGreaterThan(reportsBeforeSteps);
   });
+
+  // Blink and WebKit move focus to wherever the DOM selection is written, so a
+  // load that wrote it would also take focus from the other field.
+  test("loads a new value without moving the caret out of another field", () => {
+    const store = Composer.createStore();
+    const other = Composer.createStore();
+    let saved: ComposerSnapshot | undefined;
+    const Page = ({ value }: { value?: ComposerSnapshot }) => (
+      <>
+        <Composer.Root store={store} value={value}>
+          <Composer.Textarea aria-label="Message" />
+        </Composer.Root>
+        <Composer.Root
+          store={other}
+          onValueChange={(snapshot) => {
+            saved = snapshot;
+          }}
+        >
+          <Composer.Textarea aria-label="Other" />
+        </Composer.Root>
+      </>
+    );
+    const { rerender } = render(<Page />);
+    const otherEditor = screen.getByRole("textbox", { name: "Other" });
+    act(() => otherEditor.focus());
+    type(other, "typing here");
+    if (!saved) throw new Error("typing reported no snapshot");
+
+    rerender(<Page value={saved} />);
+
+    expect(store.controller.getText()).toBe("typing here");
+    expect(otherEditor.contains(document.getSelection()?.anchorNode ?? null)).toBe(true);
+  });
 });
 
 describe("Continue", () => {
