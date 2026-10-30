@@ -6,6 +6,7 @@
 // this mount. Every bare <Composer> is fully isolated.
 
 import { useEffect, useId, useMemo, useRef, useSyncExternalStore } from "react";
+import { isComposingKey } from "../internal/is-composing-key";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRefWithInit } from "../internal/render/useRefWithInit";
 import { useRenderElement } from "../internal/render/useRenderElement";
@@ -160,15 +161,28 @@ export const ComposerRoot = ({
     });
   };
 
-  // Escape stops generating. React bubbles keys from portaled parts (a positioned
-  // Panel) here too; a consumer's onKeyDown can skip it with preventPrimitiveHandler().
+  // React bubbles keys from portaled parts (a positioned Panel) here too; a
+  // consumer's onKeyDown can skip it with preventPrimitiveHandler().
   const handleKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
     const stopGenerating = store.stopGeneratingRef.current;
-    if (event.key !== "Escape" || event.defaultPrevented || !stopGenerating) return;
-    // While a question is open, Escape dismisses its step instead.
-    if (store.getSnapshot().askUser.questions?.length) return;
-    event.preventDefault();
-    stopGenerating();
+    if (event.key !== "Escape" || isComposingKey(event.nativeEvent)) return;
+    if (!event.defaultPrevented) {
+      const { askUser } = store.getSnapshot();
+      if (askUser.questions?.length) {
+        event.preventDefault();
+        askUser.dismissStep();
+      } else if (stopGenerating) {
+        event.preventDefault();
+        stopGenerating();
+      }
+    }
+    // Popups from other libraries close on any Escape that reaches them, handled or not.
+    // Their document listener can share React's target, as when Next.js hydrates the
+    // document, and only stopImmediatePropagation skips a listener on the same target.
+    if (event.defaultPrevented) {
+      event.stopPropagation();
+      event.nativeEvent.stopImmediatePropagation();
+    }
   };
 
   const internalsValue = useMemo<ComposerInternalsValue>(
