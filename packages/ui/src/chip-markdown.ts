@@ -17,13 +17,6 @@ const LABEL = String.raw`((?:\\[\s\S]|[^\\[\]])+)`;
 // one — without that this backtracks quadratically, and message text is untrusted.
 const TAIL = String.raw`\]\(chip:([^[:)]+):([^[)?]+)(?:\?([^[)]*))?\)`;
 
-/**
- * Matches one chip token. Scan text with `parseChipSegments` rather than with
- * this: on its own it retries every escaped "[" inside a label as a token start,
- * which is quadratic.
- */
-export const CHIP_REF_PATTERN = new RegExp(String.raw`\[${LABEL}${TAIL}`, "g");
-
 // Consumes a "[" and its label whether or not a token follows, so the scan
 // resumes after the label instead of retrying the escaped "[" inside it. A
 // match without the tail is plain text.

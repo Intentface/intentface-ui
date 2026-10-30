@@ -107,8 +107,8 @@ describe("encodeChipMarkdown / parseChipSegments round trip", () => {
   });
 
   // The third: an escaped "[" belongs to its label, so retrying each one as a
-  // token start re-reads the rest of the run. ~1.5s at 40k when scanning with
-  // CHIP_REF_PATTERN alone.
+  // token start re-reads the rest of the run. ~1.5s at 40k with a pattern that
+  // requires the chip tail.
   test("a run of escaped brackets does not blow up (ReDoS regression)", () => {
     const started = performance.now();
     const segments = parseChipSegments(`[${"\\[".repeat(100_000)} [ada](chip:user:ada)`);
