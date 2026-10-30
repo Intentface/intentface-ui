@@ -15,19 +15,16 @@ export type LastChildReserve = {
 export const createLastChildReserve = (content: HTMLElement): LastChildReserve => {
   let reserved: HTMLElement | null = null;
 
-  const warnIfNotTurns = () => {
-    const children = Array.from(content.children).filter(
-      (child) => !child.matches(PLACEHOLDER_SELECTOR),
-    );
-    if (children.length === 0 || children.some(isTurn)) return;
+  const warnIfNotTurn = (last: Element | null) => {
+    if (!last || last.matches(PLACEHOLDER_SELECTOR) || isTurn(last)) return;
     warnOnce(
-      "Thread.Content reserves space on its last child so the newest turn can land at the top, but none of its children is a Message.Turn. Wrap each question and its reply in Message.Turn, or the reserve lands on the last message alone.",
+      "Thread.Content reserves space on its last child so the newest turn can land at the top, but its last child isn't a Message.Turn. Wrap each question and its reply in Message.Turn, and render nothing after the last turn.",
     );
   };
 
   const sync = () => {
-    if (process.env.NODE_ENV !== "production") warnIfNotTurns();
     const last = content.lastElementChild;
+    if (process.env.NODE_ENV !== "production") warnIfNotTurn(last);
     if (last === reserved) return;
     reserved?.style.removeProperty("min-height");
     reserved = last instanceof HTMLElement ? last : null;

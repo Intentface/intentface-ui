@@ -135,6 +135,7 @@ The package emits only behavior-critical inline styles (`position`, `overflow`, 
 .chat { height: 100%; }
 .chat-viewport { height: 100%; }
 .chat-pad {
+  box-sizing: border-box;
   min-height: 100%;
   padding-top: 24px; /* the landing gap */
   padding-bottom: var(--thread-dock-inset, 128px);
@@ -143,6 +144,10 @@ The package emits only behavior-critical inline styles (`position`, `overflow`, 
 ```
 
 ```tsx
+import { Message } from "@intentface/ui/message";
+import { groupTurns } from "@intentface/ui/message-utils";
+import { Thread } from "@intentface/ui/thread";
+
 <Thread.Root className="chat">
   <Thread.Viewport className="chat-viewport">
     <div className="chat-pad">
