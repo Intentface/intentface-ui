@@ -6,7 +6,7 @@
 // <Composer> is fully isolated. It is not a form, so it can sit inside a
 // consumer's own; render={<form />} makes it one.
 
-import { useEffect, useId, useMemo, useRef, useSyncExternalStore } from "react";
+import { useEffect, useId, useMemo, useSyncExternalStore } from "react";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRefWithInit } from "../internal/render/useRefWithInit";
 import { useRenderElement } from "../internal/render/useRenderElement";
@@ -75,7 +75,7 @@ export const ComposerRoot = ({
     return { store: resolved, ownsStore: !storeProp };
   }).current;
 
-  const rootRef = useRef<HTMLElement | null>(null);
+  const { rootRef } = store;
 
   const onSubmitRef = useAsRef(onSubmit);
 
@@ -83,7 +83,7 @@ export const ComposerRoot = ({
   // <Activity>), where the state lives on, so it only resets an owned store
   // once React has removed the root — that happens on a real unmount only.
   useEffect(() => {
-    const root = rootRef.current;
+    const root = store.rootRef.current;
     store.onSubmitRef.current = (data) => onSubmitRef.current?.(data);
     return () => {
       store.onSubmitRef.current = null;

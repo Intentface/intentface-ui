@@ -185,6 +185,8 @@ export type ComposerStore = {
   // observes this box to reposition — the badge moves when the container grows
   // (attachments strip, multi-line input).
   containerRef: RefObject<HTMLElement | null>;
+  // The mounted Composer.Root's element, a <form> when rendered as one.
+  rootRef: RefObject<HTMLElement | null>;
   // Co-located refs the mounted Composer wires up at runtime.
   attachmentConfigRef: RefObject<AttachmentStoreConfig>;
   onSubmitRef: RefObject<((data: ComposerSubmitData) => void | Promise<void>) | null>;
@@ -194,6 +196,12 @@ export type ComposerStore = {
   // CommandList via a callback ref (commit-time), not an effect.
   commandSelectRef: RefObject<(() => void) | null>;
 };
+
+// Enter and Composer.Submit send through the store, not a native submit, so a
+// <form> root runs its validation here: a required, empty Composer.Textarea
+// blocks an attachment-only send as it would a native submit.
+const isRootValid = (root: HTMLElement | null) =>
+  !(root instanceof HTMLFormElement) || root.noValidate || root.reportValidity();
 
 // ---------------------------------------------------------------------------
 // Ask-user keydown — the document-level handler for question mode, kept out of
@@ -310,6 +318,7 @@ export const createComposerStore = (): ComposerStore => {
 
   // Imperative refs co-located with the store; not reactive.
   const containerRef: RefObject<HTMLElement | null> = { current: null };
+  const rootRef: RefObject<HTMLElement | null> = { current: null };
   const optionsRef: RefObject<AskUserOptionsHandle | null> = { current: null };
   const fileInputRef: RefObject<HTMLInputElement | null> = { current: null };
   const globalDropRef: RefObject<boolean> = { current: false };
@@ -570,7 +579,7 @@ export const createComposerStore = (): ComposerStore => {
       return;
     }
 
-    if (isSubmitting) return;
+    if (isSubmitting || !isRootValid(rootRef.current)) return;
 
     const serialized = controller.serialize();
     const trimmedText = serialized.text.trim();
@@ -649,6 +658,7 @@ export const createComposerStore = (): ComposerStore => {
     controller,
     registerEditor,
     containerRef,
+    rootRef,
     attachmentConfigRef,
     onSubmitRef,
     stopGeneratingRef,

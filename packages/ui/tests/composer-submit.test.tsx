@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { type ComponentProps, type MouseEvent, useState } from "react";
 import { AskUser } from "../src/ask-user";
 import { Composer } from "../src/composer";
-import { useComposer } from "../src/composer/store";
+import { createComposerStore, useComposer } from "../src/composer/store";
 import type { AskUserQuestion, ComposerSubmitData } from "../src/composer/types";
 
 type ChatProps = {
@@ -190,6 +190,51 @@ describe("inside a consumer's own form", () => {
 
 describe("render={<form />}", () => {
   const asForm = { render: <form aria-label="Composer" /> };
+
+  const renderWithAttachment = (props: ChatProps) => {
+    const store = createComposerStore();
+    render(<Chat {...props} rootProps={{ ...props.rootProps, store }} />);
+    act(() => store.getSnapshot().attachments.add([new File(["x"], "pixel.png")]));
+    return store;
+  };
+
+  test("required blocks an attachment-only send from Enter and Submit", () => {
+    const onSubmit = mock();
+    const store = renderWithAttachment({
+      name: "prompt",
+      initial: "",
+      required: true,
+      onSubmit,
+      rootProps: asForm,
+    });
+
+    pressEnter();
+    clickSubmit();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(store.getSnapshot().attachments.items).toHaveLength(1);
+  });
+
+  test("the default div root still sends an attachment-only message despite required", () => {
+    const onSubmit = mock();
+    renderWithAttachment({ name: "prompt", initial: "", required: true, onSubmit });
+
+    pressEnter();
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  test("noValidate lets an attachment-only send through despite required", () => {
+    const onSubmit = mock();
+    renderWithAttachment({
+      name: "prompt",
+      initial: "",
+      required: true,
+      onSubmit,
+      rootProps: { render: <form aria-label="Composer" noValidate /> },
+    });
+
+    pressEnter();
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
 
   test("Enter sends", () => {
     const onSubmit = mock();
