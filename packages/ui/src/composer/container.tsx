@@ -6,6 +6,7 @@
 
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRenderElement } from "../internal/render/useRenderElement";
+import { useComposerInternals } from "./internals";
 import { useComposerContextStore } from "./store";
 
 export type ComposerContainerProps = PrimitiveProps<"div">;
@@ -17,6 +18,7 @@ export const ComposerContainer = ({
   ...elementProps
 }: ComposerContainerProps) => {
   const store = useComposerContextStore();
+  const { attachContainer } = useComposerInternals();
 
   const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -36,8 +38,9 @@ export const ComposerContainer = ({
     "div",
     { className, render, style },
     {
-      // Register the element so Composer.Popover can observe it for repositioning.
-      ref: store.containerRef,
+      // Register the element so Composer.Popover can observe it for repositioning,
+      // and so Root measures it for --composer-container-*.
+      ref: [store.containerRef, attachContainer],
       // No role/tabIndex: the chrome is a mouse-only focus passthrough, not a
       // control — keyboard users tab straight to the editor, and an unnamed
       // focusable "button" would only add a broken tab stop.
