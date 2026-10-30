@@ -36,7 +36,7 @@ import {
   attachmentReducer,
   INITIAL_ATTACHMENT_STATE,
 } from "./attachments-machine";
-import { interpretAskUserKey } from "./keyboard";
+import { interpretAskUserKey, isComposingKey } from "./keyboard";
 import type {
   AskUserQuestion,
   ComposerAnswerEntry,
@@ -227,6 +227,7 @@ type AskUserKeydownDeps = {
 const createAskUserKeydownHandler =
   ({ controller, optionsRef, editorRef, dispatch }: AskUserKeydownDeps) =>
   (event: KeyboardEvent) => {
+    if (isComposingKey(event)) return;
     const scopedOptionsElement = optionsRef.current?.getElement() ?? null;
     if (
       !isEventForComposer(

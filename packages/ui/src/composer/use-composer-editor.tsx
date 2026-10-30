@@ -38,7 +38,7 @@ import {
   writeCaretToDom,
 } from "./editor-dom";
 import { useAsRef, useComposerInternals, useIsomorphicLayoutEffect } from "./internals";
-import { type ComposerSubmitOn, interpretEditorKey } from "./keyboard";
+import { type ComposerSubmitOn, interpretEditorKey, isComposingKey } from "./keyboard";
 import { CLOSED_COMMAND_STATE, type RegisteredPrefix } from "./prefix-detection";
 import {
   diffFlatText,
@@ -425,9 +425,7 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    // An IME owns Enter (conversion confirm) and the arrows (candidate
-    // window) during composition — 229 covers engines that omit isComposing.
-    if (event.isComposing || event.keyCode === 229) return;
+    if (isComposingKey(event)) return;
 
     const { store, options } = getDependencies();
     const action = interpretEditorKey(

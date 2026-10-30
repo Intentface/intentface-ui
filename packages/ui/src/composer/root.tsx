@@ -17,6 +17,7 @@ import {
   useComposerSnapshot,
   useDragDropFiles,
 } from "./internals";
+import { isComposingKey } from "./keyboard";
 import { type ComposerStore, ComposerStoreContext, createComposerStore } from "./store";
 import type {
   AskUserQuestion,
@@ -164,7 +165,7 @@ export const ComposerRoot = ({
   // consumer's onKeyDown can skip it with preventPrimitiveHandler().
   const handleKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
     const stopGenerating = store.stopGeneratingRef.current;
-    if (event.key !== "Escape") return;
+    if (event.key !== "Escape" || isComposingKey(event.nativeEvent)) return;
     if (!event.defaultPrevented) {
       const { askUser } = store.getSnapshot();
       if (askUser.questions?.length) {
@@ -176,7 +177,12 @@ export const ComposerRoot = ({
       }
     }
     // Popups from other libraries close on any Escape that reaches them, handled or not.
-    if (event.defaultPrevented) event.stopPropagation();
+    // Their document listener can share React's target, as when Next.js hydrates the
+    // document, and only stopImmediatePropagation skips a listener on the same target.
+    if (event.defaultPrevented) {
+      event.stopPropagation();
+      event.nativeEvent.stopImmediatePropagation();
+    }
   };
 
   const internalsValue = useMemo<ComposerInternalsValue>(

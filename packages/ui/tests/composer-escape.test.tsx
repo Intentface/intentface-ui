@@ -25,8 +25,8 @@ const ChatComposer = ({
   </Composer.Root>
 );
 
-const pressEscape = (target: Element | Document) =>
-  act(() => void fireEvent.keyDown(target, { key: "Escape" }));
+const pressEscape = (target: Element | Document, init: KeyboardEventInit = {}) =>
+  act(() => void fireEvent.keyDown(target, { key: "Escape", ...init }));
 
 const QUESTIONS: AskUserQuestion[] = [
   { question: "Which database?", options: [{ label: "PostgreSQL" }, { label: "SQLite" }] },
@@ -200,6 +200,38 @@ describe("next to elements that are not composers", () => {
   });
 });
 
+describe("during IME composition", () => {
+  // An IME takes Escape to cancel a conversion. 229 stands in for engines that omit isComposing.
+  const COMPOSING = [
+    ["isComposing", { isComposing: true }],
+    ["keyCode 229", { keyCode: 229 }],
+  ] as const;
+
+  test.each(COMPOSING)("an Escape (%s) does not stop generating", (_name, init) => {
+    const onStop = mock();
+    render(<ChatComposer name="Message" generating onStop={onStop} />);
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }), init);
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  test.each(COMPOSING)("an Escape (%s) does not dismiss a question's step", async (_name, init) => {
+    const submitted: ComposerSubmitData[] = [];
+    render(
+      <Composer.Root questions={QUESTIONS} onSubmit={(data) => void submitted.push(data)}>
+        <Composer.Textarea aria-label="Message" />
+        <input aria-label="Note" />
+        <AskUserOptions />
+      </Composer.Root>,
+    );
+    await flushFrames();
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }), init);
+    pressEscape(screen.getByRole("textbox", { name: "Note" }), init);
+    expect(submitted).toEqual([]);
+  });
+});
+
 describe("inside a popup or dialog from another library", () => {
   // Base UI's Popover and Dialog close on any Escape that reaches them, through
   // the popup's onKeyDown or a document listener, whether or not it was handled.
@@ -268,6 +300,26 @@ describe("inside a popup or dialog from another library", () => {
     pressEscape(screen.getByRole("textbox", { name: "Message" }));
     expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
     expect(view.layer).not.toHaveBeenCalled();
+  });
+
+  // Next.js hydrates the whole document, so React's listener and a popup's document
+  // listener sit on one target, where stopPropagation can't keep them apart.
+  test("an Escape the composer used does not reach a listener beside React's", () => {
+    const onStop = mock();
+    const heard = mock();
+    const { container, rerender } = render(
+      <ChatComposer name="Message" generating onStop={onStop} />,
+    );
+    container.addEventListener("keydown", heard);
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }));
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(heard).not.toHaveBeenCalled();
+
+    rerender(<ChatComposer name="Message" />);
+    pressEscape(screen.getByRole("textbox", { name: "Message" }));
+    container.removeEventListener("keydown", heard);
+    expect(heard).toHaveBeenCalledTimes(1);
   });
 
   test("an Escape the composer has no use for reaches it", () => {
