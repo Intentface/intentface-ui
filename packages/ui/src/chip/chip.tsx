@@ -1,7 +1,7 @@
 "use client";
 
-// Headless inline chip. Renders an unstyled <span> flow-surface with
-// data-variant for styling hooks. Popups are not owned by this layer: a
+// Headless inline chip. Renders an unstyled <span> flow-surface; how a chip
+// looks is the consumer's. Popups are not owned by this layer: a
 // Chip.Preview child is captured and handed to `renderWithPreview` so the
 // styled layer can compose its own hover-card/popover around the badge.
 // Every part supports the Base UI render prop.
@@ -19,13 +19,7 @@ type ChipPreviewProps = { children: ReactNode };
  */
 export const ChipPreview = (_props: ChipPreviewProps): ReactNode => null;
 
-export type ChipState = {
-  /** Opaque styling hook, surfaced as data-variant. */
-  variant: string | undefined;
-};
-
-export type ChipRootProps = PrimitiveProps<"span", ChipState> & {
-  variant?: string;
+export type ChipRootProps = PrimitiveProps<"span"> & {
   /**
    * Called when a Chip.Preview child is present. Receives the rendered badge
    * element and the preview content; compose your popup of choice around
@@ -41,7 +35,6 @@ export type ChipRootProps = PrimitiveProps<"span", ChipState> & {
  * Renders a `<span>` element.
  */
 export const ChipRoot = ({
-  variant,
   renderWithPreview,
   className,
   render,
@@ -60,10 +53,7 @@ export const ChipRoot = ({
   const badge = useRenderElement(
     "span",
     { className, render, style },
-    {
-      state: { variant },
-      props: [{ "data-chip": "", children: inlineChildren }, elementProps],
-    },
+    { props: [{ "data-chip": "", children: inlineChildren }, elementProps] },
   );
 
   if (!previewChild || !renderWithPreview) return badge;

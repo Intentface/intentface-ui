@@ -13,14 +13,14 @@ import { Preview } from './chip/demos/preview';
 
 - **Inline token** — flows with the surrounding text instead of breaking the line box.
 - **Two homes** — backs the composer's mention decorations and the chips a message reconstructs from its wire format.
-- **Variants** — `primary` / `accent` / `warning` tint the surface.
+- **Unstyled** — how a chip looks is yours. Tint it with a class, or with a `data-*` attribute your styles read.
 - **Hover preview** — a `Chip.Preview` child promotes the chip to a hover card and is never rendered inline.
 - **Get started** — see [Quick start](/quick-start) to add the package.
 
 ## Anatomy
 
 ```tsx
-<Chip.Root variant="accent">
+<Chip.Root>
   <Chip.Icon>{icon}</Chip.Icon>
   <Chip.Label>{label}</Chip.Label>
 </Chip.Root>
@@ -64,7 +64,6 @@ the line box, and lifts a `Chip.Preview` child into whatever surface
 `renderWithPreview` builds. Renders a `<span>` element.
 
 export const rootProps = [
-  { name: "variant", type: "string", default: "undefined", description: "An opaque styling hook, surfaced as data-variant. The package takes no view on the values; the demo uses primary, accent and warning." },
   { name: "renderWithPreview", type: "(badge: ReactElement, preview: ReactNode) => ReactNode", description: "Called when a Chip.Preview child is present. Receives the rendered badge and the preview content; compose your own popup around them. Without it the preview content is ignored." },
 ];
 
@@ -72,7 +71,6 @@ export const rootProps = [
 
 export const rootAttrs = [
   { attribute: "data-chip", description: "The token element." },
-  { attribute: "data-variant", values: "string", description: "The `variant` prop as given, for styling." },
 ];
 
 <AttributesTable rows={rootAttrs} />

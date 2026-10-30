@@ -4,12 +4,12 @@ import { Chip } from "@intentface/ui/chip";
 import { Globe } from "@keyline-icons/react";
 import type { ReactElement, ReactNode } from "react";
 
-// Chips flow inline with text. `variant` is an opaque string surfaced as
-// data-variant, so the tinting rules are entirely yours.
+// Chips flow inline with text. The package doesn't style them, so this demo
+// tints them through its own data-variant attribute.
 export const Basic = () => (
   <p className="max-w-md text-sm text-zinc-700 leading-8 dark:text-zinc-300">
     Pulled results from{" "}
-    <Chip.Root variant="accent" className={CHIP_CLASS}>
+    <Chip.Root data-variant="accent" className={CHIP_CLASS}>
       <Chip.Icon className="flex items-center">
         <Globe className="size-3.5" />
       </Chip.Icon>
@@ -21,7 +21,7 @@ export const Basic = () => (
       <Chip.Preview>Hover shows a preview panel for the referenced item.</Chip.Preview>
     </Chip.Root>{" "}
     reference, with one{" "}
-    <Chip.Root variant="warning" className={CHIP_CLASS}>
+    <Chip.Root data-variant="warning" className={CHIP_CLASS}>
       <Chip.Label>deprecated</Chip.Label>
     </Chip.Root>{" "}
     flag.
