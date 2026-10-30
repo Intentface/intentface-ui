@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getSegmentedParts, groupTurns } from "../src/message-utils";
+import { getSegmentedParts, groupTurns, type Turn } from "../src/message-utils";
 import type { ChatMessage, MessagePart } from "../src/types";
 
 describe("getSegmentedParts", () => {
@@ -41,6 +41,21 @@ describe("groupTurns", () => {
 
     expect(turns.map((t) => t.key)).toEqual(["u1", "u2"]);
     expect(turns[1]?.messages.map((m) => m.id)).toEqual(["u2", "a2", "a3"]);
+  });
+
+  test("groups any records that carry an id and a role", () => {
+    const records = [
+      { id: "q1", role: "human", body: "hi" },
+      { id: "r1", role: "bot", body: "hello" },
+      { id: "q2", role: "human", body: "again" },
+    ];
+    const turns = groupTurns(records, "human");
+
+    expect(turns.map((t) => t.key)).toEqual(["q1", "q2"]);
+    // The element type flows through, so a consumer reads its own fields back.
+    expect(turns[0]?.messages.map((m) => m.body)).toEqual(["hi", "hello"]);
+    const accepted: Turn<(typeof records)[number]> | undefined = turns[0];
+    expect(accepted?.key).toBe("q1");
   });
 
   test("a leading assistant message still gets a turn", () => {

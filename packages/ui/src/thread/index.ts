@@ -6,8 +6,6 @@ export type {
   ThreadAutoScrollMode,
   ThreadComposerProps,
   ThreadContentProps,
-  ThreadOverlayProps,
-  ThreadOverlayState,
   ThreadPlaceholderProps,
   ThreadRootProps,
   ThreadScrollToMessageOptions,

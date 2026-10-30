@@ -3,6 +3,7 @@ import {
   DEFAULT_BOTTOM_OFFSET,
   DOCK_SELECTOR,
   measureDockInset,
+  measureDockSize,
   measureTopInset,
   queryDock,
   readViewportBox,
@@ -111,16 +112,38 @@ describe("queryDock", () => {
 });
 
 describe("measureTopInset", () => {
-  test("returns the top overlay's height", () => {
-    const root = {
-      querySelector: () => ({ getBoundingClientRect: () => ({ height: 64 }) }),
-    } as unknown as HTMLElement;
-    expect(measureTopInset(root)).toBe(64);
+  const rootWith = (parts: { scroller?: unknown; content?: unknown }) =>
+    ({
+      querySelector: (selector: string) =>
+        selector === "[data-thread-scroller]" ? (parts.scroller ?? null) : (parts.content ?? null),
+    }) as unknown as HTMLElement;
+  const scroller = (top: number, scrollTop = 0, clientTop = 0) => ({
+    getBoundingClientRect: () => ({ top }),
+    clientTop,
+    scrollTop,
+  });
+  const content = (top: number) => ({ getBoundingClientRect: () => ({ top }) });
+
+  test("is the space between the scroller's top and the content's top", () => {
+    expect(measureTopInset(rootWith({ scroller: scroller(100), content: content(124) }))).toBe(24);
   });
 
-  test("returns 0 when there is no top overlay", () => {
-    const root = { querySelector: () => null } as unknown as HTMLElement;
-    expect(measureTopInset(root)).toBe(0);
+  test("does not change while the scroller is scrolled", () => {
+    // Scrolled 80px: the content's box moved up by 80 along with everything in it.
+    expect(measureTopInset(rootWith({ scroller: scroller(100, 80), content: content(44) }))).toBe(
+      24,
+    );
+  });
+
+  test("starts below the scroller's border", () => {
+    expect(
+      measureTopInset(rootWith({ scroller: scroller(100, 0, 2), content: content(126) })),
+    ).toBe(24);
+  });
+
+  test("is 0 until the scroller and the content are mounted", () => {
+    expect(measureTopInset(rootWith({ content: content(24) }))).toBe(0);
+    expect(measureTopInset(rootWith({ scroller: scroller(100) }))).toBe(0);
   });
 });
 
@@ -143,6 +166,19 @@ describe("measureDockInset", () => {
 
   test("null when the dock isn't mounted yet", () => {
     expect(measureDockInset(rootWith(null))).toBeNull();
+  });
+});
+
+describe("measureDockSize", () => {
+  const rootWith = (dock: unknown) => ({ querySelector: () => dock }) as unknown as HTMLElement;
+
+  test("is the dock's own box, rounded to whole px", () => {
+    const dock = { getBoundingClientRect: () => ({ width: 640.4, height: 91.6 }) };
+    expect(measureDockSize(rootWith(dock))).toEqual({ width: 640, height: 92 });
+  });
+
+  test("null when the dock isn't mounted yet", () => {
+    expect(measureDockSize(rootWith(null))).toBeNull();
   });
 });
 
