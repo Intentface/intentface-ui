@@ -3,17 +3,11 @@
 // Headless thread: the scroll subsystem (at-bottom detection, auto-scroll
 // landing/follow, composer-inset measurement) plus unstyled structural parts.
 // The only styles emitted are behavior-critical (positioning/overflow/sentinel
-// size), applied inline; everything visual belongs to the styled layer.
-//
-// Styled-layer contract: Thread.Content sets --thread-turn-min-height while an
-// auto-scroll mode is active; map it onto the last child's min-height (e.g.
-// `[&>*:last-child]:min-h-(--thread-turn-min-height,0px)`) so the newest turn
-// can land at the top.
+// size/reserve), applied inline; everything visual belongs to the styled layer.
 
 import {
   createContext,
   type KeyboardEvent,
-  memo,
   type ReactNode,
   type RefObject,
   type TouchEvent,
@@ -28,13 +22,13 @@ import {
   type WheelEvent,
 } from "react";
 import type { PrimitiveProps } from "../internal/primitive-props";
-import type { StateAttributesMapping } from "../internal/render/getStateAttributesProps";
 import { useRefWithInit } from "../internal/render/useRefWithInit";
 import { useRenderElement } from "../internal/render/useRenderElement";
 import {
   DEFAULT_BOTTOM_OFFSET,
   measureDockInset,
-  measureTopInset,
+  measureDockSize,
+  measureLandingGap,
   queryDock,
   readViewportBox,
   resolveScrollBehavior,
@@ -42,6 +36,7 @@ import {
   scrollContainerTo,
   wasPrepended,
 } from "./geometry";
+import { createLastChildReserve } from "./reserve";
 import {
   createEdgeStore,
   createVisibilityStore,
@@ -238,7 +233,7 @@ const useThreadScroll = (
 
     // One observer for both edge sentinels; its `root` is the scroll container.
     // Edge state is mirrored to data-at-top / data-at-bottom on the thread root
-    // (the common ancestor of the overlays + scroller) for pure-CSS affordances.
+    // (the common ancestor of the scroller + composer) for pure-CSS affordances.
     const io = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -406,6 +401,7 @@ const useThreadScroll = (
     const followsStream = mode !== "jump";
 
     // Reserve a viewport on the last turn so the newest lands at the top.
+    const reserve = landsAtTop ? createLastChildReserve(content) : null;
     if (landsAtTop) {
       content.style.setProperty("--thread-turn-min-height", "var(--thread-turn-area)");
     }
@@ -419,6 +415,7 @@ const useThreadScroll = (
     let hadContent = false;
     let firstTurn: Element | null = null;
     const land = (mutations: MutationRecord[] = []) => {
+      reserve?.sync();
       const previousFirst = firstTurn;
       firstTurn = content.firstElementChild;
       // A switch whose history loads async goes A → [] → B across separate
@@ -498,6 +495,7 @@ const useThreadScroll = (
     return () => {
       turns.disconnect();
       growth?.disconnect();
+      reserve?.clear();
       if (landsAtTop) content.style.removeProperty("--thread-turn-min-height");
     };
   }, [mode, scrollToBottom, flushPendingJump]);
@@ -704,7 +702,9 @@ const useThreadScroll = (
 /**
  * Writes the measured insets to CSS vars on the root via a ResizeObserver — no
  * React state, so composer growth never re-renders the thread:
- *   --thread-overlay-bottom-height drives the bottom overlay + viewport padding;
+ *   --thread-dock-inset is the space the dock takes from the root's bottom edge
+ *   (plus a gap): pad the content by it;
+ *   --thread-dock-height / --thread-dock-width are the dock's own box;
  *   --thread-turn-area is the visible thread area (root − top − bottom). When an
  *   auto-scroll mode is active, useThreadScroll maps the last turn's reserve
  *   (--thread-turn-min-height) to it; otherwise the reserve falls back to 0.
@@ -715,17 +715,22 @@ const useThreadInsets = (rootRef: RefObject<HTMLDivElement | null>) => {
     const root = rootRef.current;
     if (!root) return;
 
-    // Read both insets before writing either property: a write followed by a forced
+    // Read every measurement before writing any property: a write followed by a forced
     // layout read dips scrollHeight for a frame, and that scrollTop clamp is final.
     const apply = () => {
       const bottomInset = measureDockInset(root);
-      const topInset = measureTopInset(root);
+      const dockSize = measureDockSize(root);
+      const landingGap = measureLandingGap(root);
       const area = Math.max(
         0,
-        Math.round(root.clientHeight - topInset - (bottomInset ?? DEFAULT_BOTTOM_OFFSET)),
+        Math.round(root.clientHeight - landingGap - (bottomInset ?? DEFAULT_BOTTOM_OFFSET)),
       );
       if (bottomInset !== null) {
-        root.style.setProperty("--thread-overlay-bottom-height", `${bottomInset}px`);
+        root.style.setProperty("--thread-dock-inset", `${bottomInset}px`);
+      }
+      if (dockSize) {
+        root.style.setProperty("--thread-dock-height", `${dockSize.height}px`);
+        root.style.setProperty("--thread-dock-width", `${dockSize.width}px`);
       }
       root.style.setProperty("--thread-turn-area", `${area}px`);
     };
@@ -774,7 +779,7 @@ export const ThreadRoot = ({
       props: [
         {
           "data-thread-root": "",
-          // Anchors the overlays/composer and bounds the inset measurement.
+          // Anchors the composer and bounds the inset measurement.
           style: { position: "relative", overflow: "hidden" },
         },
         elementProps,
@@ -784,48 +789,6 @@ export const ThreadRoot = ({
 
   return <ThreadContext value={scroll}>{element}</ThreadContext>;
 };
-
-// ---------------------------------------------------------------------------
-// Overlay — a positioned marker strip; the styled layer supplies the blur/fade
-// content as children. data-thread-overlay="top" doubles as the top-inset
-// measurement target.
-// ---------------------------------------------------------------------------
-
-export type ThreadOverlayState = {
-  /** Which edge this overlay marks, surfaced as data-thread-overlay. */
-  direction: "top" | "bottom";
-};
-
-const threadOverlayStateMapping: StateAttributesMapping<ThreadOverlayState> = {
-  direction: (value): Record<string, string> => ({ "data-thread-overlay": value }),
-};
-
-export type ThreadOverlayProps = PrimitiveProps<"div", ThreadOverlayState> & {
-  direction: "top" | "bottom";
-};
-
-export const ThreadOverlay = memo(
-  ({ direction, className, render, style, ...elementProps }: ThreadOverlayProps) =>
-    useRenderElement(
-      "div",
-      { className, render, style },
-      {
-        state: { direction },
-        stateAttributesMapping: threadOverlayStateMapping,
-        props: [
-          {
-            // Identity + direction ride the data-thread-overlay state attribute
-            // (stamped by threadOverlayStateMapping above).
-            // A sibling of the scroll container: never swallow wheel/drag/click.
-            style: { position: "absolute", pointerEvents: "none" },
-          },
-          elementProps,
-        ],
-      },
-    ),
-);
-
-ThreadOverlay.displayName = "ThreadOverlay";
 
 // ---------------------------------------------------------------------------
 // Viewport — the scroll container. A focusable region so keyboard users can
@@ -910,6 +873,11 @@ export const ThreadViewport = ({
 
 export type ThreadContentProps = PrimitiveProps<"div">;
 
+/**
+ * The column inside the viewport that holds the turns. While a top-landing mode
+ * is active it sets `min-height: var(--thread-turn-min-height, 0px)` on its last
+ * child.
+ */
 export const ThreadContent = ({
   className,
   render,
@@ -961,6 +929,11 @@ export const ThreadContent = ({
 
 export type ThreadComposerProps = PrimitiveProps<"div">;
 
+/**
+ * Bottom-docked slot for the composer. Positions itself along the root's bottom
+ * edge (a `style` prop overrides), and its box is measured into
+ * `--thread-dock-inset`, `--thread-dock-height` and `--thread-dock-width` on the root.
+ */
 export const ThreadComposer = ({
   className,
   render,
@@ -970,7 +943,15 @@ export const ThreadComposer = ({
   useRenderElement(
     "div",
     { className, render, style },
-    { props: [{ "data-thread-composer": "" }, elementProps] },
+    {
+      props: [
+        {
+          "data-thread-composer": "",
+          style: { position: "absolute", insetInline: 0, bottom: 0 },
+        },
+        elementProps,
+      ],
+    },
   );
 
 export type ThreadPlaceholderProps = PrimitiveProps<"div">;

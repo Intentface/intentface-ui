@@ -309,7 +309,7 @@ export const Thread = Object.assign(ThreadRoot, {
 | `Thread.Overlay`      | One component with a required `direction: "top" \| "bottom"` — progressive-blur fade masks at the viewport edges |
 | `Thread.Placeholder`  | Empty-state slot (renders its children)                                       |
 
-There is **no `Thread.Spacer`**. The end-of-list reserve that lets the newest turn land at the top is now implicit CSS: the content column's last child carries `min-height: var(--thread-turn-min-height)`, which the `autoScroll` mode sets to a measured visible-area value (`root.clientHeight − overlay insets`). Auto-scroll behavior is driven by `use-stick-to-bottom`; `ScrollButton` reads `isAtBottom` from an `IntersectionObserver` on a bottom sentinel.
+There is **no `Thread.Spacer`**. The end-of-list reserve that lets the newest turn land at the top is applied by the package: while an `autoScroll` mode lands at the top, `Thread.Content` sets `min-height: var(--thread-turn-min-height, 0px)` inline on its last child, a measured visible-area value (`root.clientHeight − the space above the content − the dock inset`). Auto-scroll behavior is driven by `use-stick-to-bottom`; `ScrollButton` reads `isAtBottom` from an `IntersectionObserver` on a bottom sentinel.
 
 ---
 

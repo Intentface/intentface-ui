@@ -42,8 +42,7 @@ export const wasPrepended = (
 
 // Fallback (px) until the composer is measured.
 export const DEFAULT_BOTTOM_OFFSET = 128;
-// Breathing room between the last line of content and the composer dock. The
-// bottom overlay spans it in the styled layer.
+// Breathing room between the last line of content and the composer dock.
 const COMPOSER_GAP = 32;
 // The dock is the Thread.Composer slot — the one element the thread reserves
 // space for. Null until it mounts.
@@ -67,7 +66,17 @@ export const measureDockInset = (root: HTMLElement): number | null => {
   return Math.round(root.getBoundingClientRect().bottom - dockTop + COMPOSER_GAP);
 };
 
-// Top inset reserved by the top overlay, measured straight off the rendered
-// element (px) — no getComputedStyle / rem→px conversion. 0 if no top overlay.
-export const measureTopInset = (root: HTMLElement): number =>
-  root.querySelector('[data-thread-overlay="top"]')?.getBoundingClientRect().height ?? 0;
+export const measureDockSize = (root: HTMLElement): { width: number; height: number } | null => {
+  const dock = queryDock(root);
+  if (!dock) return null;
+  const { width, height } = dock.getBoundingClientRect();
+  return { width: Math.round(width), height: Math.round(height) };
+};
+
+export const measureLandingGap = (root: HTMLElement): number => {
+  const scroller = root.querySelector<HTMLElement>("[data-thread-scroller]");
+  const content = root.querySelector<HTMLElement>("[data-thread-content]");
+  if (!scroller || !content) return 0;
+  const scrollerTop = scroller.getBoundingClientRect().top + scroller.clientTop;
+  return content.getBoundingClientRect().top - scrollerTop + scroller.scrollTop;
+};

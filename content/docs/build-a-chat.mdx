@@ -46,12 +46,13 @@ nothing else; appending the turn is your call.
 
 <Demo component={<ComposerStage />} file="build-a-chat/demos/composer.tsx" />
 
-Two things happen automatically once the composer is docked inside
-`Thread.Composer`. The thread measures it and publishes the height as
-`--thread-overlay-bottom-height`, which the content column uses as bottom
-padding — so messages never hide behind the input, at any composer height. And
-the newest turn gets `--thread-turn-min-height` so it lands at the top of the
-viewport rather than jumping.
+Three things happen automatically once the composer is docked inside
+`Thread.Composer`. The slot positions itself along the bottom edge. The thread
+measures it and publishes the space it takes as `--thread-dock-inset`, which the
+content wrapper uses as bottom padding, so messages never hide behind the input
+at any composer height. And `Thread.Content` reserves a visible area on its last
+child, the newest `Message.Turn`, so the turn lands at the top of the viewport
+rather than jumping.
 
 At this point everything is local: submitting appends a message, and no request
 leaves the page.

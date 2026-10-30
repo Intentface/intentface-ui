@@ -14,7 +14,8 @@ import { Jump } from './thread/demos/jump';
 
 - **Scroll surface** — lands the newest turn, follows the stream while you're at the bottom, and yields the moment you scroll up.
 - **Auto-scroll modes** — `off` / `bottom` / `jump` / `follow` via the `autoScroll` prop (see below).
-- **Composer inset** — measures the docked composer to reserve space; the overlays fade the top and bottom edges.
+- **Docked composer** — `Thread.Composer` positions itself along the bottom edge, and the thread publishes the room it takes as `--thread-dock-inset` for you to pad by.
+- **Children are turns** — the newest-turn reserve lands on the last child of `Thread.Content`, so wrap each question and its reply in `Message.Turn`; see [Sizing the last turn](#sizing-the-last-turn).
 - **Owns no data** — you map your messages in; rows are addressable by a `data-message-id` attribute.
 - **Cheap while streaming** — no scroll handler and no re-render per token; see [Why the scroll subsystem is cheap](#why-the-scroll-subsystem-is-cheap).
 - **Get started** — see [Quick start](/quick-start) to add the package.
@@ -25,7 +26,6 @@ The bare nesting — `Thread` provides the scroll context its parts read:
 
 ```tsx
 <Thread.Root>
-  <Thread.Overlay />
   <Thread.Viewport>
     <Thread.Content />
   </Thread.Viewport>
@@ -33,15 +33,19 @@ The bare nesting — `Thread` provides the scroll context its parts read:
 </Thread.Root>
 ```
 
-A realistic surface with overlays and a message list:
+A realistic surface with a message list. The wrapper inside the viewport and the
+scroll button are yours:
 
 ```tsx
 <Thread.Root autoScroll="follow">
-  <Thread.Overlay direction="top" />
   <Thread.Viewport>
-    {turns.map((turn) => (
-      <Message.Turn key={turn.key} data-message-id={turn.id}>{/* … */}</Message.Turn>
-    ))}
+    <div className="pt-4 pb-(--thread-dock-inset)">
+      <Thread.Content>
+        {turns.map((turn) => (
+          <Message.Turn key={turn.key} data-message-id={turn.key}>{/* … */}</Message.Turn>
+        ))}
+      </Thread.Content>
+    </div>
   </Thread.Viewport>
   <Thread.Composer>
     <Composer.Root onSubmit={sendMessage}>{/* … */}</Composer.Root>
@@ -49,7 +53,6 @@ A realistic surface with overlays and a message list:
   {/* Not a part: a scroll-to-bottom control is yours, built from
       `useThread()`'s `isAtBottom` and `scrollToBottom`. */}
   <ScrollToBottomButton />
-  <Thread.Overlay direction="bottom" />
 </Thread.Root>
 ```
 
@@ -91,39 +94,41 @@ to the bottom.
 ### Sizing the last turn
 
 A turn lands at the top because it is at least one visible area tall. The thread
-measures that area — the root's height minus the top overlay and the docked
-composer — and publishes it as `--thread-turn-min-height` on `Thread.Content`.
-Three pieces of markup make the landing exact:
+measures that area, the root's height minus the space above `Thread.Content` and
+the docked composer, and publishes it as `--thread-turn-area`. In `"follow"` and
+`"jump"`, `Thread.Content` sets `min-height` to it on its last child, so you
+write no rule for the reserve. Three rules keep the landing exact:
 
-- **Give the reserve to the whole turn.** Apply the variable to the last child,
-  and make that child the turn: wrap each question and its reply in
-  `Message.Turn`. On a bare reply, the question above it is pushed off the top.
-- **Mount a top overlay.** Its height is the gap a landed turn keeps from the
-  top edge. Without one, the turn lands flush against it.
-- **Pad the content by the same insets.** Use `--thread-overlay-top-height` and
-  `--thread-overlay-bottom-height` on the wrapper inside the viewport. Any other
-  vertical padding or margin between the viewport and the turns shifts the
-  landing by that much.
+- **Children are turns.** The reserve goes on the last child, so make that child
+  the turn: wrap each question and its reply in `Message.Turn`. On a bare reply,
+  the question above it is pushed off the top. In development the thread warns
+  once when the last child isn't a `Message.Turn`.
+- **The top padding is the landing gap.** A landed turn sits exactly as far from
+  the top edge as the space above `Thread.Content` inside the viewport. Put
+  that space on a wrapper as `pt-4`, or leave it out and the turn lands flush.
+- **The bottom padding is `--thread-dock-inset`.** The thread writes the dock's
+  height plus a gap to that variable. Any other vertical padding or margin
+  between the viewport and the turns shifts the landing by that much.
 
 ```tsx
-<Thread.Root className="relative h-full [--thread-overlay-top-height:1rem]">
-  <Thread.Overlay direction="top" className="inset-x-0 top-0 h-(--thread-overlay-top-height)" />
+<Thread.Root className="relative h-full">
+  {/* Optional fade over the top gap. Yours, so it needs no pointer events. */}
+  <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-1 h-4 bg-linear-to-b from-white to-transparent" />
   <Thread.Viewport className="h-full overflow-y-auto">
-    <div className="flex min-h-full flex-col pt-(--thread-overlay-top-height) pb-(--thread-overlay-bottom-height)">
-      <Thread.Content className="flex flex-col gap-4 [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+    <div className="flex min-h-full flex-col pt-4 pb-(--thread-dock-inset)">
+      <Thread.Content className="flex flex-col gap-4">
         {turns.map((turn) => (
           <Message.Turn key={turn.key}>{/* question, then reply */}</Message.Turn>
         ))}
       </Thread.Content>
     </div>
   </Thread.Viewport>
-  <Thread.Composer className="absolute inset-x-0 bottom-0">{/* … */}</Thread.Composer>
+  <Thread.Composer>{/* … */}</Thread.Composer>
 </Thread.Root>
 ```
 
-The composer's height is measured and written to `--thread-overlay-bottom-height`
-for you. Without a `Thread.Composer`, the area leaves 128px at the bottom, so set
-`--thread-overlay-bottom-height: 128px` for the padding to match.
+Without a `Thread.Composer`, the area leaves 128px at the bottom, so set
+`--thread-dock-inset: 128px` on `Thread.Root` for the padding to match.
 
 ### Jumping to a message
 
@@ -194,23 +199,6 @@ export const rootAttrs = [
 
 <AttributesTable rows={rootAttrs} />
 
-### Thread.Overlay
-
-A positioned fade strip at the top or bottom edge. The top overlay's height is
-also the top inset the viewport reserves.
-
-export const overlayProps = [
-  { name: "direction", type: '"top" | "bottom"', default: "(required)", description: "Which edge the overlay marks." },
-];
-
-<PropsTable rows={overlayProps} />
-
-export const overlayAttrs = [
-  { attribute: "data-thread-overlay", values: '"top" | "bottom"', description: "Which edge this overlay marks — style the fade direction from it. The top one doubles as the top-inset measurement target." },
-];
-
-<AttributesTable rows={overlayAttrs} />
-
 ### Thread.Viewport
 
 The scroll container plus the measured content column and the 1px edge sentinels
@@ -227,7 +215,9 @@ export const viewportAttrs = [
 
 ### Thread.Composer
 
-Bottom-docked slot; its height is measured to inset the viewport. Renders
+Bottom-docked slot for the composer. Positions itself along the root's bottom
+edge (a `style` prop overrides), and its box is measured into `--thread-dock-inset`,
+`--thread-dock-height` and `--thread-dock-width` on the root. Renders
 `data-thread-composer`.
 
 Anything inside it that should _not_ push content up — a floating scroll
@@ -242,9 +232,9 @@ Empty-state slot, shown when there are no messages. Renders
 
 ### Thread.Content
 
-The column inside the viewport that holds the messages. Renders
-`data-thread-content`, and carries the auto-scroll reserve as
-`--thread-turn-min-height` on its last child.
+The column inside the viewport that holds the turns. While a top-landing mode
+is active it sets `min-height: var(--thread-turn-min-height, 0px)` on its last
+child. Renders `data-thread-content`.
 
 There is no scroll-to-bottom part — build one from `useThread()`, which exposes
 `isAtBottom` and `scrollToBottom`:
@@ -261,12 +251,16 @@ return isAtBottom ? null : (
 
 ### CSS variables
 
-The thread reads these, so you can override them from your own CSS:
+The thread writes these as inline custom properties, from a `ResizeObserver` on
+`Thread.Root` (`--thread-turn-min-height` goes on `Thread.Content`), so a
+growing composer never re-renders the thread. Read them in your own CSS:
 
 export const cssVars = [
-  { attribute: "--thread-width", values: "672px", description: "Max width of the content column and overlays." },
-  { attribute: "--thread-overlay-top-height", values: "4rem", description: "Top overlay height and top inset." },
-  { attribute: "--thread-overlay-bottom-height", values: "8rem", description: "Bottom overlay height and bottom inset (measured from the Thread.Composer slot at runtime)." },
+  { attribute: "--thread-dock-inset", values: "px", description: "Space the dock takes from the root's bottom edge, plus a 32px gap. Pad the content by it. Unset until Thread.Composer mounts." },
+  { attribute: "--thread-dock-height", values: "px", description: "Height of the Thread.Composer slot, rounded to whole pixels. Unset until it mounts." },
+  { attribute: "--thread-dock-width", values: "px", description: "Width of the Thread.Composer slot, rounded to whole pixels. Unset until it mounts." },
+  { attribute: "--thread-turn-area", values: "px", description: "The visible thread area: the root's height minus the space above Thread.Content and the dock inset." },
+  { attribute: "--thread-turn-min-height", values: "--thread-turn-area | unset", description: "Set on Thread.Content in the top-landing modes. The last child's min-height reads it, with a fallback of 0px." },
 ];
 
 <AttributesTable rows={cssVars} />
@@ -291,7 +285,7 @@ per-row cost:
 
 ```tsx
 {turns.map((turn) => (
-  <Message.Turn key={turn.key} data-message-id={turn.id}>{/* … */}</Message.Turn>
+  <Message.Turn key={turn.key} data-message-id={turn.key}>{/* … */}</Message.Turn>
 ))}
 ```
 
