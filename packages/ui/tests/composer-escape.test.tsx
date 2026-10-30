@@ -200,13 +200,13 @@ describe("next to elements that are not composers", () => {
   });
 });
 
-describe("during IME composition", () => {
-  // An IME takes Escape to cancel a conversion. 229 stands in for engines that omit isComposing.
-  const COMPOSING = [
-    ["isComposing", { isComposing: true }],
-    ["keyCode 229", { keyCode: 229 }],
-  ] as const;
+// An IME takes Escape to cancel a conversion. 229 stands in for engines that omit isComposing.
+const COMPOSING = [
+  ["isComposing", { isComposing: true }],
+  ["keyCode 229", { keyCode: 229 }],
+] as const;
 
+describe("during IME composition", () => {
   test.each(COMPOSING)("an Escape (%s) does not stop generating", (_name, init) => {
     const onStop = mock();
     render(<ChatComposer name="Message" generating onStop={onStop} />);
@@ -374,5 +374,15 @@ describe("inside a floating Tabs.Popup", () => {
     pressEscape(reply);
     expect(onStop).toHaveBeenCalledTimes(1);
     expect(getByTestId("tab-chat").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  test.each(COMPOSING)("an Escape (%s) during composition leaves it open", async (_name, init) => {
+    const onStop = mock();
+    const { getByTestId } = render(<Dock onStop={onStop} />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    pressEscape(screen.getByRole("textbox", { name: "Reply" }), init);
+    expect(onStop).not.toHaveBeenCalled();
+    expect(getByTestId("tab-chat").getAttribute("aria-expanded")).toBe("true");
   });
 });

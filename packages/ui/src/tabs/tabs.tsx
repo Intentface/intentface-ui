@@ -4,6 +4,7 @@ import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from "react";
 import { createContext, Fragment, use, useCallback, useId, useMemo, useState } from "react";
 import { createChangeEventDetails } from "../internal/change-event-details";
 import { step } from "../internal/collection";
+import { isComposingKey } from "../internal/is-composing-key";
 import { useIsomorphicLayoutEffect } from "../internal/iso-layout-effect";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import type { StateAttributesMapping } from "../internal/render/getStateAttributesProps";
@@ -276,7 +277,9 @@ export const TabsRoot = <Value extends string = string>({
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       const { value } = store.getSnapshot();
       // The window hears Escape last, so one handled inside (a composer stopping) is spent.
+      // During IME composition, Escape cancels the conversion, not the popup (as in Base UI).
       if (event.key !== "Escape" || event.defaultPrevented || value === null) return;
+      if (isComposingKey(event)) return;
       event.preventDefault();
       // From inside the popup, focus would drop to the body as it closes; it goes back to the tab.
       const fromPopup = store.popupRef.current?.contains(document.activeElement) ?? false;

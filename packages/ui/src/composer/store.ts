@@ -22,6 +22,7 @@ import {
   revokeAttachmentUrl,
   toAttachmentItem,
 } from "../attachments";
+import { isComposingKey } from "../internal/is-composing-key";
 import {
   type AnswerEntry,
   type AskUserAction,
@@ -36,7 +37,7 @@ import {
   attachmentReducer,
   INITIAL_ATTACHMENT_STATE,
 } from "./attachments-machine";
-import { interpretAskUserKey, isComposingKey } from "./keyboard";
+import { interpretAskUserKey } from "./keyboard";
 import type {
   AskUserQuestion,
   ComposerAnswerEntry,

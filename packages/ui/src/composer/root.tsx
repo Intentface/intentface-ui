@@ -6,6 +6,7 @@
 // this mount. Every bare <Composer> is fully isolated.
 
 import { useEffect, useId, useMemo, useRef, useSyncExternalStore } from "react";
+import { isComposingKey } from "../internal/is-composing-key";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRefWithInit } from "../internal/render/useRefWithInit";
 import { useRenderElement } from "../internal/render/useRenderElement";
@@ -17,7 +18,6 @@ import {
   useComposerSnapshot,
   useDragDropFiles,
 } from "./internals";
-import { isComposingKey } from "./keyboard";
 import { type ComposerStore, ComposerStoreContext, createComposerStore } from "./store";
 import type {
   AskUserQuestion,

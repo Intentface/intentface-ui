@@ -25,6 +25,7 @@ import {
 import { createPortal } from "react-dom";
 import { Chip } from "../chip/index";
 import { type ChipData, parseChipSegments } from "../chip-markdown";
+import { isComposingKey } from "../internal/is-composing-key";
 import { useRefWithInit } from "../internal/render/useRefWithInit";
 import {
   documentToDomSpec,
@@ -38,7 +39,7 @@ import {
   writeCaretToDom,
 } from "./editor-dom";
 import { useAsRef, useComposerInternals, useIsomorphicLayoutEffect } from "./internals";
-import { type ComposerSubmitOn, interpretEditorKey, isComposingKey } from "./keyboard";
+import { type ComposerSubmitOn, interpretEditorKey } from "./keyboard";
 import { CLOSED_COMMAND_STATE, type RegisteredPrefix } from "./prefix-detection";
 import {
   diffFlatText,
