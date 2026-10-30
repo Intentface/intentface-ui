@@ -6,3 +6,4 @@
 - [Composer] [Breaking] `Composer.Submit` and `AskUser.Continue` are `type="button"` and send through the store. Don't rely on them submitting an enclosing form.
 - [Composer] [Breaking] `useComposerSubmit` returns `onClick` in place of `type`. Spread `onClick` onto your button and set `type="button"`.
 - [Composer] New `submit()` on the composer store.
+- [Composer] Fix `Composer.Textarea`'s `required` never blocking the submit of a form it sits in.

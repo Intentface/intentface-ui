@@ -72,6 +72,8 @@ const visuallyHiddenStyle: CSSProperties = {
   border: 0,
 };
 
+const ignoreInput = () => {};
+
 export const ComposerTextarea = ({
   value,
   onValueChange,
@@ -197,14 +199,16 @@ export const ComposerTextarea = ({
               {editorContent}
               {chipPortals}
               {name != null && (
+                // Not readOnly: browsers skip constraint validation on readonly
+                // inputs, so `required` would never block a form submit.
                 <input
                   type="text"
-                  readOnly
                   tabIndex={-1}
                   aria-hidden="true"
                   name={name}
                   required={required}
                   value={serializedText}
+                  onChange={ignoreInput}
                   onFocus={() => store.controller.focus()}
                   style={visuallyHiddenStyle}
                 />

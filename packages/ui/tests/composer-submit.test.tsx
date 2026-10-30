@@ -9,6 +9,7 @@ import type { AskUserQuestion, ComposerSubmitData } from "../src/composer/types"
 type ChatProps = {
   initial?: string;
   name?: string;
+  required?: boolean;
   rootProps?: Partial<ComponentProps<typeof Composer.Root>>;
   submitProps?: Partial<ComponentProps<typeof Composer.Submit>>;
   onSubmit?: (data: ComposerSubmitData) => void;
@@ -17,6 +18,7 @@ type ChatProps = {
 const Chat = ({
   initial = "hello",
   name,
+  required,
   rootProps,
   submitProps,
   onSubmit = () => {},
@@ -24,7 +26,13 @@ const Chat = ({
   const [value, setValue] = useState(initial);
   return (
     <Composer.Root onSubmit={onSubmit} {...rootProps}>
-      <Composer.Textarea aria-label="Message" name={name} value={value} onValueChange={setValue} />
+      <Composer.Textarea
+        aria-label="Message"
+        name={name}
+        required={required}
+        value={value}
+        onValueChange={setValue}
+      />
       <Composer.Submit {...submitProps} />
     </Composer.Root>
   );
@@ -146,6 +154,26 @@ describe("inside a consumer's own form", () => {
     clickSubmit();
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onFormSubmit).not.toHaveBeenCalled();
+  });
+
+  test("required blocks the form while the composer is empty", () => {
+    const { container } = render(
+      <form aria-label="Outer">
+        <Chat name="prompt" initial="" required />
+      </form>,
+    );
+
+    expect(container.querySelector("form")?.checkValidity()).toBe(false);
+  });
+
+  test("required lets the form submit once the composer has text", () => {
+    const { container } = render(
+      <form aria-label="Outer">
+        <Chat name="prompt" initial="hello" required />
+      </form>,
+    );
+
+    expect(container.querySelector("form")?.checkValidity()).toBe(true);
   });
 
   test("the textarea's name puts its text in the form's FormData", () => {
