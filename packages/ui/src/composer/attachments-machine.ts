@@ -14,7 +14,8 @@ export type AttachmentStoreState = {
 export type AttachmentStoreAction =
   | { type: "add"; files: File[] | FileList }
   | { type: "remove"; id: string }
-  | { type: "reset" };
+  | { type: "reset" }
+  | { type: "hand-off" };
 
 export type AttachmentStoreConfig = {
   accept: string;
@@ -79,6 +80,8 @@ export const attachmentReducer = (
       for (const item of state.items) config.destroy(item);
       return INITIAL_ATTACHMENT_STATE;
     }
+    case "hand-off":
+      return INITIAL_ATTACHMENT_STATE;
   }
 };
 
