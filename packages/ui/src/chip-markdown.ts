@@ -10,9 +10,24 @@
  */
 export type ChipIconKey = string;
 
-// Every class excludes "[" so no group can consume past the next one — without
-// that this backtracks quadratically, and message text is untrusted.
-export const CHIP_REF_PATTERN = /\[([^[\]]+)\]\(chip:([^[:)]+):([^[)?]+)(?:\?([^[)]*))?\)/g;
+// A label is escape pairs and any character but a bracket or backslash, so the
+// brackets escapeMarkdownLink escapes stay inside it.
+const LABEL = String.raw`((?:\\[\s\S]|[^\\[\]])+)`;
+// Every group after the label excludes "[" so none can consume past the next
+// one — without that this backtracks quadratically, and message text is untrusted.
+const TAIL = String.raw`\]\(chip:([^[:)]+):([^[)?]+)(?:\?([^[)]*))?\)`;
+
+/**
+ * Matches one chip token. Scan text with `parseChipSegments` rather than with
+ * this: on its own it retries every escaped "[" inside a label as a token start,
+ * which is quadratic.
+ */
+export const CHIP_REF_PATTERN = new RegExp(String.raw`\[${LABEL}${TAIL}`, "g");
+
+// Consumes a "[" and its label whether or not a token follows, so the scan
+// resumes after the label instead of retrying the escaped "[" inside it. A
+// match without the tail is plain text.
+const SCAN_PATTERN = new RegExp(String.raw`\[${LABEL}(?:${TAIL})?`, "g");
 
 export type ChipData = {
   prefix: string;
@@ -33,6 +48,8 @@ export type ChipSegment =
 
 export const escapeMarkdownLink = (input: string): string =>
   input.replace(/[[\]()\\]/g, (match) => `\\${match}`);
+
+const unescapeMarkdownLink = (input: string): string => input.replace(/\\([[\]()\\])/g, "$1");
 
 // Tolerate legacy/un-encoded values — a stray "%" would otherwise throw and
 // take the whole message render down with it.
@@ -55,17 +72,19 @@ export const encodeChipMarkdown = (chip: ChipData): string => {
 export const parseChipSegments = (text: string): ChipSegment[] => {
   const segments: ChipSegment[] = [];
   let lastIndex = 0;
-  for (const match of text.matchAll(CHIP_REF_PATTERN)) {
+  for (const match of text.matchAll(SCAN_PATTERN)) {
+    const [token, rawLabel = "", prefix, rawValue = "", rawQuery] = match;
+    // A label with no token after it stays in the surrounding text.
+    if (prefix === undefined) continue;
     const start = match.index;
     if (start > lastIndex) {
       segments.push({ type: "text", text: text.slice(lastIndex, start) });
     }
-    const [token, label = "", prefix = "", rawValue = "", rawQuery] = match;
     const params = new URLSearchParams(rawQuery ?? "");
     const icon = params.get("icon");
     segments.push({
       type: "chip",
-      label,
+      label: unescapeMarkdownLink(rawLabel),
       prefix,
       value: safeDecode(rawValue),
       ...(icon ? { icon } : {}),
