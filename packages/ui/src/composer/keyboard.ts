@@ -62,7 +62,11 @@ export const interpretEditorKey = (
     case hasActiveQuestions && key === "Escape":
       return { type: "question-dismiss" };
 
-    case key === "Backspace" && context.isEditorEmpty && context.hasAttachments:
+    // Attachments belong to the message, which waits while questions run.
+    case key === "Backspace" &&
+      !hasActiveQuestions &&
+      context.isEditorEmpty &&
+      context.hasAttachments:
       return { type: "remove-last-attachment" };
 
     // Send / soft break — the chord mapping swaps on submitOn. Sending stays

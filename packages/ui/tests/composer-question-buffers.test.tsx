@@ -194,6 +194,26 @@ describe("the message buffer around a question flow", () => {
     expect(submitted[0]?.kind).toBe("answers");
     expect(store.controller.serialize().text).toBe(message);
   });
+
+  test("keeps its attachments through a Backspace in an empty step", async () => {
+    const store = Composer.createStore();
+    const { rerender } = render(<Harness store={store} />);
+    type(store, "see the attached notes");
+    act(() =>
+      store.getSnapshot().attachments.add([new File(["x"], "notes.txt", { type: "text/plain" })]),
+    );
+    act(() => editor().focus());
+
+    rerender(<Harness store={store} questions={TWO} />);
+    await flushFrames();
+    press(editor(), "Backspace");
+    press(editor(), "ArrowDown");
+    press(radio("PostgreSQL"), "Enter");
+    press(radio("EU"), "Enter");
+
+    expect(store.controller.getText()).toBe("see the attached notes");
+    expect(store.getSnapshot().attachments.items.map((item) => item.filename)).toEqual(["notes.txt"]);
+  });
 });
 
 describe("step buffers", () => {
