@@ -215,6 +215,17 @@ The `<div>` that owns submission, store resolution, drag-and-drop, and the
 prop → store bridges. Renders `data-composer-root`. Pass `render={<form />}` to
 make it a form; a submit event on that form sends too.
 
+The root measures itself and the `Container` in whole px and publishes the result
+twice. Descendants read the four CSS variables below, with a fallback because each
+is absent until measured: `height: var(--composer-height, 0px)`. The container
+pair is absent while no `Container` is mounted. A hidden composer measures 0, which
+is a real size. `Panel` and `Popover` content is portaled out of the root, so it
+doesn't inherit the variables. Read `useComposer((c) => c.size)` inside the tree,
+portals included, and `useComposerStore(store, (c) => c.size)` from a sibling or
+parent that holds a `Composer.createStore()` handle. `size` is `null` until a root
+mounts. Don't size the root's own content from `--composer-height`, because that
+feeds back into the measurement.
+
 export const rootProps = [
   { name: "onSubmit", type: "(data: ComposerSubmitData) => void | Promise<void>", description: "Fires on message submit and on ask-user answers. Discriminate on data.kind." },
   { name: "commands", type: "ComposerCommandsMap", default: "{}", description: "Prefix → command config (kind, trigger, items, suggestion, placeholder). suggestion: false disables ghost-text completion; placeholder sets the per-prefix empty-query hint (never shown alongside a suggestion — the suggestion wins)." },
@@ -232,6 +243,10 @@ export const rootAttrs = [
   { attribute: "data-composer-root", description: "The root element." },
   { attribute: "data-submitting", description: "Present while isSubmitting is true." },
   { attribute: "data-dragging", description: "Present while files are dragged over the drop scope." },
+  { attribute: "--composer-height", values: "whole px", description: "The root's height. Absent until measured." },
+  { attribute: "--composer-width", values: "whole px", description: "The root's width. Absent until measured." },
+  { attribute: "--composer-container-height", values: "whole px", description: "The Container's height. Absent until measured, and while no Container is mounted." },
+  { attribute: "--composer-container-width", values: "whole px", description: "The Container's width. Absent until measured, and while no Container is mounted." },
 ];
 
 <AttributesTable rows={rootAttrs} />
@@ -421,7 +436,7 @@ UI-style): `--anchor-width` / `--anchor-height` (the anchor's box, e.g.
 so the content scrolls instead of overflowing).
 
 export const panelProps = [
-  { name: "children", type: "ReactNode | ((composer: ComposerState) => ReactNode)", description: "Panel content, or a callback that reads composer state and returns one branch by priority." },
+  { name: "children", type: 'ReactNode | ((composer: Omit<ComposerState, "size">) => ReactNode)', description: "Panel content, or a callback that reads composer state and returns one branch by priority." },
   { name: "anchor", type: "boolean | Element | RefObject<Element>", description: "Positioned, portaled overlay (default true, anchored to the Container) or an in-flow block (false). A ref/element anchors elsewhere. Match its width with width: var(--anchor-width)." },
   { name: "side", type: '"top" | "bottom" | "left" | "right"', description: "Overlay preferred side; flips to the opposite on collision. Default \"top\"." },
   { name: "align", type: '"start" | "center" | "end"', description: "Overlay alignment along the side. Default \"center\"." },
@@ -457,7 +472,7 @@ written imperatively — the styled layer supplies only box and animation stylin
 not `left`/`top`.
 
 export const popoverProps = [
-  { name: "children", type: "ReactNode | ((composer: ComposerState) => ReactNode)", description: "Same content as Panel — nodes or a state callback." },
+  { name: "children", type: 'ReactNode | ((composer: Omit<ComposerState, "size">) => ReactNode)', description: "Same content as Panel — nodes or a state callback." },
   { name: "pin", type: "boolean", description: "Hold the placement without collision repositioning (drops flip + shift). Default false." },
 ];
 
