@@ -52,7 +52,6 @@ describe("groupTurns", () => {
     const turns = groupTurns(records, "human");
 
     expect(turns.map((t) => t.key)).toEqual(["q1", "q2"]);
-    // The element type flows through, so a consumer reads its own fields back.
     expect(turns[0]?.messages.map((m) => m.body)).toEqual(["hi", "hello"]);
     const accepted: Turn<(typeof records)[number]> | undefined = turns[0];
     expect(accepted?.key).toBe("q1");

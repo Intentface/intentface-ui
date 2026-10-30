@@ -81,7 +81,6 @@ describe("Thread.Root dock variables", () => {
     const { container } = render(<Transcript mode="follow" ids={["a"]} />);
     const root = container.querySelector("[data-thread-root]") as HTMLElement;
 
-    // 600 - 540 + the 32px gap
     expect(root.style.getPropertyValue("--thread-dock-inset")).toBe("92px");
     expect(root.style.getPropertyValue("--thread-dock-height")).toBe("60px");
     expect(root.style.getPropertyValue("--thread-dock-width")).toBe("640px");
@@ -200,8 +199,6 @@ describe("Thread.Content reserve", () => {
   });
 });
 
-// The warning is deduplicated process-wide by its text, so no test in this file may render
-// non-turn children outside the last case, and the cases that must stay quiet run before it.
 describe("Thread.Content turn warning", () => {
   let warn: ReturnType<typeof spyOn<Console, "warn">>;
 

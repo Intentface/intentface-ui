@@ -49,8 +49,7 @@ const REPLY =
  *
  * Each question and its reply share a Message.Turn, so the reserve lands on the
  * whole turn (the primitive puts it on the last child). The docked composer is
- * measured, so the reserve fills exactly the visible area, and the pt-4 above
- * Thread.Content is the gap a landed turn leaves at the top.
+ * measured, so the reserve fills exactly the visible area.
  *
  * Remounting on a mode change is this demo's doing, not a requirement: the key
  * forces a fresh scroll subsystem so each mode is observed from its own
@@ -139,7 +138,6 @@ export const AutoScroll = () => {
           />
           <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
             <div className="relative flex min-h-full w-full flex-col pt-4 pb-(--thread-dock-inset)">
-              {/* The primitive reserves the visible area on the last child: the newest turn. */}
               <Thread.Content className="flex min-h-full w-full flex-col gap-5 px-4">
                 {exchanges.map((exchange, index) => (
                   <Message.Turn key={exchange.id} className="flex flex-col gap-5">

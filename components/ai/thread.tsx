@@ -48,8 +48,6 @@ const OVERLAY_EDGE = {
   bottom: ["bottom-0 h-(--thread-dock-inset)", "bg-linear-to-t"],
 } as const;
 
-// Plain div, not a package part: the fade covers the top padding or the dock
-// inset, both of which the viewport below pads by.
 const ThreadOverlay = memo(({ className, direction, ...props }: ThreadOverlayProps) => {
   const [edge, gradient] = OVERLAY_EDGE[direction];
 
@@ -96,9 +94,6 @@ const ThreadViewport = ({ children, className, ...props }: ThreadViewportProps) 
       {...props}
     >
       <div className="relative flex min-h-full w-full flex-col items-center pt-(--chat-top-inset) pb-(--thread-dock-inset)">
-        {/* Content column. Its children are turns; the package puts the
-            auto-scroll reserve on the last one, and the padding above this
-            wrapper is the gap a landed turn leaves at the top. */}
         <ThreadPrimitive.Content className="mx-auto px-4 flex min-h-full w-full max-w-(--thread-width) flex-col gap-4">
           {children}
         </ThreadPrimitive.Content>

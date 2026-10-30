@@ -4,7 +4,7 @@ import {
   DOCK_SELECTOR,
   measureDockInset,
   measureDockSize,
-  measureTopInset,
+  measureLandingGap,
   queryDock,
   readViewportBox,
   sameViewportBox,
@@ -111,7 +111,7 @@ describe("queryDock", () => {
   });
 });
 
-describe("measureTopInset", () => {
+describe("measureLandingGap", () => {
   const rootWith = (parts: { scroller?: unknown; content?: unknown }) =>
     ({
       querySelector: (selector: string) =>
@@ -125,25 +125,26 @@ describe("measureTopInset", () => {
   const content = (top: number) => ({ getBoundingClientRect: () => ({ top }) });
 
   test("is the space between the scroller's top and the content's top", () => {
-    expect(measureTopInset(rootWith({ scroller: scroller(100), content: content(124) }))).toBe(24);
-  });
-
-  test("does not change while the scroller is scrolled", () => {
-    // Scrolled 80px: the content's box moved up by 80 along with everything in it.
-    expect(measureTopInset(rootWith({ scroller: scroller(100, 80), content: content(44) }))).toBe(
+    expect(measureLandingGap(rootWith({ scroller: scroller(100), content: content(124) }))).toBe(
       24,
     );
   });
 
+  test("does not change while the scroller is scrolled", () => {
+    expect(
+      measureLandingGap(rootWith({ scroller: scroller(100, 80), content: content(124 - 80) })),
+    ).toBe(24);
+  });
+
   test("starts below the scroller's border", () => {
     expect(
-      measureTopInset(rootWith({ scroller: scroller(100, 0, 2), content: content(126) })),
+      measureLandingGap(rootWith({ scroller: scroller(100, 0, 2), content: content(126) })),
     ).toBe(24);
   });
 
   test("is 0 until the scroller and the content are mounted", () => {
-    expect(measureTopInset(rootWith({ content: content(24) }))).toBe(0);
-    expect(measureTopInset(rootWith({ scroller: scroller(100) }))).toBe(0);
+    expect(measureLandingGap(rootWith({ content: content(24) }))).toBe(0);
+    expect(measureLandingGap(rootWith({ scroller: scroller(100) }))).toBe(0);
   });
 });
 
