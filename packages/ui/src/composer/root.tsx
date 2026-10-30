@@ -18,6 +18,7 @@ import {
   useComposerSnapshot,
   useDragDropFiles,
 } from "./internals";
+import { createSizeTracker } from "./size";
 import { type ComposerStore, ComposerStoreContext, createComposerStore } from "./store";
 import type {
   AskUserQuestion,
@@ -69,10 +70,14 @@ export const ComposerRoot = ({
   // Resolved once at mount (lazy-init ref, not reactive state): an explicit
   // handle, or an instance this mount creates and owns. Swapping the store
   // prop after mount is not supported.
-  const { store, ownsStore } = useRefWithInit(() => {
+  const { store, ownsStore, sizeTracker } = useRefWithInit(() => {
     const resolved = storeProp ?? createComposerStore();
     resolved.listboxId = listboxId;
-    return { store: resolved, ownsStore: !storeProp };
+    return {
+      store: resolved,
+      ownsStore: !storeProp,
+      sizeTracker: createSizeTracker(resolved.setSize),
+    };
   }).current;
 
   const rootRef = useRef<HTMLElement | null>(null);
@@ -151,8 +156,9 @@ export const ComposerRoot = ({
       commands,
       getRegisteredPrefixes,
       reportEditorUpdate,
+      attachContainer: sizeTracker.attachContainer,
     }),
-    [commands, getRegisteredPrefixes, reportEditorUpdate],
+    [commands, getRegisteredPrefixes, reportEditorUpdate, sizeTracker],
   );
 
   const rootElement = useRenderElement(
@@ -160,7 +166,7 @@ export const ComposerRoot = ({
     { className, render, style },
     {
       state: { submitting: isSubmitting, dragging: isDragging },
-      ref: rootRef,
+      ref: [rootRef, sizeTracker.attachRoot],
       props: [
         { "data-composer-root": "", onSubmit: handleFormSubmit, onKeyDown: handleKeyDown },
         elementProps,

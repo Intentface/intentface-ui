@@ -126,6 +126,12 @@ export type ComposerCommandsState = ComposerPanelSlice & {
   activeOptionId: string | null;
 };
 
+/** A part's layout box in whole CSS px (offsetWidth / offsetHeight). */
+export type ComposerBox = { readonly width: number; readonly height: number };
+
+/** Composer.Root's box, with Composer.Container's nested: no container size without a root size. */
+export type ComposerSize = ComposerBox & { readonly container: ComposerBox | null };
+
 export type ComposerState = {
   // Data only — the reactive editor flags. The imperative methods live on
   // store.controller (or useComposerController()), so a component that only
@@ -136,6 +142,8 @@ export type ComposerState = {
   commands: ComposerCommandsState;
   attachments: ComposerAttachmentsState;
   askUser: ComposerAskUserState;
+  /** null while no Composer.Root is mounted (server, before the first commit, after an explicit store's Root unmounts). 0 is a real measurement. */
+  size: ComposerSize | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -145,7 +153,11 @@ export type ComposerState = {
 export type ComposerStore = {
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => ComposerState;
+  // Everything but `size`, so a Panel or Popover callback doesn't re-render on
+  // every wrapped line. Not consumer API, like the bridges below.
+  getContentSnapshot: () => Omit<ComposerState, "size">;
   // Bridges for props and editor/document integrations — not consumer API.
+  setSize: (next: ComposerSize | null) => void;
   setHasContent: (value: boolean) => void;
   setIsSubmitting: (value: boolean) => void;
   setCommands: (next: { active: boolean; trigger: string | null; query: string }) => void;
@@ -295,6 +307,7 @@ export const createComposerStore = (): ComposerStore => {
   // --- Subscriptions & refs
   const listeners = new Set<() => void>();
   const notify = () => {
+    combined = null;
     for (const listener of listeners) listener();
   };
 
@@ -334,9 +347,21 @@ export const createComposerStore = (): ComposerStore => {
   // Canonical machine states; the snapshot mirrors them on every update.
   let attachmentState = INITIAL_ATTACHMENT_STATE;
   let askUserMachine = INITIAL_ASK_USER_STATE;
-  let snapshot: ComposerState;
+  let snapshot: Omit<ComposerState, "size">;
+  // Owned by the size tracker, so reset() leaves it alone: nulling it under a
+  // mounted Root would leave the tracker's last value blocking the next publish.
+  let size: ComposerSize | null = null;
+  // getSnapshot's merged view, rebuilt after each notify so its identity holds
+  // between them, as useSyncExternalStore requires.
+  let combined: ComposerState | null = null;
 
   // --- Setters
+  const setSize = (next: ComposerSize | null) => {
+    if (size === next) return;
+    size = next;
+    notify();
+  };
+
   const setHasContent = (value: boolean) => {
     if (snapshot.textarea.hasContent === value) return;
     snapshot = { ...snapshot, textarea: { ...snapshot.textarea, hasContent: value } };
@@ -630,7 +655,12 @@ export const createComposerStore = (): ComposerStore => {
         listeners.delete(listener);
       };
     },
-    getSnapshot: () => snapshot,
+    getSnapshot: () => {
+      combined ??= { ...snapshot, size };
+      return combined;
+    },
+    getContentSnapshot: () => snapshot,
+    setSize,
     setHasContent,
     setIsSubmitting,
     setCommands,
@@ -689,6 +719,12 @@ export const useComposerStore = <Selected = ComposerState>(
     return selector ? selector(state) : (state as Selected);
   };
   return useSyncExternalStore(store.subscribe, getValue, getValue);
+};
+
+// Internal: the snapshot without `size`, for Panel and Popover callbacks.
+export const useComposerContent = () => {
+  const store = useComposerContextStore();
+  return useSyncExternalStore(store.subscribe, store.getContentSnapshot, store.getContentSnapshot);
 };
 
 // Subscribe to composer state from inside the tree. With a selector, the
