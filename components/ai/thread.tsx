@@ -28,7 +28,7 @@ export type ThreadRootProps = ComponentProps<typeof ThreadPrimitive.Root>;
 const ThreadRoot = ({ className, ...props }: ThreadRootProps) => (
   <ThreadPrimitive.Root
     className={cn(
-      "relative flex h-full w-full overflow-hidden [--thread-overlay-top-height:4rem] [--thread-overlay-bottom-height:8rem]",
+      "relative flex h-full w-full overflow-hidden [--chat-top-inset:4rem] [--thread-dock-inset:8rem]",
       className,
     )}
     {...props}
@@ -43,27 +43,37 @@ export type ThreadOverlayProps = ComponentProps<typeof ProgressiveBlur> & {
   direction: "top" | "bottom";
 };
 
-const ThreadOverlay = memo(({ className, direction, ...props }: ThreadOverlayProps) => (
-  <ThreadPrimitive.Overlay
-    direction={direction}
-    className={cn(
-      "group/thread-overlay pointer-events-none absolute right-0 left-0 z-1 mx-auto w-full max-w-(--thread-width)",
-      'data-[thread-overlay="top"]:h-(--thread-overlay-top-height) data-[thread-overlay="top"]:top-0',
-      'data-[thread-overlay="bottom"]:h-(--thread-overlay-bottom-height) data-[thread-overlay="bottom"]:bottom-0',
-      className,
-    )}
-  >
-    <ProgressiveBlur
-      direction={direction}
+const OVERLAY_EDGE = {
+  top: ["top-0 h-(--chat-top-inset)", "bg-linear-to-b"],
+  bottom: ["bottom-0 h-(--thread-dock-inset)", "bg-linear-to-t"],
+} as const;
+
+// Plain div, not a package part: the fade covers the top padding or the dock
+// inset, both of which the viewport below pads by.
+const ThreadOverlay = memo(({ className, direction, ...props }: ThreadOverlayProps) => {
+  const [edge, gradient] = OVERLAY_EDGE[direction];
+
+  return (
+    <div
+      aria-hidden
+      data-slot="thread-overlay"
       className={cn(
-        "h-full w-full bg-linear-to-b from-secondary-bg to-transparent pointer-events-none",
-        "group-data-[thread-overlay='top']/thread-overlay:bg-linear-to-b",
-        "group-data-[thread-overlay='bottom']/thread-overlay:bg-linear-to-t",
+        "pointer-events-none absolute right-0 left-0 z-1 mx-auto w-full max-w-(--thread-width)",
+        edge,
+        className,
       )}
-      {...props}
-    />
-  </ThreadPrimitive.Overlay>
-));
+    >
+      <ProgressiveBlur
+        direction={direction}
+        className={cn(
+          "h-full w-full bg-linear-to-b from-secondary-bg to-transparent pointer-events-none",
+          gradient,
+        )}
+        {...props}
+      />
+    </div>
+  );
+});
 
 ThreadOverlay.displayName = "ThreadOverlay";
 
@@ -85,11 +95,11 @@ const ThreadViewport = ({ children, className, ...props }: ThreadViewportProps) 
       )}
       {...props}
     >
-      <div className="relative flex min-h-full w-full flex-col items-center pt-(--thread-overlay-top-height) pb-(--thread-overlay-bottom-height)">
-        {/* Content column — children are direct, so the auto-scroll reserve
-            lives here as the last child's min-height. Consumers don't wire it:
-            the autoScroll prop sets --thread-turn-min-height (0 when off/unset). */}
-        <ThreadPrimitive.Content className="mx-auto px-4 flex min-h-full w-full max-w-(--thread-width) flex-col gap-4 [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+      <div className="relative flex min-h-full w-full flex-col items-center pt-(--chat-top-inset) pb-(--thread-dock-inset)">
+        {/* Content column. Its children are turns; the package puts the
+            auto-scroll reserve on the last one, and the padding above this
+            wrapper is the gap a landed turn leaves at the top. */}
+        <ThreadPrimitive.Content className="mx-auto px-4 flex min-h-full w-full max-w-(--thread-width) flex-col gap-4">
           {children}
         </ThreadPrimitive.Content>
       </div>
@@ -105,10 +115,7 @@ export type ThreadComposerProps = ComponentProps<"div">;
 
 const ThreadComposer = ({ className, children, ...props }: ThreadComposerProps) => (
   <ThreadPrimitive.Composer
-    className={cn(
-      "absolute inset-x-0 bottom-0 mx-auto w-full z-2 max-w-(--thread-width)",
-      className,
-    )}
+    className={cn("mx-auto w-full z-2 max-w-(--thread-width)", className)}
     {...props}
   >
     <div className="relative flex w-full flex-col items-center px-4 pb-4 @lg/thread-viewport:px-0">

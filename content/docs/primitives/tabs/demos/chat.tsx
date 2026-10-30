@@ -56,7 +56,7 @@ export const SEEDED: Record<string, Chat> = {
 };
 
 // Thread measures its docked composer and publishes the reserve as
-// --thread-overlay-bottom-height, so the last message never hides behind it.
+// --thread-dock-inset, so the last message never hides behind it.
 export const ChatThread = ({
   chat,
   onSend,
@@ -84,10 +84,10 @@ export const ChatThread = ({
     <Thread.Root
       autoScroll="bottom"
       onKeyDown={handleKeyDown}
-      className="relative flex h-full w-full overflow-hidden [--thread-overlay-top-height:0.75rem]"
+      className="relative flex h-full w-full overflow-hidden"
     >
       <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
-        <div className="relative flex min-h-full w-full flex-col pt-(--thread-overlay-top-height) pb-(--thread-overlay-bottom-height)">
+        <div className="relative flex min-h-full w-full flex-col pt-3 pb-(--thread-dock-inset)">
           <Thread.Content className="flex w-full flex-col justify-end gap-4 px-2.5">
             {chat.turns.map((turn, index) => (
               <Message.Root
@@ -104,7 +104,7 @@ export const ChatThread = ({
           </Thread.Content>
         </div>
       </Thread.Viewport>
-      <Thread.Composer className="absolute inset-x-0 bottom-0 z-2 w-full p-1 pt-0">
+      <Thread.Composer className="z-2 w-full p-1 pt-0">
         <DockComposer
           placeholder="Reply…"
           onSubmit={onSend}
