@@ -42,7 +42,7 @@ scroll button are yours:
     <div className="pt-4 pb-(--thread-dock-inset)">
       <Thread.Content>
         {turns.map((turn) => (
-          <Message.Turn key={turn.key} data-message-id={turn.id}>{/* … */}</Message.Turn>
+          <Message.Turn key={turn.key} data-message-id={turn.key}>{/* … */}</Message.Turn>
         ))}
       </Thread.Content>
     </div>
@@ -102,7 +102,7 @@ write no rule for the reserve. Three rules keep the landing exact:
 - **Children are turns.** The reserve goes on the last child, so make that child
   the turn: wrap each question and its reply in `Message.Turn`. On a bare reply,
   the question above it is pushed off the top. In development the thread warns
-  once when none of the children is a `Message.Turn`.
+  once when the last child isn't a `Message.Turn`.
 - **The top padding is the landing gap.** A landed turn sits exactly as far from
   the top edge as the space above `Thread.Content` inside the viewport. Put
   that space on a wrapper as `pt-4`, or leave it out and the turn lands flush.
@@ -285,7 +285,7 @@ per-row cost:
 
 ```tsx
 {turns.map((turn) => (
-  <Message.Turn key={turn.key} data-message-id={turn.id}>{/* … */}</Message.Turn>
+  <Message.Turn key={turn.key} data-message-id={turn.key}>{/* … */}</Message.Turn>
 ))}
 ```
 

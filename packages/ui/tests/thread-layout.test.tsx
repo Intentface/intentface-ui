@@ -6,9 +6,14 @@ import { Thread, type ThreadAutoScrollMode } from "../src/thread";
 
 const RESERVE = "var(--thread-turn-min-height, 0px)";
 
-type TranscriptProps = { mode: ThreadAutoScrollMode; ids: string[]; asTurns?: boolean };
+type TranscriptProps = {
+  mode: ThreadAutoScrollMode;
+  ids: string[];
+  asTurns?: boolean;
+  trailing?: boolean;
+};
 
-const Transcript = ({ mode, ids, asTurns = true }: TranscriptProps) => (
+const Transcript = ({ mode, ids, asTurns = true, trailing = false }: TranscriptProps) => (
   <Thread.Root autoScroll={mode}>
     <Thread.Viewport>
       <Thread.Content data-testid="content">
@@ -23,6 +28,7 @@ const Transcript = ({ mode, ids, asTurns = true }: TranscriptProps) => (
             </div>
           ),
         )}
+        {trailing && <div data-testid="trailing">typing…</div>}
       </Thread.Content>
     </Thread.Viewport>
     <Thread.Composer data-testid="composer" />
@@ -241,9 +247,10 @@ describe("Thread.Content turn warning", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  test("warns once when the children are not turns", async () => {
-    const { rerender } = render(<Transcript mode="follow" ids={["a"]} asTurns={false} />);
-    rerender(<Transcript mode="follow" ids={["a", "b"]} asTurns={false} />);
+  // The reserve goes on the last child, so a turn earlier in the list doesn't help.
+  test("warns once when the last child is not a turn", async () => {
+    const { rerender } = render(<Transcript mode="follow" ids={["a"]} trailing />);
+    rerender(<Transcript mode="follow" ids={["a", "b"]} trailing />);
     await flush();
 
     expect(warn).toHaveBeenCalledTimes(1);
