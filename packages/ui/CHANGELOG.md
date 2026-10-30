@@ -1,5 +1,12 @@
 # @intentface/ui
 
+## 0.8.0
+
+### Minor Changes
+
+- [Chip] Fix `parseChipSegments` dropping chips whose label has brackets, and keeping the backslashes `encodeChipMarkdown` adds before brackets, parentheses and backslashes.
+- [Chip] [Breaking] Remove `CHIP_REF_PATTERN`. Read chip tokens with `parseChipSegments`.
+
 ## 0.7.0
 
 ### Minor Changes

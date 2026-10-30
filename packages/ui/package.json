@@ -1,6 +1,6 @@
 {
   "name": "@intentface/ui",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Headless UI primitives — unstyled compound components, hooks, and wire formats for AI chat interfaces and the app shells around them.",
   "license": "MIT",
   "type": "module",
