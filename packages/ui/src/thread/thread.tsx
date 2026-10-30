@@ -885,6 +885,11 @@ export const ThreadViewport = ({
 
 export type ThreadContentProps = PrimitiveProps<"div">;
 
+/**
+ * The column inside the viewport that holds the turns. While a top-landing mode
+ * is active it sets `min-height: var(--thread-turn-min-height, 0px)` on its last
+ * child.
+ */
 export const ThreadContent = ({
   className,
   render,
@@ -937,6 +942,11 @@ export const ThreadContent = ({
 
 export type ThreadComposerProps = PrimitiveProps<"div">;
 
+/**
+ * Bottom-docked slot for the composer. Positions itself along the root's bottom
+ * edge (a `style` prop overrides), and its box is measured into
+ * `--thread-dock-inset`, `--thread-dock-height` and `--thread-dock-width` on the root.
+ */
 export const ThreadComposer = ({
   className,
   render,

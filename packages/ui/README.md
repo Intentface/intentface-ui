@@ -12,21 +12,28 @@ Tailwind, meant to be copied and restyled.
 "use client";
 import { Composer } from "@intentface/ui/composer";
 import { Message } from "@intentface/ui/message";
+import { groupTurns } from "@intentface/ui/message-utils";
 import { Thread } from "@intentface/ui/thread";
 
 export const Chat = ({ messages, send }: ChatProps) => (
-  <Thread.Root autoScroll="follow" className="relative flex h-dvh flex-col">
-    <Thread.Viewport className="flex-1 overflow-y-auto">
-      <Thread.Content className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
-        {messages.map((message) => (
-          <Message.Root key={message.id} role={message.role}>
-            <Message.Text>{message.text}</Message.Text>
-          </Message.Root>
-        ))}
-      </Thread.Content>
+  <Thread.Root autoScroll="follow" className="h-dvh">
+    <Thread.Viewport className="h-full">
+      <div className="min-h-full pt-6 pb-(--thread-dock-inset)">
+        <Thread.Content className="mx-auto flex max-w-2xl flex-col gap-4 px-4">
+          {groupTurns(messages).map((turn) => (
+            <Message.Turn key={turn.key} className="flex flex-col gap-4">
+              {turn.messages.map((message) => (
+                <Message.Root key={message.id} role={message.role}>
+                  <Message.Text>{message.text}</Message.Text>
+                </Message.Root>
+              ))}
+            </Message.Turn>
+          ))}
+        </Thread.Content>
+      </div>
     </Thread.Viewport>
 
-    <Thread.Composer className="p-4">
+    <Thread.Composer className="mx-auto w-full max-w-2xl p-4">
       <Composer.Root onSubmit={send}>
         <Composer.Container className="rounded-xl border p-2">
           <Composer.Textarea placeholder="Ask anything" />
@@ -40,8 +47,12 @@ export const Chat = ({ messages, send }: ChatProps) => (
 );
 ```
 
-Every class above is yours; delete them and the chat still works, it just looks
-like unstyled HTML.
+Every class above is yours. The package docks `Thread.Composer` along the bottom
+edge and publishes the room it takes as `--thread-dock-inset`, so the padding
+wrapper uses it as bottom padding. It also reserves a visible area on the last
+child of `Thread.Content`, which is why each child is a `Message.Turn`: the
+newest question and its reply land together at the top. The `pt-6` above the
+content is the gap a landed turn leaves.
 
 ## Status
 
