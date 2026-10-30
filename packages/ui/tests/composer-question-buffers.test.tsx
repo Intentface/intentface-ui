@@ -5,11 +5,6 @@ import { Composer, type ComposerStore } from "../src/composer";
 import { useComposer } from "../src/composer/store";
 import type { ComposerQuestion, ComposerSnapshot, ComposerSubmitData } from "../src/composer/types";
 
-// Every composer mode owns its own editor buffer: the message a user was
-// typing waits while questions run, each step keeps its own free text, and
-// the message comes back, chips included, once the flow ends. Keystrokes in a
-// focused editor stay typing when questions arm.
-
 const TWO: ComposerQuestion[] = [
   {
     id: "database",
@@ -78,8 +73,6 @@ const Harness = ({ store, questions, onSubmit = () => {}, value, onValueChange }
   </Composer.Root>
 );
 
-// activateQuestions settles focus and highlight one frame past the commit
-// that mounts the options.
 const flushFrames = () =>
   act(
     () =>
@@ -133,7 +126,6 @@ describe("the message buffer around a question flow", () => {
     expect(store.controller.serialize().text).toBe(message);
     expect(document.activeElement).toBe(editor());
 
-    // A host that clears `questions` once it has the answers ends nothing twice.
     rerender(<Harness store={store} onSubmit={onSubmit} />);
     expect(store.controller.serialize().text).toBe(message);
   });
@@ -246,8 +238,6 @@ describe("step buffers", () => {
     click(previous());
     expect(store.controller.getText()).toBe("answer one");
 
-    // Continue into a step visited earlier shows what was typed there instead
-    // of an empty editor.
     click(continueButton());
     expect(store.controller.getText()).toBe("answer two");
     click(continueButton());
@@ -292,8 +282,6 @@ describe("step buffers", () => {
     expect(store.getSnapshot().questions.step).toBe(0);
     expect(submitted).toEqual([]);
 
-    // Whitespace alone is no answer either: a Space typed before Enter must
-    // not turn Enter into a skip.
     type(store, "  ");
     expect(fireEvent.keyDown(editor(), { key: "Enter" })).toBe(false);
     expect(store.getSnapshot().questions.step).toBe(0);
@@ -322,7 +310,6 @@ describe("arming", () => {
     expect(store.getSnapshot().questions.step).toBe(0);
     expect(screen.queryAllByRole("radio", { checked: true })).toEqual([]);
 
-    // The arrows still enter the options, at the first one.
     press(editor(), "ArrowDown");
     expect(document.activeElement).toBe(radio("PostgreSQL"));
     press(radio("PostgreSQL"), "Enter");
@@ -338,8 +325,6 @@ describe("arming", () => {
     type(store, "hello");
     act(() => editor().focus());
 
-    // No frame flush: the options have mounted and highlighted their first
-    // item, and activateQuestions has not settled yet.
     rerender(<Harness store={store} onSubmit={onSubmit} questions={TWO} />);
     press(editor(), " ");
     press(editor(), "Enter");
@@ -472,7 +457,6 @@ describe("a controlled composer", () => {
     type(store, "step answer");
     expect(reported.length).toBe(reportsBeforeSteps);
 
-    // The host's value changes mid-flow: the editor keeps showing the step.
     act(() => setValue(first));
     expect(store.controller.getText()).toBe("step answer");
 
@@ -490,8 +474,6 @@ describe("a controlled composer", () => {
     expect(reported.length).toBeGreaterThan(reportsBeforeSteps);
   });
 
-  // Blink and WebKit move focus to wherever the DOM selection is written, so a
-  // load that wrote it would also take focus from the other field.
   test("loads a new value, open command token included, without moving the caret out of another field", () => {
     const store = Composer.createStore();
     const other = Composer.createStore();
@@ -529,8 +511,6 @@ describe("a controlled composer", () => {
 });
 
 describe("Continue", () => {
-  // A host that keeps its own Done button mounted while it saves the answers,
-  // so the button outlives the flow it ended.
   const HostWithDone = ({ store, questions, onSubmit }: HarnessProps) => (
     <Composer.Root store={store} questions={questions} onSubmit={onSubmit}>
       <Composer.Textarea aria-label="Message" />

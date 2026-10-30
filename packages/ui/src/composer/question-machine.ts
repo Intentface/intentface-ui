@@ -9,9 +9,6 @@ import type { ComposerAnswer, ComposerQuestion, ComposerSnapshot } from "./types
 // store speaks to it in.
 // ---------------------------------------------------------------------------
 
-// A step's free-text field as the user left it: the editor snapshot to show
-// again and its plain text for the answer, captured together so the two can't
-// drift. The snapshot is opaque here. The machine only stores and returns it.
 export type EditorBuffer = {
   snapshot: ComposerSnapshot;
   text: string;
@@ -33,17 +30,12 @@ export const INITIAL_QUESTIONS_STATE: QuestionsState = {
   drafts: new Map(),
 };
 
-// Everything a transition may ask of the outside world. The store executes
-// these against the editor, the options handle, and the submit callback — the
-// transitions below only describe them.
 export type QuestionsEffect =
   | { type: "load-buffer"; buffer: EditorBuffer | null }
   | { type: "focus-options" }
   | { type: "reset-highlight" }
   | { type: "submit-answers"; answers: ComposerAnswer[] };
 
-// Actions that leave a step carry the editor's buffer as captured by the
-// store, so the step keeps exactly what the user saw.
 export type QuestionsAction =
   | { type: "toggle-option"; label: string }
   | { type: "select-option"; label: string }
@@ -72,9 +64,6 @@ const cloneDrafts = (source: Map<number, AnswerDraft>) => new Map(source);
 
 const hasText = (buffer: EditorBuffer | null) => buffer !== null && buffer.text.trim().length > 0;
 
-// Save the editor's buffer as the step's free-text answer. Single-select treats
-// text and a chosen option as mutually exclusive, so text drops any selection;
-// multi-select keeps existing selections alongside the text.
 const saveStepBuffer = (
   drafts: Map<number, AnswerDraft>,
   step: number,
@@ -97,9 +86,6 @@ const skipStep = (drafts: Map<number, AnswerDraft>, step: number): Map<number, A
   return next;
 };
 
-// Toggle an option on the step's draft. Multi-select toggles membership and
-// keeps the buffer; single-select replaces both (option and text are mutually
-// exclusive).
 const toggleAnswer = (
   drafts: Map<number, AnswerDraft>,
   step: number,
@@ -153,8 +139,6 @@ export const isLastStep = (state: QuestionsState, questions: ComposerQuestion[])
 // plus the effects to run. transitionQuestions is the single entry point.
 // ---------------------------------------------------------------------------
 
-// Show `targetStep`: load its saved buffer (empty when it has none) and arm its
-// options, highlight reset.
 const showStep = (next: QuestionsState): QuestionsTransition => ({
   next,
   effects: [
@@ -164,8 +148,6 @@ const showStep = (next: QuestionsState): QuestionsTransition => ({
   ],
 });
 
-// Commit `nextDrafts` and advance one step: show the next question, or compile
-// and submit on the last step.
 const advanceStep = (
   state: QuestionsState,
   questions: ComposerQuestion[],
@@ -179,8 +161,6 @@ const advanceStep = (
   };
 };
 
-// Navigate to `targetStep`, saving the buffer of the step being left and
-// showing the target's.
 const transitionToStep = (
   state: QuestionsState,
   targetStep: number,

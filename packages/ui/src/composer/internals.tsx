@@ -105,10 +105,6 @@ export const useDragDropFiles = ({
   }, [rootRef, globalDropRef, setDragging]);
 };
 
-// The controlled/uncontrolled bridge for the message buffer only. Writes go
-// through store.setMessageSnapshot, which lands them in the editor or, while
-// questions run, in the parked message; reads skip the editor while it shows a
-// question step's answer.
 export const useComposerSnapshot = ({
   store,
   defaultValue,

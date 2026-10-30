@@ -207,8 +207,7 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
   };
 
   // Make the badge span match the tracker state; a DOM change moves the
-  // selection, so the logical caret is rewritten afterwards, while the
-  // selection is the editor's to move (see applyDocument). Never during
+  // selection, so the logical caret is rewritten afterwards. Never during
   // composition — reparenting the composition's text node aborts the IME
   // session.
   const syncBadgeAndCaret = () => {
@@ -237,10 +236,9 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
   // --- Programmatic pipeline — every model-initiated edit renders the
   // canonical DOM, restores the caret, and commits.
 
-  // A load shows a saved buffer rather than editing at the caret. Into an
-  // editor without focus it leaves the DOM selection where it is: Blink and
-  // WebKit move focus into a contenteditable whose selection is written, which
-  // would pull focus out of whatever field the user is typing in.
+  // A load into an editor without focus leaves the DOM selection where it is:
+  // Blink and WebKit move focus into a contenteditable whose selection is
+  // written, which would pull focus out of whatever field the user is typing in.
   const applyDocument = (
     nextDoc: SegmentDoc,
     caretPosition: number,
@@ -498,10 +496,6 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
         return;
       }
       case "question-arrow": {
-        // From the editor no option is current, even while freshly mounted
-        // options still show their first one highlighted, so the arrows enter
-        // the list at its edge. navigate() moves DOM focus onto that option
-        // (roving tabindex).
         event.preventDefault();
         const options = store.getSnapshot().questions.optionsRef.current;
         options?.clearHighlight();

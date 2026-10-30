@@ -22,7 +22,6 @@ const questions: ComposerQuestion[] = [
   },
 ];
 
-// The machine never looks inside a snapshot, so any branded object will do.
 const bufferOf = (text: string): EditorBuffer => ({
   snapshot: { __doc: { text }, __brand: "ComposerSnapshot" } satisfies ComposerSnapshot,
   text,

@@ -92,7 +92,6 @@ export const Prompt = () => {
   );
 };
 
-// Dismiss is a plain button you wire up; Continue continues the step itself.
 export const Controls = () => {
   const questions = useComposer((composer) => composer.questions);
 

@@ -142,11 +142,6 @@ export type ComposerState = {
   questions: ComposerQuestionsState;
 };
 
-// Which buffer the editor shows. Every mode owns its own: the message, the
-// only buffer `value` / `onValueChange` ever see, and one per question step
-// (held by the question machine). While questions run, the message waits in
-// `savedMessage` and the editor is the current step's free-text field; the
-// swap on either transition saves what the editor held and loads the other.
 export type EditorMode =
   | { kind: "message" }
   | { kind: "questions"; savedMessage: ComposerSnapshot | null };
@@ -173,13 +168,7 @@ export type ComposerStore = {
   moveHighlight: (direction: number) => void;
   setHighlight: (index: number) => void;
   setQuestions: (questions: ComposerQuestion[] | null) => void;
-  /** Whether the editor shows the message or a question step's answer. */
   getEditorMode: () => EditorMode;
-  /**
-   * Write the message buffer: into the editor while it shows the message, into
-   * `savedMessage` while questions run, so a controlled `value` or a
-   * `defaultValue` never lands in a step's answer.
-   */
   setMessageSnapshot: (snapshot: ComposerSnapshot) => void;
   setDragging: (active: boolean) => void;
   resetAttachments: () => void;
@@ -207,8 +196,6 @@ export type ComposerStore = {
   // Invokes the active list's current selection. Registered by the mounted
   // CommandList via a callback ref (commit-time), not an effect.
   commandSelectRef: RefObject<(() => void) | null>;
-  // The element in this composer's React tree, portaled parts included, that
-  // last took focus. Composer.Root records it.
   lastFocusedPartRef: RefObject<Element | null>;
 };
 
@@ -244,10 +231,8 @@ const isEventForComposer = (
   return target === null || target === document.body;
 };
 
-// Where focus sits when the question flow is about to move it: this
-// composer's editor, another field the user is typing in, another part of
-// this composer, or elsewhere on the page. The page body counts as the
-// composer's: focus drops there when the focused option goes away.
+// The page body counts as the composer's: focus drops there when the focused
+// option goes away.
 type FocusOwner = "editor" | "field" | "composer" | "page";
 
 const isEditableElement = (element: Element) =>
@@ -268,8 +253,6 @@ const getFocusOwner = ({
   return active === lastFocusedPart ? "composer" : "page";
 };
 
-// The editor's content with its plain text, captured in one read so the text
-// an answer compiles from is the text of the snapshot shown back on that step.
 const readEditorBuffer = (editorRef: RefObject<RegisteredEditor | null>): EditorBuffer | null => {
   const editor = editorRef.current;
   if (!editor) return null;
@@ -291,9 +274,6 @@ const createQuestionsKeydownHandler =
     const scopedOptionsElement = optionsRef.current?.getElement() ?? null;
     const editorDom = editorRef.current?.getRootElement() ?? undefined;
     if (!isEventForComposer(event, editorDom, scopedOptionsElement)) return;
-    // Keys typed into the editor are typing. Its own keydown maps ArrowUp,
-    // ArrowDown, and Escape to the flow; Space and Enter there are a character
-    // and the send chord, never a pick of the highlighted option.
     if (editorDom?.contains(event.target as Node)) return;
 
     const optionsHandle = optionsRef.current;
@@ -468,17 +448,10 @@ export const createComposerStore = (): ComposerStore => {
     notify();
   };
 
-  // --- Editor buffers
-  // Show a buffer in the editor; null shows an empty one. A load never moves
-  // focus, so whoever needs the caret afterwards focuses the editor itself.
-  // Input-content state is the editor engine's own job: engines report
-  // programmatic writes through their update path.
   const loadEditorSnapshot = (snapshot: ComposerSnapshot | null) => {
     editorRef.current?.applySnapshot(snapshot ?? EMPTY_BUFFER);
   };
 
-  // An editor that mounts mid-flow (a remount with an explicit store) shows
-  // the current step's buffer. In message mode it keeps what it mounted with.
   const registerEditor = (editor: RegisteredEditor) => {
     editorRef.current = editor;
     if (mode.kind === "questions") {
@@ -497,25 +470,14 @@ export const createComposerStore = (): ComposerStore => {
       lastFocusedPart: lastFocusedPartRef.current,
     });
 
-  // The Options part renders in reaction to setQuestions' notify, one commit
-  // after the swap, so the entry focus defers a frame.
   let entryFocusFrame = 0;
 
-  // message → questions: park the message and show the first step's (empty)
-  // buffer. The mode flips before the editor empties, so the swap never
-  // reports an empty message through onValueChange. Re-arming mid-flow keeps
-  // the parked message and resets only the steps.
   const enterQuestions = () => {
     if (mode.kind === "message") {
       mode = { kind: "questions", savedMessage: editorRef.current?.getSnapshot() ?? null };
     }
     loadEditorSnapshot(null);
 
-    // Settled from where focus is once the options exist. A user mid-sentence
-    // keeps the caret, and no option is highlighted (the same state as after a
-    // click into the editor). Typing in another field keeps that field.
-    // Otherwise the highlighted option takes focus, which also keeps an option
-    // an early ArrowDown already moved to.
     cancelAnimationFrame(entryFocusFrame);
     entryFocusFrame = requestAnimationFrame(() => {
       const owner = readFocusOwner();
@@ -524,9 +486,6 @@ export const createComposerStore = (): ComposerStore => {
     });
   };
 
-  // questions → message: show the parked message again, and hand it the caret
-  // while the user is still in this composer. Idempotent, so a host that
-  // clears `questions` after the answers went out does not restore twice.
   const endQuestions = () => {
     if (mode.kind !== "questions") return;
     cancelAnimationFrame(entryFocusFrame);
@@ -546,8 +505,6 @@ export const createComposerStore = (): ComposerStore => {
   };
 
   // --- Questions
-  // The execute half of the question flow: replay a transition's effects
-  // against the editor, the options handle, and the submit callback.
   const executeQuestionsEffects = (effects: QuestionsEffect[]) => {
     for (const effect of effects) {
       switch (effect.type) {
@@ -565,8 +522,6 @@ export const createComposerStore = (): ComposerStore => {
           optionsRef.current?.resetHighlight();
           break;
         case "submit-answers":
-          // The flow is over before the host hears the answers, so anything
-          // its callback does to the editor lands on the message.
           endQuestions();
           submitAnswersRef.current?.(effect.answers);
           break;
@@ -574,8 +529,6 @@ export const createComposerStore = (): ComposerStore => {
     }
   };
 
-  // The machine runs only while the editor is a step's answer field: once the
-  // answers went out, a stray Escape or submit must not compile them again.
   const dispatchQuestions = (action: QuestionsAction) => {
     const questions = snapshot.questions.items;
     if (mode.kind !== "questions" || !questions?.length) return;
@@ -618,11 +571,10 @@ export const createComposerStore = (): ComposerStore => {
     else endQuestions();
   };
 
-  // Question mode: while questions are active the options own the keyboard.
-  // The keydown listener sits at the document, scoped by containment
+  // Question mode: while questions are active the options own the keys typed
+  // outside the editor. The keydown listener sits at the document, scoped by containment
   // (isEventForComposer) — so keys keep flowing after a chrome click drops
   // focus to <body>, while a second composer's editor/options never hear them.
-  // The entry focus is enterQuestions' job.
   const activateQuestions = () => {
     const handleKeyDown = createQuestionsKeydownHandler({
       controller,

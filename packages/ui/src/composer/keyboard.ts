@@ -62,7 +62,6 @@ export const interpretEditorKey = (
     case hasActiveQuestions && key === "Escape":
       return { type: "question-dismiss" };
 
-    // Attachments belong to the message, which waits while questions run.
     case key === "Backspace" &&
       !hasActiveQuestions &&
       context.isEditorEmpty &&
@@ -76,8 +75,6 @@ export const interpretEditorKey = (
     case key === "Enter": {
       const sendChordPressed = (context.submitOn ?? "enter") === "enter" ? !shiftKey : shiftKey;
       if (!sendChordPressed || isCommandListOpen) return { type: "soft-break" };
-      // Continue with nothing typed and nothing selected would skip the
-      // question, so the send chord waits for an answer.
       if (hasActiveQuestions && !context.hasStepAnswer) return { type: "block" };
       return { type: "submit-form" };
     }
