@@ -12,7 +12,9 @@ export type EditorKeyAction =
   | { type: "question-dismiss" }
   | { type: "remove-last-attachment" }
   | { type: "submit-form" }
-  | { type: "soft-break" };
+  | { type: "soft-break" }
+  /** Claim the key and do nothing with it. */
+  | { type: "block" };
 
 /** Which Enter chord sends the message; the other inserts a soft break. */
 export type ComposerSubmitOn = "enter" | "shift-enter";
@@ -20,6 +22,8 @@ export type ComposerSubmitOn = "enter" | "shift-enter";
 export type EditorKeyContext = {
   isCommandListOpen: boolean;
   hasActiveQuestions: boolean;
+  /** Whether the current question step has an option selected. */
+  hasStepSelection: boolean;
   isEditorEmpty: boolean;
   hasAttachments: boolean;
   /** Defaults to "enter" (Enter sends, Shift+Enter breaks). */
@@ -67,9 +71,13 @@ export const interpretEditorKey = (
     // neither mapping can submit mid-popup).
     case key === "Enter": {
       const sendChordPressed = (context.submitOn ?? "enter") === "enter" ? !shiftKey : shiftKey;
-      return sendChordPressed && !isCommandListOpen
-        ? { type: "submit-form" }
-        : { type: "soft-break" };
+      if (!sendChordPressed || isCommandListOpen) return { type: "soft-break" };
+      // Continue with nothing typed and nothing selected would skip the
+      // question, so the send chord waits for an answer.
+      if (hasActiveQuestions && context.isEditorEmpty && !context.hasStepSelection) {
+        return { type: "block" };
+      }
+      return { type: "submit-form" };
     }
 
     default:

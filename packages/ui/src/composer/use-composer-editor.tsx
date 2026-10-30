@@ -430,12 +430,13 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     if (event.isComposing || event.keyCode === 229) return;
 
     const { store, options } = getDependencies();
-    const { attachments } = store.getSnapshot();
+    const { questions, attachments } = store.getSnapshot();
     const action = interpretEditorKey(
       { key: event.key, shiftKey: event.shiftKey },
       {
         isCommandListOpen: commandState.isOpen,
         hasActiveQuestions: store.getEditorMode().kind === "questions",
+        hasStepSelection: (questions.drafts.get(questions.step)?.selected.size ?? 0) > 0,
         isEditorEmpty: getPlainText(doc) === "",
         hasAttachments: attachments.items.length > 0,
         submitOn: options.submitOn,
@@ -444,6 +445,10 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     if (!action) return;
 
     switch (action.type) {
+      case "block": {
+        event.preventDefault();
+        return;
+      }
       case "command-select": {
         event.preventDefault();
         store.commandSelectRef.current?.();
