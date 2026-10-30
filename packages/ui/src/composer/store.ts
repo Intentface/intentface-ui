@@ -241,6 +241,21 @@ const isEventForComposer = (
   return target === null || target === document.body;
 };
 
+// Where focus sits when the question flow is about to move it: this
+// composer's editor, another field the user is typing in, or anything else.
+type FocusOwner = "editor" | "field" | "other";
+
+const isEditableElement = (element: Element) =>
+  element instanceof HTMLElement &&
+  (element.isContentEditable || element.matches("input, textarea, select"));
+
+const getFocusOwner = (editorDom: HTMLElement | null): FocusOwner => {
+  const active = document.activeElement;
+  if (active === null) return "other";
+  if (active === editorDom) return "editor";
+  return isEditableElement(active) ? "field" : "other";
+};
+
 // The editor's content with its plain text, captured in one read so the text
 // an answer compiles from is the text of the snapshot shown back on that step.
 const readEditorBuffer = (editorRef: RefObject<RegisteredEditor | null>): EditorBuffer | null => {
@@ -479,12 +494,14 @@ export const createComposerStore = (): ComposerStore => {
 
     // Settled from where focus is once the options exist. A user mid-sentence
     // keeps the caret, and no option is highlighted (the same state as after a
-    // click into the editor). Otherwise the highlighted option takes focus,
-    // which also keeps an option an early ArrowDown already moved to.
+    // click into the editor). Typing in another field keeps that field.
+    // Otherwise the highlighted option takes focus, which also keeps an option
+    // an early ArrowDown already moved to.
     cancelAnimationFrame(entryFocusFrame);
     entryFocusFrame = requestAnimationFrame(() => {
-      if (editorRef.current?.isFocused()) optionsRef.current?.clearHighlight();
-      else optionsRef.current?.focusHighlighted();
+      const owner = getFocusOwner(editorRef.current?.getRootElement() ?? null);
+      if (owner === "editor") optionsRef.current?.clearHighlight();
+      if (owner === "other") optionsRef.current?.focusHighlighted();
     });
   };
 

@@ -378,6 +378,41 @@ describe("arming", () => {
     await flushFrames();
     expect(document.activeElement).toBe(radio("PostgreSQL"));
   });
+
+  const otherFields = {
+    "another composer": (store: ComposerStore) => (
+      <Composer.Root store={store}>
+        <Composer.Textarea aria-label="Other" />
+      </Composer.Root>
+    ),
+    "an input": () => <input aria-label="Other" />,
+  };
+
+  test.each(Object.entries(otherFields))(
+    "leaves the caret in %s the user is typing in, where Space and Enter answer nothing",
+    async (_, renderField) => {
+      const store = Composer.createStore();
+      const other = Composer.createStore();
+      const Page = ({ questions }: { questions?: ComposerQuestion[] }) => (
+        <>
+          <Harness store={store} questions={questions} />
+          {renderField(other)}
+        </>
+      );
+      const { rerender } = render(<Page />);
+      const field = screen.getByRole("textbox", { name: "Other" });
+      act(() => field.focus());
+
+      rerender(<Page questions={TWO} />);
+      await flushFrames();
+      expect(document.activeElement).toBe(field);
+
+      press(field, " ");
+      press(field, "Enter");
+      expect(store.getSnapshot().questions.step).toBe(0);
+      expect(screen.queryAllByRole("radio", { checked: true })).toEqual([]);
+    },
+  );
 });
 
 describe("a controlled composer", () => {
