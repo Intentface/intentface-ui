@@ -7,6 +7,7 @@ import { warn } from "../internal/render/warn";
 
 const RESERVE_MIN_HEIGHT = "var(--thread-turn-min-height, 0px)";
 const TURN_SELECTOR = "[data-message-turn]";
+const PLACEHOLDER_SELECTOR = "[data-thread-placeholder]";
 
 const isTurn = (child: Element) =>
   child.matches(TURN_SELECTOR) || child.querySelector(TURN_SELECTOR) !== null;
@@ -22,9 +23,12 @@ export const createLastChildReserve = (content: HTMLElement): LastChildReserve =
   let reserved: HTMLElement | null = null;
 
   // `warn` reports each message once per page, so a long transcript logs it once.
+  // The empty-state placeholder is not a turn, but nothing is wrong while it shows.
   const warnIfNotTurns = () => {
-    if (content.children.length === 0) return;
-    if (Array.from(content.children).some(isTurn)) return;
+    const children = Array.from(content.children).filter(
+      (child) => !child.matches(PLACEHOLDER_SELECTOR),
+    );
+    if (children.length === 0 || children.some(isTurn)) return;
     warn(
       "Thread.Content reserves space on its last child so the newest turn can land at the top, but none of its children is a Message.Turn. Wrap each question and its reply in Message.Turn, or the reserve lands on the last message alone.",
     );
