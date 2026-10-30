@@ -452,15 +452,32 @@ export const createComposerStore = (): ComposerStore => {
     else controller.clear();
   };
 
+  // The Options part renders in reaction to setQuestions' notify, one commit
+  // after the swap, so the entry focus defers a frame.
+  let entryFocusFrame = 0;
+
   // message → questions: park the message and show the first step's (empty)
   // buffer. The mode flips before the editor empties, so the swap never
   // reports an empty message through onValueChange. Re-arming mid-flow keeps
   // the parked message and resets only the steps.
   const enterQuestions = () => {
+    // Read before the swap: loading a buffer writes the DOM selection into the
+    // editor, and Chrome then reports the editor as the active element even
+    // after a button click took focus away from it.
+    const keepEditorFocus = editorRef.current?.isFocused() ?? false;
     if (mode.kind === "message") {
       mode = { kind: "questions", savedMessage: editorRef.current?.getSnapshot() ?? null };
     }
     loadEditorSnapshot(null);
+
+    // A user mid-sentence keeps the caret, and no option is highlighted (the
+    // same state as after a click into the editor), so ArrowDown enters the
+    // list at its first option. Otherwise the highlighted option takes focus.
+    cancelAnimationFrame(entryFocusFrame);
+    entryFocusFrame = requestAnimationFrame(() => {
+      if (keepEditorFocus) optionsRef.current?.clearHighlight();
+      else optionsRef.current?.focusHighlighted();
+    });
   };
 
   // questions → message: show the parked message again and hand it the caret.
@@ -468,6 +485,7 @@ export const createComposerStore = (): ComposerStore => {
   // does not restore twice.
   const endQuestions = () => {
     if (mode.kind !== "questions") return;
+    cancelAnimationFrame(entryFocusFrame);
     const { savedMessage } = mode;
     mode = { kind: "message" };
     loadEditorSnapshot(savedMessage);
@@ -556,10 +574,10 @@ export const createComposerStore = (): ComposerStore => {
   };
 
   // Question mode: while questions are active the options own the keyboard.
-  // Entering moves DOM focus onto the highlighted option (roving tabindex),
-  // and the keydown listener sits at the document, scoped by containment
+  // The keydown listener sits at the document, scoped by containment
   // (isEventForComposer) — so keys keep flowing after a chrome click drops
   // focus to <body>, while a second composer's editor/options never hear them.
+  // The entry focus is enterQuestions' job.
   const activateQuestions = () => {
     const handleKeyDown = createQuestionsKeydownHandler({
       controller,
@@ -568,19 +586,7 @@ export const createComposerStore = (): ComposerStore => {
       dispatch: dispatchQuestions,
     });
     document.addEventListener("keydown", handleKeyDown);
-
-    // The Options part renders in reaction to setQuestions' notify — one
-    // commit after this call — so the entry focus defers a frame. A user
-    // mid-sentence keeps the caret, and no option is highlighted (the same
-    // state as after a click into the editor), so ArrowDown enters the list
-    // at its first option.
-    const frame = requestAnimationFrame(() => {
-      if (editorRef.current?.isFocused()) optionsRef.current?.clearHighlight();
-      else optionsRef.current?.focusHighlighted();
-    });
-
     return () => {
-      cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
     };
   };
@@ -655,6 +661,7 @@ export const createComposerStore = (): ComposerStore => {
   const reset = () => {
     dispatchAttachments({ type: "reset" });
     questionsMachine = INITIAL_QUESTIONS_STATE;
+    cancelAnimationFrame(entryFocusFrame);
     mode = { kind: "message" };
     commandSelectRef.current = null;
     snapshot = initialSnapshot;
