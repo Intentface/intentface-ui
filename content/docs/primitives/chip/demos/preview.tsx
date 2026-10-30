@@ -25,7 +25,7 @@ export const Preview = () => (
       </Chip.Preview>
     </Chip.Root>{" "}
     and{" "}
-    <Chip.Root variant="accent" className={chipClass} renderWithPreview={renderWithPreview}>
+    <Chip.Root data-variant="accent" className={chipClass} renderWithPreview={renderWithPreview}>
       <Chip.Label>rfc-2324</Chip.Label>
       <Chip.Preview>
         <span className="font-medium text-zinc-900 dark:text-zinc-100">
