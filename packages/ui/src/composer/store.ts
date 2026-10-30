@@ -261,6 +261,10 @@ const createQuestionsKeydownHandler =
     const scopedOptionsElement = optionsRef.current?.getElement() ?? null;
     const editorDom = editorRef.current?.getRootElement() ?? undefined;
     if (!isEventForComposer(event, editorDom, scopedOptionsElement)) return;
+    // Keys typed into the editor are typing. Its own keydown maps ArrowUp,
+    // ArrowDown, and Escape to the flow; Space and Enter there are a character
+    // and the send chord, never a pick of the highlighted option.
+    if (editorDom?.contains(event.target as Node)) return;
 
     const optionsHandle = optionsRef.current;
     const action = interpretQuestionKey(
@@ -566,9 +570,13 @@ export const createComposerStore = (): ComposerStore => {
     document.addEventListener("keydown", handleKeyDown);
 
     // The Options part renders in reaction to setQuestions' notify — one
-    // commit after this call — so the entry focus defers a frame.
+    // commit after this call — so the entry focus defers a frame. A user
+    // mid-sentence keeps the caret, and no option is highlighted (the same
+    // state as after a click into the editor), so ArrowDown enters the list
+    // at its first option.
     const frame = requestAnimationFrame(() => {
-      optionsRef.current?.focusHighlighted();
+      if (editorRef.current?.isFocused()) optionsRef.current?.clearHighlight();
+      else optionsRef.current?.focusHighlighted();
     });
 
     return () => {
