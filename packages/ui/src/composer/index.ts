@@ -39,7 +39,7 @@ export type {
   ComposerQuestionStepLabelState,
 } from "./question";
 export { useQuestionOption, useQuestionOptions } from "./question";
-export type { AnswerDraft } from "./question-machine";
+export type { AnswerDraft, EditorBuffer } from "./question-machine";
 export type { ComposerRootProps } from "./root";
 export type { Segment, SegmentDoc, TextChange } from "./segments";
 export {

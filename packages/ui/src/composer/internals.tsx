@@ -8,7 +8,8 @@ import { createContext, type RefObject, use, useCallback, useEffect, useRef } fr
 import { useIsomorphicLayoutEffect } from "../internal/iso-layout-effect";
 import { createDragHandlers } from "./attachments-machine";
 import type { RegisteredPrefix } from "./prefix-detection";
-import type { ComposerCommandsMap, ComposerSnapshot, RegisteredEditor } from "./types";
+import type { ComposerStore } from "./store";
+import type { ComposerCommandsMap, ComposerSnapshot } from "./types";
 
 // ---------------------------------------------------------------------------
 // Generic hooks — small, composer-agnostic utilities the parts build on.
@@ -105,12 +106,12 @@ export const useDragDropFiles = ({
 };
 
 export const useComposerSnapshot = ({
-  editorRef,
+  store,
   defaultValue,
   value,
   onValueChange,
 }: {
-  editorRef: RefObject<RegisteredEditor | null>;
+  store: ComposerStore;
   defaultValue?: ComposerSnapshot;
   value?: ComposerSnapshot;
   onValueChange?: (snapshot: ComposerSnapshot) => void;
@@ -122,31 +123,29 @@ export const useComposerSnapshot = ({
   const onValueChangeRef = useAsRef(onValueChange);
 
   useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || initializedRef.current) return;
+    if (!store.editorRef.current || initializedRef.current) return;
     if (defaultValue) {
-      editor.applySnapshot(defaultValue);
+      store.setMessageSnapshot(defaultValue);
       lastAppliedRef.current = defaultValue;
     }
     initializedRef.current = true;
-  }, [editorRef, defaultValue]);
+  }, [store, defaultValue]);
 
   useEffect(() => {
-    if (!isControlled) return;
-    const editor = editorRef.current;
-    if (!editor || !value) return;
+    if (!isControlled || !value) return;
     if (lastAppliedRef.current === value) return;
-    editor.applySnapshot(value);
+    store.setMessageSnapshot(value);
     lastAppliedRef.current = value;
-  }, [editorRef, isControlled, value]);
+  }, [store, isControlled, value]);
 
   const reportEditorUpdate = useCallback(() => {
-    const editor = editorRef.current;
+    const editor = store.editorRef.current;
     if (!editor || !onValueChangeRef.current) return;
+    if (store.getEditorMode().kind === "questions") return;
     const snapshot = editor.getSnapshot();
     lastAppliedRef.current = snapshot;
     onValueChangeRef.current(snapshot);
-  }, [editorRef]);
+  }, [store]);
 
   return { reportEditorUpdate };
 };

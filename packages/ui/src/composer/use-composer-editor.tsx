@@ -51,7 +51,7 @@ import {
   segmentsFromChipSegments,
   segmentsFromParagraphJSON,
   segmentsFromText,
-  segmentsToParagraphJSON,
+  segmentsToSnapshot,
   serializeSegments,
   sliceSegments,
   spliceSegments,
@@ -62,7 +62,7 @@ import {
 } from "./segments";
 import { type ComposerStore, useComposer, useComposerContextStore } from "./store";
 import { closeActiveToken, trackActiveToken } from "./trigger-tracker";
-import type { ComposerSnapshot, RegisteredEditor } from "./types";
+import type { RegisteredEditor } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -148,6 +148,8 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     for (const listener of listeners) listener();
   };
 
+  const isFocused = () => root !== null && root.ownerDocument.activeElement === root;
+
   // --- Commit — the single funnel every state change flows through: tracker,
   // badge, store mirrors, value callbacks, version bump.
 
@@ -220,7 +222,7 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
           }
         : null,
     );
-    if (changed) writeCaretToDom(root, caret.start, caret.end);
+    if (changed && isFocused()) writeCaretToDom(root, caret.start, caret.end);
   };
 
   const mirrorCommandState = () => {
@@ -234,7 +236,16 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
   // --- Programmatic pipeline — every model-initiated edit renders the
   // canonical DOM, restores the caret, and commits.
 
-  const applyDocument = (nextDoc: SegmentDoc, caretPosition: number, change: TextChange | null) => {
+  // A load into an editor without focus leaves the DOM selection where it is:
+  // Blink and WebKit move focus into a contenteditable whose selection is
+  // written, which would pull focus out of whatever field the user is typing in.
+  const applyDocument = (
+    nextDoc: SegmentDoc,
+    caretPosition: number,
+    change: TextChange | null,
+    { isLoad = false }: { isLoad?: boolean } = {},
+  ) => {
+    const movesSelection = !isLoad || isFocused();
     // The registry must know new chips before the next DOM read resolves them.
     chipRegistry = new Map(
       nextDoc.flatMap((segment) =>
@@ -243,10 +254,10 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     );
     if (root) {
       chipElements = renderDocumentToDom(root, nextDoc);
-      writeCaretToDom(root, caretPosition);
+      if (movesSelection) writeCaretToDom(root, caretPosition);
     }
     commit(nextDoc, { start: caretPosition, end: caretPosition }, change, true);
-    if (root) scrollCaretIntoView(root);
+    if (root && movesSelection) scrollCaretIntoView(root);
   };
 
   const spliceAndApply = (from: number, to: number, insert: SegmentDoc) => {
@@ -430,19 +441,27 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     if (event.isComposing || event.keyCode === 229) return;
 
     const { store, options } = getDependencies();
+    const { questions, attachments } = store.getSnapshot();
     const action = interpretEditorKey(
       { key: event.key, shiftKey: event.shiftKey },
       {
         isCommandListOpen: commandState.isOpen,
-        hasActiveQuestions: (store.getSnapshot().questions.items?.length ?? 0) > 0,
+        hasActiveQuestions: store.getEditorMode().kind === "questions",
+        hasStepAnswer:
+          (questions.drafts.get(questions.step)?.selected.size ?? 0) > 0 ||
+          getPlainText(doc).trim() !== "",
         isEditorEmpty: getPlainText(doc) === "",
-        hasAttachments: store.getSnapshot().attachments.items.length > 0,
+        hasAttachments: attachments.items.length > 0,
         submitOn: options.submitOn,
       },
     );
     if (!action) return;
 
     switch (action.type) {
+      case "block": {
+        event.preventDefault();
+        return;
+      }
       case "command-select": {
         event.preventDefault();
         store.commandSelectRef.current?.();
@@ -477,11 +496,10 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
         return;
       }
       case "question-arrow": {
-        // navigate() moves DOM focus onto the newly highlighted option
-        // (roving tabindex) — never blur to <body>. At the list boundary
-        // (null) focus stays in the editor.
         event.preventDefault();
-        store.getSnapshot().questions.optionsRef.current?.navigate(action.direction);
+        const options = store.getSnapshot().questions.optionsRef.current;
+        options?.clearHighlight();
+        options?.navigate(action.direction);
         return;
       }
       case "question-dismiss": {
@@ -613,22 +631,19 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     getText: () => getPlainText(doc),
     setText: setTextContent,
     serialize: () => serializeSegments(doc),
-    isFocused: () => root !== null && root.ownerDocument.activeElement === root,
+    isFocused,
     getRootElement: () => root,
-    getSnapshot: () =>
-      ({
-        __doc: { type: "doc", content: segmentsToParagraphJSON(doc) },
-        __brand: "ComposerSnapshot",
-      }) as ComposerSnapshot,
+    getSnapshot: () => segmentsToSnapshot(doc),
     applySnapshot: (snapshot) => {
       const snapshotDoc = snapshot.__doc as { content?: SnapshotParagraphNode[] };
       const nextDoc = segmentsFromParagraphJSON(snapshotDoc.content ?? []);
       const previousLength = documentLength(doc);
-      applyDocument(nextDoc, documentLength(nextDoc), {
-        rangeStart: 0,
-        rangeEnd: previousLength,
-        insertedLength: documentLength(nextDoc),
-      });
+      applyDocument(
+        nextDoc,
+        documentLength(nextDoc),
+        { rangeStart: 0, rangeEnd: previousLength, insertedLength: documentLength(nextDoc) },
+        { isLoad: true },
+      );
     },
     // Replace the active trigger token with the chip, plus a trailing space
     // so the user can keep typing — unless one already follows.
