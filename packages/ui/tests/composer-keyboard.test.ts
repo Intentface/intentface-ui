@@ -4,7 +4,7 @@ import { interpretEditorKey, interpretQuestionKey } from "../src/composer/keyboa
 const baseContext = {
   isCommandListOpen: false,
   hasActiveQuestions: false,
-  hasStepSelection: false,
+  hasStepAnswer: false,
   isEditorEmpty: false,
   hasAttachments: false,
 };

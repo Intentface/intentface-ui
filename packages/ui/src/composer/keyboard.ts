@@ -22,8 +22,8 @@ export type ComposerSubmitOn = "enter" | "shift-enter";
 export type EditorKeyContext = {
   isCommandListOpen: boolean;
   hasActiveQuestions: boolean;
-  /** Whether the current question step has an option selected. */
-  hasStepSelection: boolean;
+  /** Whether continuing the current question step carries an answer: an option selected, or text beyond whitespace. */
+  hasStepAnswer: boolean;
   isEditorEmpty: boolean;
   hasAttachments: boolean;
   /** Defaults to "enter" (Enter sends, Shift+Enter breaks). */
@@ -74,9 +74,7 @@ export const interpretEditorKey = (
       if (!sendChordPressed || isCommandListOpen) return { type: "soft-break" };
       // Continue with nothing typed and nothing selected would skip the
       // question, so the send chord waits for an answer.
-      if (hasActiveQuestions && context.isEditorEmpty && !context.hasStepSelection) {
-        return { type: "block" };
-      }
+      if (hasActiveQuestions && !context.hasStepAnswer) return { type: "block" };
       return { type: "submit-form" };
     }
 

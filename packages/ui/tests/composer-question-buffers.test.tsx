@@ -255,6 +255,12 @@ describe("step buffers", () => {
     expect(store.getSnapshot().questions.step).toBe(0);
     expect(submitted).toEqual([]);
 
+    // Whitespace alone is no answer either: a Space typed before Enter must
+    // not turn Enter into a skip.
+    type(store, "  ");
+    expect(fireEvent.keyDown(editor(), { key: "Enter" })).toBe(false);
+    expect(store.getSnapshot().questions.step).toBe(0);
+
     click(radio("SQLite"));
     press(editor(), "Enter");
     expect(store.getSnapshot().questions.step).toBe(1);

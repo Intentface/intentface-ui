@@ -436,7 +436,9 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
       {
         isCommandListOpen: commandState.isOpen,
         hasActiveQuestions: store.getEditorMode().kind === "questions",
-        hasStepSelection: (questions.drafts.get(questions.step)?.selected.size ?? 0) > 0,
+        hasStepAnswer:
+          (questions.drafts.get(questions.step)?.selected.size ?? 0) > 0 ||
+          getPlainText(doc).trim() !== "",
         isEditorEmpty: getPlainText(doc) === "",
         hasAttachments: attachments.items.length > 0,
         submitOn: options.submitOn,
