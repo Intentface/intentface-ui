@@ -492,13 +492,16 @@ describe("a controlled composer", () => {
 
   // Blink and WebKit move focus to wherever the DOM selection is written, so a
   // load that wrote it would also take focus from the other field.
-  test("loads a new value without moving the caret out of another field", () => {
+  test("loads a new value, open command token included, without moving the caret out of another field", () => {
     const store = Composer.createStore();
     const other = Composer.createStore();
+    const commands = {
+      "@": { kind: "insert" as const, trigger: "word-boundary" as const, items: [] },
+    };
     let saved: ComposerSnapshot | undefined;
     const Page = ({ value }: { value?: ComposerSnapshot }) => (
       <>
-        <Composer.Root store={store} value={value}>
+        <Composer.Root store={store} value={value} commands={commands}>
           <Composer.Textarea aria-label="Message" />
         </Composer.Root>
         <Composer.Root
@@ -514,12 +517,13 @@ describe("a controlled composer", () => {
     const { rerender } = render(<Page />);
     const otherEditor = screen.getByRole("textbox", { name: "Other" });
     act(() => otherEditor.focus());
-    type(other, "typing here");
+    type(other, "ask @ad");
     if (!saved) throw new Error("typing reported no snapshot");
 
     rerender(<Page value={saved} />);
 
-    expect(store.controller.getText()).toBe("typing here");
+    expect(store.controller.getText()).toBe("ask @ad");
+    expect(store.getSnapshot().commands.active).toBe(true);
     expect(otherEditor.contains(document.getSelection()?.anchorNode ?? null)).toBe(true);
   });
 });
