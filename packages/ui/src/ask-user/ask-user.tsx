@@ -20,7 +20,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useComposer } from "../composer/store";
+import { useComposer, useComposerContextStore } from "../composer/store";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRenderElement } from "../internal/render/useRenderElement";
 import { scrollIntoViewWithin } from "../internal/scroll-into-view-within";
@@ -518,7 +518,11 @@ export const AskUserDismiss = ({
     { props: [{ type: "button" as const, "data-ask-user-dismiss": "" }, elementProps] },
   );
 
-/** Continue/submit button — `type=submit` so the enclosing form drives it. */
+/**
+ * Continue/submit button. Sends through the composer store, like Enter: advances
+ * the step, and submits the answers on the last. preventDefault() on the click
+ * cancels it.
+ */
 export type AskUserContinueProps = PrimitiveProps<"button">;
 
 export const AskUserContinue = ({
@@ -526,9 +530,24 @@ export const AskUserContinue = ({
   render,
   style,
   ...elementProps
-}: AskUserContinueProps) =>
-  useRenderElement(
+}: AskUserContinueProps) => {
+  const store = useComposerContextStore();
+
+  return useRenderElement(
     "button",
     { className, render, style },
-    { props: [{ type: "submit" as const, "data-ask-user-continue": "" }, elementProps] },
+    {
+      props: [
+        {
+          type: "button" as const,
+          "data-ask-user-continue": "",
+          // Merged ahead of the consumer's onClick, which therefore runs first.
+          onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+            if (!event.defaultPrevented) void store.submit();
+          },
+        },
+        elementProps,
+      ],
+    },
   );
+};

@@ -21,6 +21,7 @@ import { Store } from './composer/demos/store';
 - **Panel** — hosts command results, live steps, or an ask-user prompt above the field.
 - **Headless** — behavior lives in `@intentface/ui`; the demos below show one way to style it, and every class in them is yours to change.
 - **Isolate it from your stream** — see [Why the composer needs isolating](#why-the-composer-needs-isolating). The editor is the most expensive thing on the page to re-render per token.
+- **Fits inside your form** — `Composer.Root` renders a `<div>`, so it can sit inside your own `<form>`, and `Composer.Textarea`'s `name` puts its text in that form's `FormData`. Pass `render={<form />}` to make the root a form itself.
 - **Get started** — see [Quick start](/quick-start) to add the package.
 
 ## Anatomy
@@ -154,14 +155,13 @@ transitions.
 
 ## Keyboard
 
-`Composer.Root` is a `<form>`, so submission and key handling follow form
-semantics. The editor interprets keys by mode — a command list being open, or
-ask-user being active, takes priority over normal typing.
+The editor interprets keys by mode — a command list being open, or ask-user
+being active, takes priority over normal typing.
 
 **Normal typing**
 
 export const normalKeys = [
-  { keys: "Enter", description: "Submit the form (requestSubmit)." },
+  { keys: "Enter", description: "Send the message." },
   { keys: "Shift + Enter", description: "Insert a soft line break." },
   { keys: "Backspace", description: "When the editor is empty and attachments exist, remove the last attachment." },
 ];
@@ -211,8 +211,9 @@ tables are hand-authored from the package source.
 
 ### Composer
 
-The `<form>` that owns submission, store resolution, drag-and-drop, and the
-prop → store bridges. Renders `data-composer-root`.
+The `<div>` that owns submission, store resolution, drag-and-drop, and the
+prop → store bridges. Renders `data-composer-root`. Pass `render={<form />}` to
+make it a form; a submit event on that form sends too.
 
 export const rootProps = [
   { name: "onSubmit", type: "(data: ComposerSubmitData) => void | Promise<void>", description: "Fires on message submit and on ask-user answers. Discriminate on data.kind." },
@@ -228,7 +229,7 @@ export const rootProps = [
 <PropsTable rows={rootProps} />
 
 export const rootAttrs = [
-  { attribute: "data-composer-root", description: "The form element." },
+  { attribute: "data-composer-root", description: "The root element." },
   { attribute: "data-submitting", description: "Present while isSubmitting is true." },
   { attribute: "data-dragging", description: "Present while files are dragged over the drop scope." },
 ];
@@ -359,7 +360,7 @@ Submit button that morphs into a stop control while generating. Renders
 `data-composer-submit`.
 
 export const submitProps = [
-  { name: "isGenerating", type: "boolean", default: "false", description: "Morphs into a stop control: type becomes \"button\" and clicking calls onStop." },
+  { name: "isGenerating", type: "boolean", default: "false", description: "Morphs into a stop control: clicking calls onStop instead of sending." },
   { name: "onStop", type: "() => void", description: "Abort callback — on click while generating, or on Escape inside the composer (see Keyboard)." },
 ];
 
@@ -562,8 +563,8 @@ namespace in `@intentface/ui/ask-user`, reading the step through
 `askUser.active`.
 
 `AskUser.Dismiss` is a plain button you wire to `askUser.dismissStep`;
-`AskUser.Continue` is `type="submit"`, so the enclosing `Composer.Root` form
-drives it. Neither ships copy — supply the labels as children, and read
+`AskUser.Continue` is a `type="button"` that sends through the composer, like
+Enter. Neither ships copy — supply the labels as children, and read
 `askUser.isLastStep` to switch the continue wording.
 
 ### Hooks
@@ -572,7 +573,7 @@ export const hooks = [
   { name: "useComposer", type: "(selector?) => Selected", description: "Subscribe to a slice of the nearest composer's store. Throws outside <Composer.Root>." },
   { name: "useComposerStore", type: "(store, selector?) => Selected", description: "Same, for an explicit createStore() handle — the outside-the-tree twin." },
   { name: "useComposerController", type: "() => ComposerEditorState", description: "The nearest composer's imperative editor controls (focus, insert, clear, …)." },
-  { name: "useComposerSubmit", type: "(options) => ComposerSubmitState", description: "Computes Submit's type/disabled/generating; auto-disables while empty or submitting; aborts on Escape inside the composer." },
+  { name: "useComposerSubmit", type: "(options) => ComposerSubmitState", description: "Computes Submit's disabled/generating/onClick; auto-disables while empty or submitting; aborts on Escape inside the composer." },
   { name: "useCommandListItems", type: "() => { items, state }", description: "The resolved items and load state inside a Command. Throws outside one." },
 ];
 

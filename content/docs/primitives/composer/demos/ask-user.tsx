@@ -91,8 +91,8 @@ export const Prompt = () => {
   );
 };
 
-// Dismiss is a plain button you wire up; Continue is type=submit, so the
-// enclosing Composer.Root form drives it.
+// Dismiss is a plain button you wire up; Continue sends through the composer
+// on its own.
 export const Controls = () => {
   const askUser = useComposer((composer) => composer.askUser);
 

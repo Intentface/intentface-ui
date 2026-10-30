@@ -11,7 +11,7 @@ export type EditorKeyAction =
   | { type: "ask-user-arrow"; direction: 1 | -1 }
   | { type: "ask-user-dismiss" }
   | { type: "remove-last-attachment" }
-  | { type: "submit-form" }
+  | { type: "submit" }
   | { type: "soft-break" };
 
 /** Which Enter chord sends the message; the other inserts a soft break. */
@@ -67,9 +67,7 @@ export const interpretEditorKey = (
     // neither mapping can submit mid-popup).
     case key === "Enter": {
       const sendChordPressed = (context.submitOn ?? "enter") === "enter" ? !shiftKey : shiftKey;
-      return sendChordPressed && !isCommandListOpen
-        ? { type: "submit-form" }
-        : { type: "soft-break" };
+      return sendChordPressed && !isCommandListOpen ? { type: "submit" } : { type: "soft-break" };
     }
 
     default:

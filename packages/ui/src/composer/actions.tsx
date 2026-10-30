@@ -6,7 +6,7 @@
 // behavior via useComposerSubmit and renders a plain button — the styled layer
 // applies the same hook to its own button component.
 
-import { Children, useEffect } from "react";
+import { Children, type MouseEventHandler, useEffect } from "react";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRenderElement } from "../internal/render/useRenderElement";
 import { openStateMapping } from "../internal/state-mappings";
@@ -77,24 +77,27 @@ export type UseComposerSubmitOptions = {
   isGenerating?: boolean;
   onStop?: () => void;
   disabled?: boolean;
+  /** Runs before the send; calling preventDefault() on the click cancels it. */
+  onClick?: MouseEventHandler<HTMLButtonElement>;
 };
 
 export type ComposerSubmitState = {
-  /** "button" while generating (click stops), "submit" otherwise. */
-  type: "button" | "submit";
   disabled: boolean;
   isGenerating: boolean;
+  /** Stops while generating, otherwise runs the consumer's onClick and sends. */
+  onClick: MouseEventHandler<HTMLButtonElement>;
 };
 
 /**
- * Send↔stop behavior: auto-disables while empty or submitting, flips the
- * button type while generating, and aborts on Escape inside this composer
+ * Send↔stop behavior: auto-disables while empty or submitting, turns the click
+ * into a stop while generating, and aborts on Escape inside this composer
  * (unless something closer — the command list — already handled it).
  */
 export const useComposerSubmit = ({
   isGenerating = false,
   onStop,
   disabled,
+  onClick,
 }: UseComposerSubmitOptions): ComposerSubmitState => {
   const hasContent = useComposer((composer) => composer.textarea.hasContent);
   const isSubmitting = useComposer((composer) => composer.isSubmitting);
@@ -118,10 +121,19 @@ export const useComposerSubmit = ({
   const autoDisabled =
     disabled ?? ((!hasContent && attachments.items.length === 0) || isSubmitting);
 
+  const handleClick: MouseEventHandler<HTMLButtonElement> = (event) => {
+    if (isGenerating) {
+      onStop?.();
+      return;
+    }
+    onClick?.(event);
+    if (!event.defaultPrevented) void store.submit();
+  };
+
   return {
-    type: isGenerating ? "button" : "submit",
     disabled: isGenerating ? false : autoDisabled,
     isGenerating,
+    onClick: handleClick,
   };
 };
 
@@ -131,9 +143,8 @@ export type ComposerSubmitButtonState = {
 };
 
 export type ComposerSubmitProps = PrimitiveProps<"button", ComposerSubmitButtonState> & {
-  // While generating, the button morphs into a stop control: the type flips
-  // to "button" and clicking it (or pressing Escape) calls onStop instead of
-  // submitting the form.
+  // While generating, the button morphs into a stop control: clicking it (or
+  // pressing Escape) calls onStop instead of sending.
   isGenerating?: boolean;
   onStop?: () => void;
 };
@@ -148,7 +159,7 @@ export const ComposerSubmit = ({
   style,
   ...elementProps
 }: ComposerSubmitProps) => {
-  const submit = useComposerSubmit({ isGenerating, onStop, disabled });
+  const submit = useComposerSubmit({ isGenerating, onStop, disabled, onClick });
 
   return useRenderElement(
     "button",
@@ -157,15 +168,13 @@ export const ComposerSubmit = ({
       state: { generating: isGenerating },
       props: [
         {
-          type: submit.type,
+          type: "button" as const,
           "data-composer-submit": "",
           // Default overridable names for the (typically icon-only) morphing
           // control — both states announce, not just the stop affordance.
           "aria-label": isGenerating ? "Stop generating" : "Send message",
           disabled: submit.disabled,
-          // Replaces (not chains) the consumer's onClick while generating —
-          // a stop click must never fall through to submit handlers.
-          onClick: isGenerating ? () => onStop?.() : onClick,
+          onClick: submit.onClick,
         },
         elementProps,
       ],

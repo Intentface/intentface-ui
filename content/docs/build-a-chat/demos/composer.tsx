@@ -13,7 +13,7 @@ const INITIAL: ChatMessage[] = [
   {
     id: "2",
     role: "assistant",
-    text: "A form. Enter submits it, and onSubmit receives a ComposerSubmitData describing what was sent.",
+    text: "A div. Press Enter or the send button, and onSubmit receives a ComposerSubmitData describing what was sent.",
   },
   { id: "3", role: "user", text: "Does it clear itself afterwards?" },
   {

@@ -6,6 +6,7 @@ import { ArrowUp, Stop } from "@keyline-icons/react";
 // carries the Tailwind classes, icons, and motion, and re-exports the public
 // surface so consumers keep importing from "@/components/ai/composer".
 
+import { AskUser as AskUserPrimitive } from "@intentface/ui/ask-user";
 import {
   type CommandItemData as CommandItemDataPrimitive,
   Composer as ComposerPrimitive,
@@ -301,8 +302,8 @@ const ComposerActions = ({
 
 type ComposerSubmitProps = ComponentProps<typeof IconButton> & {
   // While generating, the button morphs into a stop control: the send glyph
-  // cross-fades to a stop square, the type flips to "button", and clicking it
-  // (or pressing Escape) calls onStop instead of submitting the form.
+  // cross-fades to a stop square, and clicking it (or pressing Escape) calls
+  // onStop instead of sending.
   isGenerating?: boolean;
   onStop?: () => void;
 };
@@ -316,11 +317,11 @@ const ComposerSubmit = ({
   onClick,
   ...props
 }: ComposerSubmitProps) => {
-  const submit = useComposerSubmit({ isGenerating, onStop, disabled });
+  const submit = useComposerSubmit({ isGenerating, onStop, disabled, onClick });
 
   return (
     <IconButton
-      type={submit.type}
+      type="button"
       variant="accent"
       size="sm"
       data-slot="composer-submit"
@@ -328,7 +329,7 @@ const ComposerSubmit = ({
       aria-label={isGenerating ? "Stop generating" : "Send message"}
       className={cn("rounded-full", className)}
       disabled={submit.disabled}
-      onClick={isGenerating ? () => onStop?.() : onClick}
+      onClick={submit.onClick}
       {...props}
     >
       <AnimatePresence mode="wait" initial={false}>
@@ -696,20 +697,26 @@ const ComposerAskUserDismiss = ({ className, ...props }: ComposerAskUserDismissP
   );
 };
 
-type ComposerAskUserContinueProps = ComponentProps<typeof Button>;
+type ComposerAskUserContinueProps = Omit<
+  ComponentProps<typeof AskUserPrimitive.Continue>,
+  "render"
+>;
 
 const ComposerAskUserContinue = ({ className, ...props }: ComposerAskUserContinueProps) => {
   const askUser = useComposer((composer) => composer.askUser);
   return (
-    <Button
-      type="submit"
-      variant="tertiary"
-      data-slot="composer-ask-user-continue"
-      className={cn("gap-2", className)}
+    <AskUserPrimitive.Continue
+      render={
+        <Button
+          variant="tertiary"
+          data-slot="composer-ask-user-continue"
+          className={cn("gap-2", className)}
+        />
+      }
       {...props}
     >
       {askUser.isLastStep ? "Submit" : "Continue"}
-    </Button>
+    </AskUserPrimitive.Continue>
   );
 };
 
