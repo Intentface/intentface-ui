@@ -381,7 +381,7 @@ part attribute of its own.
 
 export const attachmentsProps = [
   { name: "convert", type: "(file: File) => AttachmentItem", default: "blob ingestion", description: "Converts a picked/dropped/pasted File into an item. Override (with destroy) for custom ids, extra fields, or upload-backed items." },
-  { name: "destroy", type: "(item: AttachmentItem) => void", default: "revoke blob URL", description: "Cleanup for a removed item." },
+  { name: "destroy", type: "(item: AttachmentItem) => void", default: "revoke blob URL", description: "Cleanup for a removed item, or a sent one once onSubmit has settled." },
   { name: "accept", type: "string", default: '"" (everything)', description: "Accepted MIME types — the package imposes no policy; pass yours." },
   { name: "maxFiles", type: "number", default: "unlimited", description: "Maximum file count." },
   { name: "maxFileSize", type: "number", default: "unlimited", description: "Maximum size per file." },
