@@ -472,21 +472,18 @@ export const createComposerStore = (): ComposerStore => {
   // reports an empty message through onValueChange. Re-arming mid-flow keeps
   // the parked message and resets only the steps.
   const enterQuestions = () => {
-    // Read before the swap: loading a buffer writes the DOM selection into the
-    // editor, and Chrome then reports the editor as the active element even
-    // after a button click took focus away from it.
-    const keepEditorFocus = editorRef.current?.isFocused() ?? false;
     if (mode.kind === "message") {
       mode = { kind: "questions", savedMessage: editorRef.current?.getSnapshot() ?? null };
     }
     loadEditorSnapshot(null);
 
-    // A user mid-sentence keeps the caret, and no option is highlighted (the
-    // same state as after a click into the editor), so ArrowDown enters the
-    // list at its first option. Otherwise the highlighted option takes focus.
+    // Settled from where focus is once the options exist. A user mid-sentence
+    // keeps the caret, and no option is highlighted (the same state as after a
+    // click into the editor). Otherwise the highlighted option takes focus,
+    // which also keeps an option an early ArrowDown already moved to.
     cancelAnimationFrame(entryFocusFrame);
     entryFocusFrame = requestAnimationFrame(() => {
-      if (keepEditorFocus) optionsRef.current?.clearHighlight();
+      if (editorRef.current?.isFocused()) optionsRef.current?.clearHighlight();
       else optionsRef.current?.focusHighlighted();
     });
   };

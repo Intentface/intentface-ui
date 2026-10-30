@@ -350,6 +350,24 @@ describe("arming", () => {
     await flushFrames();
   });
 
+  test("an ArrowDown in the frame before the options settle enters at the first option, which works", async () => {
+    const store = Composer.createStore();
+    const { rerender } = render(<Harness store={store} />);
+    type(store, "hello");
+    act(() => editor().focus());
+
+    rerender(<Harness store={store} questions={TWO} />);
+    press(editor(), "ArrowDown");
+    await flushFrames();
+
+    expect(document.activeElement).toBe(radio("PostgreSQL"));
+    press(radio("PostgreSQL"), "ArrowDown");
+    expect(document.activeElement).toBe(radio("SQLite"));
+    press(radio("SQLite"), " ");
+    expect(store.getSnapshot().questions.step).toBe(1);
+    expect(store.getSnapshot().questions.drafts.get(0)?.selected).toEqual(new Set(["SQLite"]));
+  });
+
   test("moves focus to the first option when the editor is not focused", async () => {
     const store = Composer.createStore();
     const { rerender } = render(<Harness store={store} />);

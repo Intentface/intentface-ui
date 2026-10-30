@@ -498,11 +498,14 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
         return;
       }
       case "question-arrow": {
-        // navigate() moves DOM focus onto the newly highlighted option
-        // (roving tabindex) — never blur to <body>. At the list boundary
-        // (null) focus stays in the editor.
+        // From the editor no option is current, even while freshly mounted
+        // options still show their first one highlighted, so the arrows enter
+        // the list at its edge. navigate() moves DOM focus onto that option
+        // (roving tabindex).
         event.preventDefault();
-        store.getSnapshot().questions.optionsRef.current?.navigate(action.direction);
+        const options = store.getSnapshot().questions.optionsRef.current;
+        options?.clearHighlight();
+        options?.navigate(action.direction);
         return;
       }
       case "question-dismiss": {
