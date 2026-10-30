@@ -224,6 +224,20 @@ describe("Thread.Content turn warning", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  test("stays quiet while only the empty-state placeholder shows", () => {
+    render(
+      <Thread.Root autoScroll="follow">
+        <Thread.Viewport>
+          <Thread.Content>
+            <Thread.Placeholder>Start a conversation</Thread.Placeholder>
+          </Thread.Content>
+        </Thread.Viewport>
+      </Thread.Root>,
+    );
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   test("stays quiet while the transcript is empty", () => {
     render(<Transcript mode="follow" ids={[]} asTurns={false} />);
 
