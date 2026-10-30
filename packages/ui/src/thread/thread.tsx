@@ -4,18 +4,6 @@
 // landing/follow, composer-inset measurement) plus unstyled structural parts.
 // The only styles emitted are behavior-critical (positioning/overflow/sentinel
 // size/reserve), applied inline; everything visual belongs to the styled layer.
-//
-// Layout contract:
-//   - Thread.Content's children are turns (Message.Turn). While a top-landing
-//     mode is active it sets min-height: var(--thread-turn-min-height, 0px)
-//     inline on its last child, so the newest turn can land at the top.
-//   - The landing gap is the space above Thread.Content inside the scroller:
-//     put top padding on a wrapper around it.
-//   - Thread.Composer positions itself (absolute, along the root's bottom edge).
-//     Pad the bottom of the same wrapper by --thread-dock-inset so the last
-//     turn clears it.
-//   - Thread.Root writes --thread-dock-inset, --thread-dock-height,
-//     --thread-dock-width and --thread-turn-area (see useThreadInsets).
 
 import {
   createContext,
@@ -40,7 +28,7 @@ import {
   DEFAULT_BOTTOM_OFFSET,
   measureDockInset,
   measureDockSize,
-  measureTopInset,
+  measureLandingGap,
   queryDock,
   readViewportBox,
   resolveScrollBehavior,
@@ -732,10 +720,10 @@ const useThreadInsets = (rootRef: RefObject<HTMLDivElement | null>) => {
     const apply = () => {
       const bottomInset = measureDockInset(root);
       const dockSize = measureDockSize(root);
-      const topInset = measureTopInset(root);
+      const landingGap = measureLandingGap(root);
       const area = Math.max(
         0,
-        Math.round(root.clientHeight - topInset - (bottomInset ?? DEFAULT_BOTTOM_OFFSET)),
+        Math.round(root.clientHeight - landingGap - (bottomInset ?? DEFAULT_BOTTOM_OFFSET)),
       );
       if (bottomInset !== null) {
         root.style.setProperty("--thread-dock-inset", `${bottomInset}px`);
@@ -936,8 +924,7 @@ export const ThreadContent = ({
 };
 
 // ---------------------------------------------------------------------------
-// Composer slot + Placeholder — structural markers. The composer docks itself
-// along the root's bottom edge; the inline position yields to a consumer style.
+// Composer slot + Placeholder — structural markers.
 // ---------------------------------------------------------------------------
 
 export type ThreadComposerProps = PrimitiveProps<"div">;

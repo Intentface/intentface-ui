@@ -66,7 +66,6 @@ export const measureDockInset = (root: HTMLElement): number | null => {
   return Math.round(root.getBoundingClientRect().bottom - dockTop + COMPOSER_GAP);
 };
 
-// The dock's own box, rounded to whole px like the insets. Null until it mounts.
 export const measureDockSize = (root: HTMLElement): { width: number; height: number } | null => {
   const dock = queryDock(root);
   if (!dock) return null;
@@ -74,11 +73,7 @@ export const measureDockSize = (root: HTMLElement): { width: number; height: num
   return { width: Math.round(width), height: Math.round(height) };
 };
 
-// The landing gap: how far the content column starts below the top of the
-// scroller's scrollable area, i.e. the padding the consumer puts above
-// Thread.Content. Scroll-independent (the scroll offset cancels the content's
-// position), measured straight off the rendered boxes. 0 until both parts mount.
-export const measureTopInset = (root: HTMLElement): number => {
+export const measureLandingGap = (root: HTMLElement): number => {
   const scroller = root.querySelector<HTMLElement>("[data-thread-scroller]");
   const content = root.querySelector<HTMLElement>("[data-thread-content]");
   if (!scroller || !content) return 0;
