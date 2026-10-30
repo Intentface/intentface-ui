@@ -796,10 +796,11 @@ const ComposerQuestionContinue = ({ className, ...props }: ComposerQuestionConti
   const questions = useComposer((composer) => composer.questions);
   return (
     <Button
-      type="submit"
+      type="button"
       variant="tertiary"
       data-slot="composer-question-continue"
       className={cn("gap-2", className)}
+      onClick={questions.continueStep}
       {...props}
     >
       {questions.isLastStep ? "Submit" : "Continue"}

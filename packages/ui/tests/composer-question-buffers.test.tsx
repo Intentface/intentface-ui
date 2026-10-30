@@ -400,3 +400,37 @@ describe("a controlled composer", () => {
     expect(reported.length).toBeGreaterThan(reportsBeforeSteps);
   });
 });
+
+describe("Continue", () => {
+  // A host that keeps its own Done button mounted while it saves the answers,
+  // so the button outlives the flow it ended.
+  const HostWithDone = ({ store, questions, onSubmit }: HarnessProps) => (
+    <Composer.Root store={store} questions={questions} onSubmit={onSubmit}>
+      <Composer.Textarea aria-label="Message" />
+      <Prompt />
+      {questions ? <Composer.QuestionContinue>Done</Composer.QuestionContinue> : null}
+    </Composer.Root>
+  );
+
+  test("clicked again after the answers went out sends nothing, and the message stays", async () => {
+    const store = Composer.createStore();
+    const { submitted, onSubmit } = collect();
+    const { rerender } = render(<HostWithDone store={store} onSubmit={onSubmit} />);
+    type(store, "my unfinished draft");
+
+    const one = TWO.slice(0, 1);
+    rerender(<HostWithDone store={store} onSubmit={onSubmit} questions={one} />);
+    await flushFrames();
+    click(radio("SQLite"));
+    click(screen.getByRole("button", { name: "Done" }));
+    click(screen.getByRole("button", { name: "Done" }));
+
+    expect(submitted).toEqual([
+      { kind: "answers", answers: [{ id: "database", selected: ["SQLite"] }] },
+    ]);
+    expect(store.controller.getText()).toBe("my unfinished draft");
+
+    rerender(<HostWithDone store={store} onSubmit={onSubmit} />);
+    expect(store.controller.getText()).toBe("my unfinished draft");
+  });
+});
