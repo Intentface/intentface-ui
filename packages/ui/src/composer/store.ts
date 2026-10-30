@@ -322,12 +322,6 @@ export const createComposerStore = (): ComposerStore => {
   // Per-store editor engine behind a null-safe controller.
   const editorRef: RefObject<RegisteredEditor | null> = { current: null };
   const controller = createEditorController(editorRef);
-  const registerEditor = (editor: RegisteredEditor) => {
-    editorRef.current = editor;
-    return () => {
-      if (editorRef.current === editor) editorRef.current = null;
-    };
-  };
 
   // Imperative refs co-located with the store; not reactive.
   const containerRef: RefObject<HTMLElement | null> = { current: null };
@@ -450,6 +444,20 @@ export const createComposerStore = (): ComposerStore => {
   const loadEditorSnapshot = (snapshot: ComposerSnapshot | null) => {
     if (snapshot) editorRef.current?.applySnapshot(snapshot);
     else controller.clear();
+  };
+
+  // An editor that mounts mid-flow (a remount with an explicit store) shows
+  // the current step's buffer. In message mode it keeps what it mounted with.
+  const registerEditor = (editor: RegisteredEditor) => {
+    editorRef.current = editor;
+    if (mode.kind === "questions") {
+      loadEditorSnapshot(
+        questionsMachine.drafts.get(questionsMachine.step)?.buffer?.snapshot ?? null,
+      );
+    }
+    return () => {
+      if (editorRef.current === editor) editorRef.current = null;
+    };
   };
 
   // The Options part renders in reaction to setQuestions' notify, one commit

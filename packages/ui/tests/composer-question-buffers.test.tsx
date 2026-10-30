@@ -212,7 +212,9 @@ describe("the message buffer around a question flow", () => {
     press(radio("EU"), "Enter");
 
     expect(store.controller.getText()).toBe("see the attached notes");
-    expect(store.getSnapshot().attachments.items.map((item) => item.filename)).toEqual(["notes.txt"]);
+    expect(store.getSnapshot().attachments.items.map((item) => item.filename)).toEqual([
+      "notes.txt",
+    ]);
   });
 });
 
@@ -261,6 +263,21 @@ describe("step buffers", () => {
         ],
       },
     ]);
+  });
+
+  test("an editor that remounts mid-flow shows the current step's saved text", async () => {
+    const store = Composer.createStore();
+    const first = render(<Harness store={store} questions={TWO} />);
+    await flushFrames();
+    type(store, "abc");
+    click(screen.getByRole("button", { name: "Continue" }));
+    click(screen.getByRole("button", { name: "Previous question" }));
+    first.unmount();
+
+    render(<Harness store={store} questions={TWO} />);
+    await flushFrames();
+    expect(store.getSnapshot().questions.step).toBe(0);
+    expect(store.controller.getText()).toBe("abc");
   });
 
   test("Enter in an empty step with nothing selected does nothing; with a selection it continues", async () => {
