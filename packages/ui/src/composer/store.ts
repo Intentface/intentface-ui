@@ -31,6 +31,7 @@ import { interpretQuestionKey } from "./keyboard";
 import type { ComposerQuestionOptionsHandle } from "./question";
 import {
   type AnswerDraft,
+  type EditorBuffer,
   INITIAL_QUESTIONS_STATE,
   isLastStep,
   type QuestionsAction,
@@ -41,6 +42,7 @@ import type {
   ComposerAnswer,
   ComposerEditorHandle,
   ComposerQuestion,
+  ComposerSnapshot,
   RegisteredEditor,
 } from "./types";
 
@@ -95,7 +97,8 @@ export type ComposerQuestionsState = ComposerPanelSlice & {
   step: number;
   drafts: Map<number, AnswerDraft>;
   toggleOption: (label: string) => void;
-  continueStep: (freeText?: string) => void;
+  /** Continue with the editor's content as the step's free-text answer (plus any selection). */
+  continueStep: () => void;
   dismissStep: () => void;
   isLastStep: boolean;
   isSingle: boolean;
@@ -138,6 +141,15 @@ export type ComposerState = {
   questions: ComposerQuestionsState;
 };
 
+// Which buffer the editor shows. Every mode owns its own: the message, the
+// only buffer `value` / `onValueChange` ever see, and one per question step
+// (held by the question machine). While questions run, the message waits in
+// `savedMessage` and the editor is the current step's free-text field; the
+// swap on either transition saves what the editor held and loads the other.
+export type EditorMode =
+  | { kind: "message" }
+  | { kind: "questions"; savedMessage: ComposerSnapshot | null };
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -160,6 +172,14 @@ export type ComposerStore = {
   moveHighlight: (direction: number) => void;
   setHighlight: (index: number) => void;
   setQuestions: (questions: ComposerQuestion[] | null) => void;
+  /** Whether the editor shows the message or a question step's answer. */
+  getEditorMode: () => EditorMode;
+  /**
+   * Write the message buffer: into the editor while it shows the message, into
+   * `savedMessage` while questions run, so a controlled `value` or a
+   * `defaultValue` never lands in a step's answer.
+   */
+  setMessageSnapshot: (snapshot: ComposerSnapshot) => void;
   setDragging: (active: boolean) => void;
   resetAttachments: () => void;
   activateQuestions: () => () => void;
@@ -218,6 +238,14 @@ const isEventForComposer = (
   return target === null || target === document.body;
 };
 
+// The editor's content with its plain text, captured in one read so the text
+// an answer compiles from is the text of the snapshot shown back on that step.
+const readEditorBuffer = (editorRef: RefObject<RegisteredEditor | null>): EditorBuffer | null => {
+  const editor = editorRef.current;
+  if (!editor) return null;
+  return { snapshot: editor.getSnapshot(), text: editor.getText() };
+};
+
 type QuestionsKeydownDeps = {
   controller: ComposerEditorState;
   optionsRef: RefObject<ComposerQuestionOptionsHandle | null>;
@@ -231,15 +259,8 @@ const createQuestionsKeydownHandler =
   ({ controller, optionsRef, editorRef, dispatch }: QuestionsKeydownDeps) =>
   (event: KeyboardEvent) => {
     const scopedOptionsElement = optionsRef.current?.getElement() ?? null;
-    if (
-      !isEventForComposer(
-        event,
-        editorRef.current?.getRootElement() ?? undefined,
-        scopedOptionsElement,
-      )
-    ) {
-      return;
-    }
+    const editorDom = editorRef.current?.getRootElement() ?? undefined;
+    if (!isEventForComposer(event, editorDom, scopedOptionsElement)) return;
 
     const optionsHandle = optionsRef.current;
     const action = interpretQuestionKey(
@@ -270,10 +291,10 @@ const createQuestionsKeydownHandler =
         return;
       }
       case "go-back":
-        dispatch({ type: "step-back", currentText: controller.getText() });
+        dispatch({ type: "step-back", buffer: readEditorBuffer(editorRef) });
         return;
       case "go-next":
-        dispatch({ type: "step-forward", currentText: controller.getText() });
+        dispatch({ type: "step-forward", buffer: readEditorBuffer(editorRef) });
         return;
       case "insert-character":
         optionsHandle?.clearHighlight();
@@ -330,6 +351,7 @@ export const createComposerStore = (): ComposerStore => {
   // Canonical machine states; the snapshot mirrors them on every update.
   let attachmentState = INITIAL_ATTACHMENT_STATE;
   let questionsMachine = INITIAL_QUESTIONS_STATE;
+  let mode: EditorMode = { kind: "message" };
   let snapshot: ComposerState;
 
   // --- Setters
@@ -417,22 +439,53 @@ export const createComposerStore = (): ComposerStore => {
     notify();
   };
 
+  // --- Editor buffers
+  // Show a buffer in the editor; null shows an empty one. Input-content state
+  // is the editor engine's own job: engines report programmatic writes
+  // through their update path.
+  const loadEditorSnapshot = (snapshot: ComposerSnapshot | null) => {
+    if (snapshot) editorRef.current?.applySnapshot(snapshot);
+    else controller.clear();
+  };
+
+  // message → questions: park the message and show the first step's (empty)
+  // buffer. The mode flips before the editor empties, so the swap never
+  // reports an empty message through onValueChange. Re-arming mid-flow keeps
+  // the parked message and resets only the steps.
+  const enterQuestions = () => {
+    if (mode.kind === "message") {
+      mode = { kind: "questions", savedMessage: editorRef.current?.getSnapshot() ?? null };
+    }
+    loadEditorSnapshot(null);
+  };
+
+  // questions → message: show the parked message again and hand it the caret.
+  // Idempotent, so a host that clears `questions` after the answers went out
+  // does not restore twice.
+  const endQuestions = () => {
+    if (mode.kind !== "questions") return;
+    const { savedMessage } = mode;
+    mode = { kind: "message" };
+    loadEditorSnapshot(savedMessage);
+    controller.focus(FOCUS_IN_PLACE);
+  };
+
+  const setMessageSnapshot = (snapshot: ComposerSnapshot) => {
+    if (mode.kind === "questions") {
+      mode = { kind: "questions", savedMessage: snapshot };
+      return;
+    }
+    editorRef.current?.applySnapshot(snapshot);
+  };
+
   // --- Questions
   // The execute half of the question flow: replay a transition's effects
-  // against the editor controller, the options handle, and the submit
-  // callback. Input-content state is the editor engine's own job — engines
-  // report programmatic setText/clear through their update path.
+  // against the editor, the options handle, and the submit callback.
   const executeQuestionsEffects = (effects: QuestionsEffect[]) => {
     for (const effect of effects) {
       switch (effect.type) {
-        case "clear-input":
-          controller.clear();
-          break;
-        case "set-input-text":
-          controller.setText(effect.text);
-          break;
-        case "focus-input":
-          controller.focus(FOCUS_IN_PLACE);
+        case "load-buffer":
+          loadEditorSnapshot(effect.buffer?.snapshot ?? null);
           break;
         case "focus-options":
           // Step advance / navigation: focus lands on the new step's
@@ -445,15 +498,20 @@ export const createComposerStore = (): ComposerStore => {
           optionsRef.current?.resetHighlight();
           break;
         case "submit-answers":
+          // The flow is over before the host hears the answers, so anything
+          // its callback does to the editor lands on the message.
+          endQuestions();
           submitAnswersRef.current?.(effect.answers);
           break;
       }
     }
   };
 
+  // The machine runs only while the editor is a step's answer field: once the
+  // answers went out, a stray Escape or submit must not compile them again.
   const dispatchQuestions = (action: QuestionsAction) => {
     const questions = snapshot.questions.items;
-    if (!questions || questions.length === 0) return;
+    if (mode.kind !== "questions" || !questions?.length) return;
     const { next, effects } = transitionQuestions(questionsMachine, questions, action);
     if (next !== questionsMachine) {
       questionsMachine = next;
@@ -489,6 +547,8 @@ export const createComposerStore = (): ComposerStore => {
       },
     };
     notify();
+    if (questions) enterQuestions();
+    else endQuestions();
   };
 
   // Question mode: while questions are active the options own the keyboard.
@@ -548,12 +608,13 @@ export const createComposerStore = (): ComposerStore => {
       isLastStep: false,
       isSingle: false,
       toggleOption: (label) => dispatchQuestions({ type: "toggle-option", label }),
-      continueStep: (freeText) =>
-        dispatchQuestions({ type: "continue-step", freeText: freeText ?? "" }),
+      continueStep: () =>
+        dispatchQuestions({ type: "continue-step", buffer: readEditorBuffer(editorRef) }),
       dismissStep: () => dispatchQuestions({ type: "dismiss-step" }),
       clearSelections: () => dispatchQuestions({ type: "clear-selections" }),
-      goBack: () => dispatchQuestions({ type: "step-back", currentText: controller.getText() }),
-      goNext: () => dispatchQuestions({ type: "step-forward", currentText: controller.getText() }),
+      goBack: () => dispatchQuestions({ type: "step-back", buffer: readEditorBuffer(editorRef) }),
+      goNext: () =>
+        dispatchQuestions({ type: "step-forward", buffer: readEditorBuffer(editorRef) }),
       optionsRef,
     },
   };
@@ -586,6 +647,7 @@ export const createComposerStore = (): ComposerStore => {
   const reset = () => {
     dispatchAttachments({ type: "reset" });
     questionsMachine = INITIAL_QUESTIONS_STATE;
+    mode = { kind: "message" };
     commandSelectRef.current = null;
     snapshot = initialSnapshot;
     notify();
@@ -607,6 +669,8 @@ export const createComposerStore = (): ComposerStore => {
     moveHighlight,
     setHighlight,
     setQuestions,
+    getEditorMode: () => mode,
+    setMessageSnapshot,
     setDragging,
     resetAttachments: () => dispatchAttachments({ type: "reset" }),
     activateQuestions,

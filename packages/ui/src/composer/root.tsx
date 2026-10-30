@@ -127,7 +127,7 @@ export const ComposerRoot = ({
   });
 
   const { reportEditorUpdate } = useComposerSnapshot({
-    editorRef: store.editorRef,
+    store,
     defaultValue,
     value,
     onValueChange,
@@ -137,8 +137,8 @@ export const ComposerRoot = ({
     event.preventDefault();
     const { questions, attachments } = store.getSnapshot();
 
-    if (questions.items?.length) {
-      questions.continueStep(store.controller.getText());
+    if (store.getEditorMode().kind === "questions") {
+      questions.continueStep();
       return;
     }
 
@@ -170,7 +170,7 @@ export const ComposerRoot = ({
     const stopGenerating = store.stopGeneratingRef.current;
     if (event.key !== "Escape" || event.defaultPrevented || !stopGenerating) return;
     // While a question is open, Escape dismisses its step instead.
-    if (store.getSnapshot().questions.items?.length) return;
+    if (store.getEditorMode().kind === "questions") return;
     event.preventDefault();
     stopGenerating();
   };

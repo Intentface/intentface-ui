@@ -430,13 +430,14 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     if (event.isComposing || event.keyCode === 229) return;
 
     const { store, options } = getDependencies();
+    const { attachments } = store.getSnapshot();
     const action = interpretEditorKey(
       { key: event.key, shiftKey: event.shiftKey },
       {
         isCommandListOpen: commandState.isOpen,
-        hasActiveQuestions: (store.getSnapshot().questions.items?.length ?? 0) > 0,
+        hasActiveQuestions: store.getEditorMode().kind === "questions",
         isEditorEmpty: getPlainText(doc) === "",
-        hasAttachments: store.getSnapshot().attachments.items.length > 0,
+        hasAttachments: attachments.items.length > 0,
         submitOn: options.submitOn,
       },
     );

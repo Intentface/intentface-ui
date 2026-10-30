@@ -632,7 +632,7 @@ const ComposerQuestion = () => {
 
   const draft = questions.drafts.get(questions.step) ?? {
     selected: new Set<string>(),
-    freeText: "",
+    buffer: null,
   };
 
   const totalQuestions = questions.items?.length ?? 0;

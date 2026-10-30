@@ -2,16 +2,25 @@
 // plus a map of per-step drafts; every transition is an immutable map
 // operation, so the store only owns the state cell and the effect execution.
 
-import type { ComposerAnswer, ComposerQuestion } from "./types";
+import type { ComposerAnswer, ComposerQuestion, ComposerSnapshot } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types — the machine state plus the effect/action/transition vocabulary the
 // store speaks to it in.
 // ---------------------------------------------------------------------------
 
+// A step's free-text field as the user left it: the editor snapshot to show
+// again and its plain text for the answer, captured together so the two can't
+// drift. The snapshot is opaque here. The machine only stores and returns it.
+export type EditorBuffer = {
+  snapshot: ComposerSnapshot;
+  text: string;
+};
+
 export type AnswerDraft = {
   selected: Set<string>;
-  freeText: string;
+  /** The editor content saved when the user last left this step; null when none was. */
+  buffer: EditorBuffer | null;
 };
 
 export type QuestionsState = {
@@ -25,24 +34,24 @@ export const INITIAL_QUESTIONS_STATE: QuestionsState = {
 };
 
 // Everything a transition may ask of the outside world. The store executes
-// these against the editor controller, the options handle, and the submit
-// callback — the transitions below only describe them.
+// these against the editor, the options handle, and the submit callback — the
+// transitions below only describe them.
 export type QuestionsEffect =
-  | { type: "clear-input" }
-  | { type: "set-input-text"; text: string }
-  | { type: "focus-input" }
+  | { type: "load-buffer"; buffer: EditorBuffer | null }
   | { type: "focus-options" }
   | { type: "reset-highlight" }
   | { type: "submit-answers"; answers: ComposerAnswer[] };
 
+// Actions that leave a step carry the editor's buffer as captured by the
+// store, so the step keeps exactly what the user saw.
 export type QuestionsAction =
   | { type: "toggle-option"; label: string }
   | { type: "select-option"; label: string }
   | { type: "clear-selections" }
-  | { type: "continue-step"; freeText: string }
+  | { type: "continue-step"; buffer: EditorBuffer | null }
   | { type: "dismiss-step" }
-  | { type: "step-back"; currentText: string }
-  | { type: "step-forward"; currentText: string };
+  | { type: "step-back"; buffer: EditorBuffer | null }
+  | { type: "step-forward"; buffer: EditorBuffer | null };
 
 export type QuestionsTransition = {
   next: QuestionsState;
@@ -56,27 +65,27 @@ export type QuestionsTransition = {
 
 const emptyDraft = (): AnswerDraft => ({
   selected: new Set<string>(),
-  freeText: "",
+  buffer: null,
 });
 
 const cloneDrafts = (source: Map<number, AnswerDraft>) => new Map(source);
 
-// Record `text` as the step's free-text answer. Single-select treats text and
-// a chosen option as mutually exclusive, so any selection is dropped;
-// multi-select keeps existing selections alongside the text. Empty text is a
-// no-op (returns an untouched clone).
-const writeFreeText = (
+const hasText = (buffer: EditorBuffer | null) => buffer !== null && buffer.text.trim().length > 0;
+
+// Save the editor's buffer as the step's free-text answer. Single-select treats
+// text and a chosen option as mutually exclusive, so text drops any selection;
+// multi-select keeps existing selections alongside the text.
+const saveStepBuffer = (
   drafts: Map<number, AnswerDraft>,
   step: number,
-  text: string,
+  buffer: EditorBuffer | null,
   multiSelect: boolean,
 ) => {
   const next = cloneDrafts(drafts);
-  if (text.length === 0) return next;
   const previous = next.get(step) ?? emptyDraft();
   next.set(step, {
-    selected: multiSelect ? previous.selected : new Set(),
-    freeText: text,
+    selected: multiSelect || !hasText(buffer) ? previous.selected : new Set(),
+    buffer,
   });
   return next;
 };
@@ -89,7 +98,7 @@ const skipStep = (drafts: Map<number, AnswerDraft>, step: number): Map<number, A
 };
 
 // Toggle an option on the step's draft. Multi-select toggles membership and
-// keeps free text; single-select replaces both (option and text are mutually
+// keeps the buffer; single-select replaces both (option and text are mutually
 // exclusive).
 const toggleAnswer = (
   drafts: Map<number, AnswerDraft>,
@@ -107,7 +116,7 @@ const toggleAnswer = (
     selected.clear();
     selected.add(label);
   }
-  next.set(step, { selected, freeText: multiSelect ? previous.freeText : "" });
+  next.set(step, { selected, buffer: multiSelect ? previous.buffer : null });
   return next;
 };
 
@@ -131,7 +140,7 @@ export const compileAnswers = (
         question.options.find((o) => o.label === key);
       return option ? (option.value ?? option.label) : key;
     });
-    const text = draft.freeText.trim();
+    const text = draft.buffer?.text.trim() ?? "";
 
     return text === "" ? { id: question.id, selected } : { id: question.id, selected, text };
   });
@@ -144,56 +153,45 @@ export const isLastStep = (state: QuestionsState, questions: ComposerQuestion[])
 // plus the effects to run. transitionQuestions is the single entry point.
 // ---------------------------------------------------------------------------
 
-// Commit `nextDrafts`, advance one step, and reset the input — then either
-// arm the next question (blurred, highlight reset) or compile and submit on
-// the last step (input focused for the follow-up message).
+// Show `targetStep`: load its saved buffer (empty when it has none) and arm its
+// options, highlight reset.
+const showStep = (next: QuestionsState): QuestionsTransition => ({
+  next,
+  effects: [
+    { type: "load-buffer", buffer: next.drafts.get(next.step)?.buffer ?? null },
+    { type: "reset-highlight" },
+    { type: "focus-options" },
+  ],
+});
+
+// Commit `nextDrafts` and advance one step: show the next question, or compile
+// and submit on the last step.
 const advanceStep = (
   state: QuestionsState,
   questions: ComposerQuestion[],
   nextDrafts: Map<number, AnswerDraft>,
 ): QuestionsTransition => {
   const next: QuestionsState = { step: state.step + 1, drafts: nextDrafts };
-  if (state.step < questions.length - 1) {
-    return {
-      next,
-      effects: [{ type: "clear-input" }, { type: "reset-highlight" }, { type: "focus-options" }],
-    };
-  }
+  if (state.step < questions.length - 1) return showStep(next);
   return {
     next,
-    effects: [
-      { type: "clear-input" },
-      { type: "submit-answers", answers: compileAnswers(next, questions) },
-      { type: "focus-input" },
-    ],
+    effects: [{ type: "submit-answers", answers: compileAnswers(next, questions) }],
   };
 };
 
-// Navigate to `targetStep`, preserving any in-progress free text on the step
-// being left and restoring the target step's saved text into the input.
+// Navigate to `targetStep`, saving the buffer of the step being left and
+// showing the target's.
 const transitionToStep = (
   state: QuestionsState,
   targetStep: number,
-  currentText: string,
+  buffer: EditorBuffer | null,
+  multiSelect: boolean,
 ): QuestionsTransition => {
   if (targetStep === state.step) return { next: state, effects: [] };
-
-  const trimmed = currentText.trim();
-  const drafts = cloneDrafts(state.drafts);
-  if (trimmed.length > 0) {
-    const previous = drafts.get(state.step) ?? emptyDraft();
-    drafts.set(state.step, { ...previous, freeText: trimmed });
-  }
-
-  const next: QuestionsState = { step: targetStep, drafts };
-  return {
-    next,
-    effects: [
-      { type: "set-input-text", text: drafts.get(targetStep)?.freeText ?? "" },
-      { type: "reset-highlight" },
-      { type: "focus-options" },
-    ],
-  };
+  return showStep({
+    step: targetStep,
+    drafts: saveStepBuffer(state.drafts, state.step, buffer, multiSelect),
+  });
 };
 
 // The decide half of the question flow, mirroring interpretQuestionKey: map an
@@ -214,7 +212,7 @@ export const transitionQuestions = (
           ...state,
           drafts: toggleAnswer(state.drafts, state.step, action.label, multiSelect),
         },
-        effects: multiSelect ? [] : [{ type: "clear-input" }],
+        effects: multiSelect ? [] : [{ type: "load-buffer", buffer: null }],
       };
 
     case "select-option": {
@@ -227,7 +225,7 @@ export const transitionQuestions = (
       const previous = state.drafts.get(state.step);
       if (!previous || previous.selected.size === 0) return { next: state, effects: [] };
       const drafts = cloneDrafts(state.drafts);
-      drafts.set(state.step, { selected: new Set(), freeText: previous.freeText });
+      drafts.set(state.step, { selected: new Set(), buffer: previous.buffer });
       return { next: { ...state, drafts }, effects: [] };
     }
 
@@ -235,20 +233,21 @@ export const transitionQuestions = (
       return advanceStep(
         state,
         questions,
-        writeFreeText(state.drafts, state.step, action.freeText.trim(), multiSelect),
+        saveStepBuffer(state.drafts, state.step, action.buffer, multiSelect),
       );
 
     case "dismiss-step":
       return advanceStep(state, questions, skipStep(state.drafts, state.step));
 
     case "step-back":
-      return transitionToStep(state, Math.max(0, state.step - 1), action.currentText);
+      return transitionToStep(state, Math.max(0, state.step - 1), action.buffer, multiSelect);
 
     case "step-forward":
       return transitionToStep(
         state,
         Math.min(questions.length - 1, state.step + 1),
-        action.currentText,
+        action.buffer,
+        multiSelect,
       );
   }
 };
