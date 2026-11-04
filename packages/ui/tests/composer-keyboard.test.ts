@@ -43,7 +43,7 @@ describe("interpretEditorKey", () => {
 
   test("enter submits, shift+enter soft-breaks", () => {
     expect(interpretEditorKey({ key: "Enter", shiftKey: false }, baseContext)).toEqual({
-      type: "submit-form",
+      type: "submit",
     });
     expect(interpretEditorKey({ key: "Enter", shiftKey: true }, baseContext)).toEqual({
       type: "soft-break",
@@ -108,7 +108,7 @@ describe("interpretEditorKey: submitOn", () => {
 
   test("shift-enter mode swaps the chord mapping", () => {
     expect(interpretEditorKey({ key: "Enter", shiftKey: true }, inverted)).toEqual({
-      type: "submit-form",
+      type: "submit",
     });
     expect(interpretEditorKey({ key: "Enter", shiftKey: false }, inverted)).toEqual({
       type: "soft-break",
