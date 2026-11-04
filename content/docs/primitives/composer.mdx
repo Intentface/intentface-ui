@@ -218,13 +218,15 @@ make it a form; a submit event on that form sends too.
 The root measures itself and the `Container` in whole px and publishes the result
 twice. Descendants read the four CSS variables below, with a fallback because each
 is absent until measured: `height: var(--composer-height, 0px)`. The container
-pair is absent while no `Container` is mounted. A hidden composer measures 0, which
-is a real size. `Panel` and `Popover` content is portaled out of the root, so it
-doesn't inherit the variables. Read `useComposer((c) => c.size)` inside the tree,
-portals included, and `useComposerStore(store, (c) => c.size)` from a sibling or
-parent that holds a `Composer.createStore()` handle. `size` is `null` until a root
-mounts. Don't size the root's own content from `--composer-height`, because that
-feeds back into the measurement.
+pair is absent while no `Container` is mounted. A composer under `display: none`
+measures 0, which is a real size; under a hidden `<Activity>` the variables are
+removed instead. A positioned `Panel` (the default) and the `Popover` are portaled
+out of the root, so they don't inherit the variables; an `anchor={false}` Panel
+renders inside the root and does. Read `useComposer((c) => c.size)` inside the
+tree, portals included, and `useComposerStore(store, (c) => c.size)` from a sibling
+or parent that holds a `Composer.createStore()` handle. `size` is `null` until a
+root mounts and while a hidden `<Activity>` holds it. Don't size the root's own
+content from `--composer-height`, because that feeds back into the measurement.
 
 export const rootProps = [
   { name: "onSubmit", type: "(data: ComposerSubmitData) => void | Promise<void>", description: "Fires on message submit and on ask-user answers. Discriminate on data.kind." },
