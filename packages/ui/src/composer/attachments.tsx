@@ -16,7 +16,8 @@ export type ComposerAttachmentsProps = {
   // platform blob ingestion; override (with destroy) for custom ids, extra
   // fields, or upload-backed items.
   convert?: (file: File) => AttachmentItem;
-  // Cleanup for a removed item. Defaults to revoking blob URLs.
+  // Cleanup for a removed item, or a sent one once onSubmit has settled.
+  // Defaults to revoking blob URLs.
   destroy?: (item: AttachmentItem) => void;
   // Policy — the package imposes none: accept everything, no caps.
   accept?: string;

@@ -621,15 +621,21 @@ export const createComposerStore = (): ComposerStore => {
     // Text may be empty on an attachments-only submit — any placeholder copy
     // is the consumer's.
     const files = attachments.items;
+    const { destroy } = attachmentConfigRef.current;
 
-    dispatchAttachments({ type: "reset" });
-    controller.clear();
-
-    await onSubmitRef.current?.({
-      kind: "message",
-      text: trimmedText,
-      files,
-    });
+    // From the hand-off on the store no longer holds the files, so everything
+    // after it runs inside the try and the finally is their only release.
+    try {
+      dispatchAttachments({ type: "hand-off" });
+      controller.clear();
+      await onSubmitRef.current?.({
+        kind: "message",
+        text: trimmedText,
+        files,
+      });
+    } finally {
+      for (const item of files) destroy(item);
+    }
   };
 
   // Pristine state for reset() — slice actions and refs are reused, so action

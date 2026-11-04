@@ -321,3 +321,97 @@ describe("AskUser.Continue", () => {
     });
   });
 });
+
+describe("attachments on submit", () => {
+  const renderWithAttachment = (
+    onSubmit: (data: ComposerSubmitData) => Promise<void>,
+    textareaProps?: Partial<ComponentProps<typeof Composer.Textarea>>,
+  ) => {
+    const released: string[] = [];
+    const store = createComposerStore();
+    render(
+      <Composer.Root store={store} onSubmit={onSubmit}>
+        <Composer.Textarea aria-label="Message" {...textareaProps} />
+        <Composer.Attachments
+          convert={(file) => ({ id: file.name, url: `blob:test/${file.name}` })}
+          destroy={(item) => void released.push(item.id)}
+        />
+      </Composer.Root>,
+    );
+    act(() => store.getSnapshot().attachments.add([new File(["x"], "pixel.png")]));
+    return { store, released };
+  };
+
+  test("onSubmit gets items that stay unreleased until it settles", async () => {
+    const releasedAtSubmit: string[][] = [];
+    let finish = () => {};
+    const { store, released } = renderWithAttachment((data) => {
+      releasedAtSubmit.push([...released]);
+      expect(data).toMatchObject({ files: [{ id: "pixel.png" }] });
+      return new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    });
+
+    let sending = Promise.resolve();
+    act(() => {
+      sending = store.submit();
+    });
+    expect(store.getSnapshot().attachments.items).toEqual([]);
+    expect(released).toEqual([]);
+
+    await act(async () => {
+      finish();
+      await sending;
+    });
+    expect(releasedAtSubmit).toEqual([[]]);
+    expect(released).toEqual(["pixel.png"]);
+  });
+
+  test("items are released once when onSubmit throws", async () => {
+    const releasedAtSubmit: string[][] = [];
+    const { store, released } = renderWithAttachment(async () => {
+      releasedAtSubmit.push([...released]);
+      throw new Error("offline");
+    });
+
+    await act(async () => {
+      await expect(store.submit()).rejects.toThrow("offline");
+    });
+    expect(releasedAtSubmit).toEqual([[]]);
+    expect(released).toEqual(["pixel.png"]);
+  });
+
+  test("items are released when a store listener throws on the hand-off", async () => {
+    const onSubmit = mock(async () => {});
+    const { store, released } = renderWithAttachment(onSubmit);
+    let thrown = false;
+    store.subscribe(() => {
+      if (thrown || store.getSnapshot().attachments.items.length) return;
+      thrown = true;
+      throw new Error("listener failed");
+    });
+
+    await act(async () => {
+      await expect(store.submit()).rejects.toThrow("listener failed");
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(released).toEqual(["pixel.png"]);
+  });
+
+  test("items are released when clearing the editor throws", async () => {
+    const onSubmit = mock(async () => {});
+    const { store, released } = renderWithAttachment(onSubmit, {
+      value: "hello",
+      onValueChange: (text) => {
+        if (!text) throw new Error("onValueChange failed");
+      },
+    });
+
+    await act(async () => {
+      await expect(store.submit()).rejects.toThrow("onValueChange failed");
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(released).toEqual(["pixel.png"]);
+  });
+});
