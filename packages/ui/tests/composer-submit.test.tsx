@@ -382,6 +382,23 @@ describe("attachments on submit", () => {
     expect(released).toEqual(["pixel.png"]);
   });
 
+  test("items are released when a store listener throws on the hand-off", async () => {
+    const onSubmit = mock(async () => {});
+    const { store, released } = renderWithAttachment(onSubmit);
+    let thrown = false;
+    store.subscribe(() => {
+      if (thrown || store.getSnapshot().attachments.items.length) return;
+      thrown = true;
+      throw new Error("listener failed");
+    });
+
+    await act(async () => {
+      await expect(store.submit()).rejects.toThrow("listener failed");
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(released).toEqual(["pixel.png"]);
+  });
+
   test("items are released when clearing the editor throws", async () => {
     const onSubmit = mock(async () => {});
     const { store, released } = renderWithAttachment(onSubmit, {

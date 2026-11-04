@@ -592,9 +592,10 @@ export const createComposerStore = (): ComposerStore => {
     const files = attachments.items;
     const { destroy } = attachmentConfigRef.current;
 
-    dispatchAttachments({ type: "hand-off" });
-
+    // From the hand-off on the store no longer holds the files, so everything
+    // after it runs inside the try and the finally is their only release.
     try {
+      dispatchAttachments({ type: "hand-off" });
       controller.clear();
       await onSubmitRef.current?.({
         kind: "message",
