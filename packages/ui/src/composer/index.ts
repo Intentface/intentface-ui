@@ -30,9 +30,11 @@ export {
 export type {
   ComposerAskUserState,
   ComposerAttachmentsState,
+  ComposerBox,
   ComposerCommandsState,
   ComposerEditorState,
   ComposerPanelSlice,
+  ComposerSize,
   ComposerState,
   ComposerStore,
 } from "./store";

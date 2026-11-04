@@ -17,14 +17,14 @@ import type { PrimitiveProps } from "../internal/primitive-props";
 import { useAnchorPositioning } from "../internal/render/positioning";
 import { useRenderElement } from "../internal/render/useRenderElement";
 import { openStateMapping } from "../internal/state-mappings";
-import { type ComposerState, useComposer, useComposerContextStore } from "./store";
+import { type ComposerState, useComposerContent, useComposerContextStore } from "./store";
 
 export type ComposerPopoverState = {
   open: boolean;
 };
 
 export type ComposerPopoverProps = Omit<PrimitiveProps<"div", ComposerPopoverState>, "children"> & {
-  children?: ReactNode | ((composer: ComposerState) => ReactNode);
+  children?: ReactNode | ((composer: Omit<ComposerState, "size">) => ReactNode);
   /** Hold the placement without collision repositioning (drops flip + shift). Default false. */
   pin?: boolean;
 };
@@ -38,7 +38,7 @@ export const ComposerPopover = ({
   ...elementProps
 }: ComposerPopoverProps) => {
   const store = useComposerContextStore();
-  const composer = useComposer((c) => c);
+  const composer = useComposerContent();
   // `children` may be a callback receiving composer state (to gate on a native's
   // active flag) or plain nodes. Open while the resolved content is non-empty —
   // React can't read a child's rendered null off the prop, so count is the test.
