@@ -10,7 +10,7 @@ optional.
 ## What you have to supply
 
 - **Focus indication.** Focus moves correctly; nothing paints it. Style
-  `:focus-visible` yourself, and remember that in command lists and ask-user
+  `:focus-visible` yourself, and remember that in command lists and question
   options the highlight *is* the indicator, so a faint highlight is a missing
   focus ring rather than a soft hover.
 - **Contrast.** No colour ships with the package.
@@ -64,6 +64,6 @@ rather than failing quietly. Both are argued on the page that makes the choice:
 ## Testing
 
 The package runs an axe-based suite over the composer combobox wiring, the
-ask-user flows, the display primitives' status attributes, and accessible names
+question flows, the display primitives' status attributes, and accessible names
 across controls. Automated checks cannot evaluate contrast or focus visibility
 in your styling, so those need your own pass.

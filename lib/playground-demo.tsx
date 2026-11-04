@@ -1,12 +1,12 @@
 import { type CommandItemData, Composer } from "@/components/ai/composer";
-import type { AskUserQuestion } from "@/lib/ai/types";
+import type { Question } from "@/lib/ai/types";
 
 // Demo data for the playground cards (formerly app/playground/page.tsx): the
-// ask-user question sets, the fake async issue list behind the `#` command,
+// question sets, the fake async issue list behind the `#` command,
 // and the "open in the workspace" context strip. Pure fixtures — the toggles
 // that mount them live in the Composer card.
 
-export const singleQuestion: AskUserQuestion[] = [
+export const singleQuestion: Question[] = [
   {
     question: "Which database should we use?",
     header: "Database",
@@ -27,7 +27,7 @@ export const singleQuestion: AskUserQuestion[] = [
   },
 ];
 
-export const multipleQuestions: AskUserQuestion[] = [
+export const multipleQuestions: Question[] = [
   {
     question: "Which auth method do you prefer?",
     header: "Auth",

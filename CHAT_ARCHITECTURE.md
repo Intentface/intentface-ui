@@ -62,7 +62,7 @@ export const Composer = Object.assign(ComposerRoot, {
   Container, Attachments, AttachmentTrigger, ContextWindow, Actions, Placeholder, Submit,
   Panel, PanelItem,
   Textarea,
-  AskUser, AskUserHints, AskUserDismiss, AskUserContinue,
+  Question, QuestionHints, QuestionDismiss, QuestionContinue,
   Commands, CommandList, CommandItems, CommandLoading, CommandEmpty, CommandDismiss,
   CommandItem, CommandItemIcon, CommandItemLabel, CommandItemDescription,
   CommandGroup, CommandGroupLabel, CommandCollection,
@@ -88,7 +88,7 @@ The nesting hierarchy at a glance:
         <Composer.CommandLoading />
         <Composer.CommandEmpty />
       </Composer.CommandList>
-      <Composer.AskUser />
+      <Composer.Question />
     </Composer.PanelItem>
   </Composer.Panel>
 
@@ -100,9 +100,9 @@ The nesting hierarchy at a glance:
       <Composer.Placeholder />
     </Composer.Textarea>
     <Composer.Actions>
-      <Composer.AskUserHints />
-      <Composer.AskUserDismiss />
-      <Composer.AskUserContinue />
+      <Composer.QuestionHints />
+      <Composer.QuestionDismiss />
+      <Composer.QuestionContinue />
       <Composer.Submit />
     </Composer.Actions>
   </Composer.Container>
@@ -118,7 +118,7 @@ export type ComposerRootProps = Omit<ComponentProps<"form">, "onSubmit" | "ref">
   onSubmit?: (data: ComposerSubmitData) => void | Promise<void>;
   isSubmitting?: boolean;
   commands?: ComposerCommandsMap;
-  questions?: AskUserQuestion[];          // present → drives the ask-user flow
+  questions?: ComposerQuestion[];          // present → drives the question flow
   defaultValue?: ComposerSnapshot;        // uncontrolled editor doc
   value?: ComposerSnapshot;               // controlled editor doc
   onValueChange?: (snapshot: ComposerSnapshot) => void;
@@ -138,7 +138,7 @@ type ComposerMessageSubmit = {
 
 type ComposerAnswersSubmit = {
   kind: "answers";
-  answers: ComposerAnswerEntry[];          // emitted by the ask-user flow
+  answers: ComposerAnswer[];         // emitted by the question flow
 };
 ```
 
@@ -151,14 +151,14 @@ Parent components dispatch on `data.kind`: a `"message"` submit goes to `chat.se
 A selector hook over a module-singleton store (`useSyncExternalStore`); no context needed. Slices are identity-stable — a slice's reference changes only when its data does.
 
 ```ts
-const { textarea, attachments, askUser, panel, commands, isSubmitting } = useComposer();
+const { textarea, attachments, questions, panel, commands, isSubmitting } = useComposer();
 ```
 
 | Slice         | Shape                                                                       |
 | ------------- | --------------------------------------------------------------------------- |
 | `textarea`    | The editor controller (`focus/blur/clear/insertText/insertChip/getText/setText/serialize/ensureFocus`) plus reactive `hasContent` |
 | `attachments` | `{ items, add, remove, openFileDialog, error, isDragging, fileInputRef, … }` |
-| `askUser`     | `{ questions, step, answers, toggleOption, continueStep, dismissStep, isLastStep, isSingle, goBack, goNext, … }` |
+| `questions`   | `{ items, step, drafts, toggleOption, continueStep, dismissStep, isLastStep, isSingle, goBack, goNext, … }` |
 | `panel`       | `{ isOpen, value }` — which panel item is open                              |
 | `commands`    | `{ isOpen, trigger, query }` — prefix-popover state                         |
 | `isSubmitting`| Boolean mirror of the root's `isSubmitting` prop                            |
@@ -186,22 +186,22 @@ The same controller surface is also exported as the module singleton **`composer
 <Composer.Panel value={panelState.type}>
   <Composer.PanelItem value="command-list">…</Composer.PanelItem>
   <Composer.PanelItem value="active">…</Composer.PanelItem>
-  <Composer.PanelItem value="ask-user"><Composer.AskUser /></Composer.PanelItem>
+  <Composer.PanelItem value="questions"><Composer.Question /></Composer.PanelItem>
 </Composer.Panel>
 ```
 
 The matched item animates in (spring height via `useMeasure`, blur-in); only one is visible at a time.
 
-### Ask-user — `Composer.AskUser` / `AskUserHints` / `AskUserDismiss` / `AskUserContinue`
+### Questions — `Composer.Question` / `Composer.QuestionHints` / `Composer.QuestionDismiss` / `Composer.QuestionContinue`
 
-Active when the root receives a non-empty `questions` prop (driven by the open `askUser` tool call). It's a multi-step state machine over the `askUser` store slice.
+Active when the root receives a non-empty `questions` prop (driven by the open `askUser` tool call). It's a multi-step state machine over the `questions` store slice.
 
-- `Composer.AskUser` — renders the current question with its options and a free-text fallback; handles single- and multi-select, plus prev/next navigation across questions.
-- `Composer.AskUserHints` — keyboard-hint pills (↑↓ navigate, ↵ select, ←→ between questions, esc skip).
-- `Composer.AskUserDismiss` — skips the current question (`askUser.dismissStep`).
-- `Composer.AskUserContinue` — submits the form; labeled `"Continue"`, or `"Submit"` on the last step. The form handler routes it through `askUser.continueStep`, which compiles per-question answers into the `ComposerAnswerEntry` union and fires `onSubmit({ kind: "answers", answers })`.
+- `Composer.Question` — renders the current question with its options and a free-text fallback; handles single- and multi-select, plus prev/next navigation across questions.
+- `Composer.QuestionHints` — keyboard-hint pills (↑↓ navigate, ↵ select, ←→ between questions, esc skip).
+- `Composer.QuestionDismiss` — skips the current question (`questions.dismissStep`).
+- `Composer.QuestionContinue` — submits the form; labeled `"Continue"`, or `"Submit"` on the last step. The form handler routes it through `questions.continueStep`, which compiles one answer per question (flat `ComposerAnswer`) and fires `onSubmit({ kind: "answers", answers })`.
 
-When in ask-user mode, swap the `Actions` row from the standard layout to `<AskUserHints /> <AskUserDismiss /> <AskUserContinue />`.
+When in question mode, swap the `Actions` row from the standard layout to `<Composer.QuestionHints /> <Composer.QuestionDismiss /> <Composer.QuestionContinue />`.
 
 ### Commands — prefix-triggered popovers
 
@@ -269,7 +269,7 @@ The `variant`/`icon` ride in the query string, so the token carries everything n
 ### Submission flow
 
 1. `Composer.Submit` (or Enter in the editor) triggers form submit.
-2. If `questions` is active and the user is mid-flow → `askUser.continueStep()` advances or finalises (emitting `{ kind: "answers" }`).
+2. If `questions` is active and the user is mid-flow → `questions.continueStep()` advances or finalises (emitting `{ kind: "answers" }`).
 3. Otherwise → `serializeEditorContent` produces `{ text }` (chips already inlined), attachments become `FileUIPart[]`, the editor and attachments reset, and the root calls `onSubmit({ kind: "message", text, files })`. No `chips` or `tools` field — chips live in `text`, tool toggles live in the consumer.
 4. The parent maps that to `chat.sendMessage({ parts: [...files, { type: "text", text }] }, { body: { webSearch, thinking } })`.
 
@@ -597,7 +597,7 @@ const ChatSurface = ({ chatId }: { chatId: string }) => {
           <Composer.Panel value={panelState.type}>
             <Composer.PanelItem value="command-list">{/* CommandLists */}</Composer.PanelItem>
             <Composer.PanelItem value="active">{/* StepQueue */}</Composer.PanelItem>
-            <Composer.PanelItem value="ask-user"><Composer.AskUser /></Composer.PanelItem>
+            <Composer.PanelItem value="questions"><Composer.Question /></Composer.PanelItem>
           </Composer.Panel>
 
           <Composer.Container>
@@ -608,9 +608,9 @@ const ChatSurface = ({ chatId }: { chatId: string }) => {
             <Composer.Actions>
               {panelState.type === "ask-user" ? (
                 <>
-                  <Composer.AskUserHints />
-                  <Composer.AskUserDismiss />
-                  <Composer.AskUserContinue />
+                  <Composer.QuestionHints />
+                  <Composer.QuestionDismiss />
+                  <Composer.QuestionContinue />
                 </>
               ) : (
                 <Composer.Submit />

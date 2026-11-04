@@ -25,7 +25,7 @@ const questionSchema = z.object({
     ),
 });
 
-const askUserInputSchema = z.object({
+const questionsInputSchema = z.object({
   questions: z
     .array(questionSchema)
     .min(1)
@@ -43,7 +43,7 @@ export const askUser = tool({
 - You want to confirm a potentially destructive or irreversible action
 
 Provide 1-4 questions, each with 2-5 concrete options with short labels and helpful descriptions. Users can also type a custom answer for any question.`,
-  inputSchema: askUserInputSchema,
+  inputSchema: questionsInputSchema,
   // The chat answers with addToolOutput: a JSON object of question → answer.
   outputSchema: z.string(),
 });

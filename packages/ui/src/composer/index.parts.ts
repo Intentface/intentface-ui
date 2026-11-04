@@ -28,6 +28,23 @@ export { ComposerContainer as Container } from "./container";
 export { ComposerPanel as Panel } from "./panel";
 export { ComposerPlaceholder as Placeholder } from "./placeholder";
 export { ComposerPopover as Popover } from "./popover";
+export {
+  ComposerQuestion as Question,
+  ComposerQuestionContinue as QuestionContinue,
+  ComposerQuestionDismiss as QuestionDismiss,
+  ComposerQuestionHeader as QuestionHeader,
+  ComposerQuestionHints as QuestionHints,
+  ComposerQuestionLabel as QuestionLabel,
+  ComposerQuestionNavigation as QuestionNavigation,
+  ComposerQuestionNext as QuestionNext,
+  ComposerQuestionOption as QuestionOption,
+  ComposerQuestionOptionContent as QuestionOptionContent,
+  ComposerQuestionOptionDescription as QuestionOptionDescription,
+  ComposerQuestionOptionLabel as QuestionOptionLabel,
+  ComposerQuestionOptions as QuestionOptions,
+  ComposerQuestionPrevious as QuestionPrevious,
+  ComposerQuestionStepLabel as QuestionStepLabel,
+} from "./question";
 export { ComposerRoot as Root } from "./root";
 /** Create a standalone store handle: `<Composer.Root store={…}>` + `useComposerStore(store, selector)` + `store.controller` for imperative access. */
 export { createComposerStore as createStore } from "./store";

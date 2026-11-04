@@ -12,12 +12,34 @@ export { useComposerController } from "./controller";
 export { filterArrayItems, fuzzyScore, suggestionRemainder } from "./fuzzy";
 export * as Composer from "./index.parts";
 export type { ComposerSubmitOn, EditorKeyAction, EditorKeyContext } from "./keyboard";
-export { interpretAskUserKey, interpretEditorKey } from "./keyboard";
+export { interpretEditorKey, interpretQuestionKey } from "./keyboard";
 export type { ComposerPanelProps } from "./panel";
 export type { ComposerPlaceholderProps } from "./placeholder";
 export type { ComposerPopoverProps } from "./popover";
 export type { ActiveTokenState, RegisteredPrefix } from "./prefix-detection";
 export { CLOSED_COMMAND_STATE, detectActivePrefix } from "./prefix-detection";
+export type {
+  ComposerQuestionContinueProps,
+  ComposerQuestionDismissProps,
+  ComposerQuestionHeaderProps,
+  ComposerQuestionHintsProps,
+  ComposerQuestionLabelProps,
+  ComposerQuestionNavigationProps,
+  ComposerQuestionNextProps,
+  ComposerQuestionOptionContentProps,
+  ComposerQuestionOptionDescriptionProps,
+  ComposerQuestionOptionLabelProps,
+  ComposerQuestionOptionProps,
+  ComposerQuestionOptionState,
+  ComposerQuestionOptionsHandle,
+  ComposerQuestionOptionsProps,
+  ComposerQuestionPreviousProps,
+  ComposerQuestionProps,
+  ComposerQuestionStepLabelProps,
+  ComposerQuestionStepLabelState,
+} from "./question";
+export { useQuestionOption, useQuestionOptions } from "./question";
+export type { AnswerDraft } from "./question-machine";
 export type { ComposerRootProps } from "./root";
 export type { Segment, SegmentDoc, TextChange } from "./segments";
 export {
@@ -28,30 +50,30 @@ export {
   spliceSegments,
 } from "./segments";
 export type {
-  ComposerAskUserState,
   ComposerAttachmentsState,
   ComposerCommandsState,
   ComposerEditorState,
   ComposerPanelSlice,
+  ComposerQuestionsState,
   ComposerState,
   ComposerStore,
 } from "./store";
 export { useComposer, useComposerStore } from "./store";
 export type { ComposerTextareaProps, ComposerTextareaState } from "./textarea";
 export type {
-  AskUserOption,
-  AskUserQuestion,
   AttachmentsApi,
   ChipData,
   CommandItemData,
   CommandItemKind,
-  ComposerAnswerEntry,
+  ComposerAnswer,
   ComposerAnswersSubmit,
   ComposerCommandsConfig,
   ComposerCommandsItems,
   ComposerCommandsMap,
   ComposerEditorHandle,
   ComposerMessageSubmit,
+  ComposerQuestion,
+  ComposerQuestionOption,
   ComposerSnapshot,
   ComposerSubmitData,
   PrefixOnSelectContext,

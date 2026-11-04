@@ -1,15 +1,15 @@
 import { create } from "zustand";
-import type { AskUserQuestion } from "@/lib/ai/types";
+import type { Question } from "@/lib/ai/types";
 
 // Ephemeral demo state driven by the playground cards. Deliberately NOT
-// persisted (unlike the settings store): firing an ask-user question or
+// persisted (unlike the settings store): firing a demo question or
 // showing the demo context strip is a transient demonstration, not
 // configuration — a reload resets it.
 
 type PlaygroundStore = {
-  /** Demo ask-user questions injected into the composer; null when idle. */
-  demoQuestions: AskUserQuestion[] | null;
-  setDemoQuestions: (questions: AskUserQuestion[] | null) => void;
+  /** Demo questions injected into the composer; null when idle. */
+  demoQuestions: Question[] | null;
+  setDemoQuestions: (questions: Question[] | null) => void;
   /** Show the demo "open files" context strip above the composer. */
   showContextStrip: boolean;
   setShowContextStrip: (show: boolean) => void;

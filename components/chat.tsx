@@ -41,6 +41,7 @@ import {
   type CommandItemData,
   Composer,
   type ComposerCommandsMap,
+  type ComposerQuestion,
   type ComposerSubmitData,
 } from "@/components/ai/composer";
 import { GeneratedUi } from "@/components/ai/generated-ui";
@@ -62,9 +63,9 @@ import {
   getSourcesInfo,
   splitReasoningByHeaders,
 } from "@/lib/ai/message-info";
-import { getAskUserInfo, getAskUserStepInfo, getToolCallInfo } from "@/lib/ai/steps-info";
+import { getQuestionsInfo, getQuestionsStepInfo, getToolCallInfo } from "@/lib/ai/steps-info";
 import { DEFAULT_TOOL_LABELS } from "@/lib/ai/tool-labels";
-import type { AppPart, AppUIMessage, AskUserQuestion, StepStatus } from "@/lib/ai/types";
+import type { AppPart, AppUIMessage, Question, StepStatus } from "@/lib/ai/types";
 import { applyStopToMessages } from "@/lib/chat-instance";
 import { fetchPlaygroundIssues, GroupedIssueCommands } from "@/lib/playground-demo";
 import { useChatStore } from "@/lib/store/chat";
@@ -222,8 +223,8 @@ const TimelineToolCall = ({ part }: { part: ToolPart }) => {
   );
 };
 
-const TimelineAskUser = ({ part }: { part: ToolPart }) => {
-  const { label, status, questions, answers, isComplete } = getAskUserStepInfo(part);
+const TimelineQuestions = ({ part }: { part: ToolPart }) => {
+  const { label, status, questions, answers, isComplete } = getQuestionsStepInfo(part);
 
   return (
     <TimelineStep label={label} status={status} icon={CircleQuestion}>
@@ -250,7 +251,7 @@ const InterleavedSteps = ({
 }: {
   segments: MessageSegment[];
   isStreaming: boolean;
-  // An open ask-user prompt means the turn is paused, not finished — keep the block
+  // Open questions mean the turn is paused, not finished — keep the block
   // in its active state (cycling header, open) rather than the "done" summary.
   awaitingInput?: boolean;
 }) => {
@@ -391,7 +392,7 @@ const InterleavedSteps = ({
             if (seg.type === "tool") {
               return seg.parts.map((part, j) =>
                 part.type === "tool-askUser" ? (
-                  <TimelineAskUser key={`a-${i}-${j}`} part={part} />
+                  <TimelineQuestions key={`a-${i}-${j}`} part={part} />
                 ) : (
                   <TimelineToolCall key={`t-${i}-${j}`} part={part} />
                 ),
@@ -432,12 +433,12 @@ const ChatMessageItem = memo(
     const fileParts = getFileParts(segments);
     const chain = getChainInfo(segments);
     const reasoning = chain.onlyReasoning ? getReasoningInfo(segments, isStreaming) : null;
-    const askUser = getAskUserInfo(parts);
+    const questionsInfo = getQuestionsInfo(parts);
     const sourcesInfo = isAssistant ? getSourcesInfo(parts) : null;
 
     // Every assistant turn keeps a status block, so it never appears-then-vanishes. A
     // finished reasoning-only turn uses the dedicated Reasoning disclosure; every other
-    // assistant turn — streaming, tools, ask-user, or a plain text reply — uses
+    // assistant turn — streaming, tools, questions, or a plain text reply — uses
     // InterleavedSteps, which shows a "Thought for Xs" header even with an empty timeline.
     const isReasoningOnlyDone =
       isAssistant && !isStreaming && !chain.hasTools && !!reasoning && reasoning.parts.length > 0;
@@ -474,7 +475,7 @@ const ChatMessageItem = memo(
           <InterleavedSteps
             segments={chain.segments}
             isStreaming={isStreaming}
-            awaitingInput={askUser.isAwaitingInput}
+            awaitingInput={questionsInfo.isAwaitingInput}
           />
         )}
 
@@ -522,7 +523,7 @@ const ChatMessageItem = memo(
         {isAssistant && message.metadata?.stopped && <Message.Stopped />}
 
         {/* Actions — hide while waiting for tool input */}
-        {showActions && !askUser.isAwaitingInput && (
+        {showActions && !questionsInfo.isAwaitingInput && (
           <Message.Actions>
             {isAssistant && (
               <Message.Action
@@ -651,27 +652,27 @@ const MENTION_ITEMS: CommandItemData[] = [
   },
 ];
 
-// This app's composer panel-state union: idle, or the ask-user arm for its
+// This app's composer panel-state union: idle, or the questions arm for its
 // askUser tool. (Tool/step status moved to the assistant message.)
-type AskUserPanelState = {
-  type: "ask-user";
+type QuestionsPanelState = {
+  type: "questions";
   toolCallId: string;
-  questions: AskUserQuestion[];
+  questions: Question[];
 };
 
-type AppComposerPanelState = { type: "idle" } | AskUserPanelState;
+type AppComposerPanelState = { type: "idle" } | QuestionsPanelState;
 
 // Stable idle reference so ChatInputInner's memo bails when nothing transitioned.
 const IDLE_PANEL_STATE: AppComposerPanelState = { type: "idle" };
 
-// App overlay: routes the composer panel to ask-user while this app's askUser
+// App overlay: routes the composer panel to the questions while this app's askUser
 // tool awaits input. Detection runs on ready AND streaming — the chat goes
 // "ready" while the tool waits. Referentially stable so the memoized inner
 // composer bails per stream chunk.
-const useAskUserPanelState = (
+const useQuestionsPanelState = (
   messages: readonly AppUIMessage[],
   status: ChatStatus,
-): AskUserPanelState | null => {
+): QuestionsPanelState | null => {
   const lastAssistant =
     status === "ready" || status === "streaming"
       ? messages.findLast((message) => message.role === "assistant")
@@ -683,7 +684,7 @@ const useAskUserPanelState = (
 
   const next = part
     ? {
-        type: "ask-user" as const,
+        type: "questions" as const,
         toolCallId: part.toolCallId,
         questions: part.input.questions,
       }
@@ -701,13 +702,13 @@ const useAskUserPanelState = (
 };
 
 // Thin bridge — the only composer piece that re-renders per stream chunk. It derives
-// the ask-user panel state (referentially stable while nothing transitioned) so the
+// the questions panel state (referentially stable while nothing transitioned) so the
 // memoized inner composer bails unless the panel actually changed. Idle otherwise —
 // tool/step status now renders in the assistant message.
 const ChatInput = () => {
   const { messages, status } = useChatMessages();
-  const askUserPanelState = useAskUserPanelState(messages, status);
-  return <ChatInputInner panelState={askUserPanelState ?? IDLE_PANEL_STATE} status={status} />;
+  const questionsPanelState = useQuestionsPanelState(messages, status);
+  return <ChatInputInner panelState={questionsPanelState ?? IDLE_PANEL_STATE} status={status} />;
 };
 
 type ChatInputInnerProps = {
@@ -744,7 +745,7 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
 
   // Playground knobs: which command prefixes mount, ghost suggestions, the
   // command surface, the submit chord (persisted config) — plus the ephemeral
-  // demo state (injected ask-user questions, the workspace-files context strip).
+  // demo state (injected demo questions, the workspace-files context strip).
   const commandToggles = useSettingsStore((state) => state.commands);
   const suggestions = useSettingsStore((state) => state.suggestions);
   const commandSurface = useSettingsStore((state) => state.commandSurface);
@@ -828,30 +829,46 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
     return map;
   }, [commandToggles, suggestions, commandItems]);
 
-  const isAskUser = panelState.type === "ask-user" || demoQuestions != null;
-  const askUserQuestions = panelState.type === "ask-user" ? panelState.questions : null;
+  const hasQuestions = panelState.type === "questions" || demoQuestions != null;
+  const toolQuestions = panelState.type === "questions" ? panelState.questions : null;
+
+  // Boundary map: tool questions carry no identity, so positional ids are
+  // minted here. Memoized on the merged feed — setQuestions resets the machine
+  // on any array identity change, so a fresh .map() per render would wipe
+  // in-progress drafts.
+  const activeQuestions = demoQuestions ?? toolQuestions;
+  const composerQuestions = useMemo(
+    () =>
+      activeQuestions?.map(
+        (question, index): ComposerQuestion => ({
+          id: `q-${index}`,
+          label: question.question,
+          options: question.options,
+          multiSelect: question.multiSelect,
+        }),
+      ),
+    [activeQuestions],
+  );
 
   const handleSubmit = useCallback(
     async (data: ComposerSubmitData) => {
       if (data.kind === "answers") {
         // Demo questions from the playground card: the flow completing IS the
-        // demo — discard the answers and clear the injection.
+        // demo — discard the entries and clear the injection.
         if (demoQuestions) {
           setDemoQuestions(null);
           return;
         }
-        if (panelState.type !== "ask-user") return;
-        // Project the composer's per-question entries into a question→answer map — the
-        // shape the tool output is read back as (getAskUserInfo / getAskUserStepInfo).
+        if (panelState.type !== "questions") return;
+        // Project the flat entries back into the question→answer map the tool
+        // output is read as (getQuestionsInfo / getQuestionsStepInfo). Ids resolve
+        // through the minted questions; skipped entries stay absent.
         const answers: Record<string, string> = {};
         for (const entry of data.answers) {
-          if ("options" in entry) {
-            answers[entry.question] = [...entry.options, entry.text].filter(Boolean).join(", ");
-          } else if ("option" in entry) {
-            answers[entry.question] = entry.option;
-          } else if ("text" in entry) {
-            answers[entry.question] = entry.text;
-          }
+          if (entry.selected.length === 0 && entry.text === undefined) continue;
+          const label = composerQuestions?.find((question) => question.id === entry.id)?.label;
+          if (!label) continue;
+          answers[label] = [...entry.selected, entry.text].filter(Boolean).join(", ");
         }
         addToolOutput({
           tool: "askUser",
@@ -912,6 +929,7 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
       sendMessage,
       addToolOutput,
       panelState,
+      composerQuestions,
       toolValues,
       selections,
       clearSelections,
@@ -925,15 +943,15 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
       onSubmit={handleSubmit}
       isSubmitting={isSending}
       commands={composerCommands}
-      questions={demoQuestions ?? askUserQuestions ?? undefined}
+      questions={composerQuestions}
     >
       <Composer.Panel>
         {(composer) => {
           // One at a time, by priority: an active command list wins, else the
-          // composer's own ask-user flow. (Tool/step status now lives in the
+          // composer's own question flow. (Tool/step status now lives in the
           // assistant message, not the composer.) With the popover surface
-          // selected, the command list lifts out of the panel — ask-user
-          // always stays in-flow.
+          // selected, the command list lifts out of the panel — questions
+          // always stay in-flow.
           if (composer.commands.active && commandSurface === "panel") {
             return (
               <>
@@ -943,7 +961,7 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
               </>
             );
           }
-          if (composer.askUser.active) return <Composer.AskUser />;
+          if (composer.questions.active) return <Composer.Question />;
           return null;
         }}
       </Composer.Panel>
@@ -990,7 +1008,7 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
         <Composer.Textarea autoFocus submitOn={submitOn}>
           <Composer.Placeholder
             placeholder={
-              isAskUser
+              hasQuestions
                 ? "Or type your own answer..."
                 : !hasSubmitted
                   ? loopingPlaceholder
@@ -1013,10 +1031,10 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
             }
           />
         </Composer.Textarea>
-        {isAskUser ? (
+        {hasQuestions ? (
           <Composer.Actions className="flex items-center justify-end gap-2">
-            <Composer.AskUserDismiss />
-            <Composer.AskUserContinue />
+            <Composer.QuestionDismiss />
+            <Composer.QuestionContinue />
           </Composer.Actions>
         ) : (
           <Composer.Actions className="flex items-center justify-between">

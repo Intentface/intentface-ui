@@ -2,10 +2,9 @@ import { describe, expect, mock, test } from "bun:test";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { AskUser } from "../src/ask-user";
 import { Composer } from "../src/composer";
 import { useComposer } from "../src/composer/store";
-import type { AskUserQuestion, ComposerSubmitData } from "../src/composer/types";
+import type { ComposerQuestion, ComposerSubmitData } from "../src/composer/types";
 import { Tabs } from "../src/tabs";
 
 // Escape stops a generating composer only when pressed inside that composer.
@@ -28,30 +27,34 @@ const ChatComposer = ({
 const pressEscape = (target: Element | Document) =>
   act(() => void fireEvent.keyDown(target, { key: "Escape" }));
 
-const QUESTIONS: AskUserQuestion[] = [
-  { question: "Which database?", options: [{ label: "PostgreSQL" }, { label: "SQLite" }] },
+const REQUESTS: ComposerQuestion[] = [
+  {
+    id: "database",
+    label: "Which database?",
+    options: [{ label: "PostgreSQL" }, { label: "SQLite" }],
+  },
 ];
 
-const AskUserOptions = () => {
-  const askUser = useComposer((composer) => composer.askUser);
-  const question = askUser.questions?.[askUser.step];
+const RequestOptions = () => {
+  const questions = useComposer((composer) => composer.questions);
+  const question = questions.items?.[questions.step];
   if (!question) return null;
   return (
-    <AskUser.Options ref={askUser.optionsRef}>
+    <Composer.QuestionOptions ref={questions.optionsRef}>
       {question.options.map((option) => (
-        <AskUser.Option
+        <Composer.QuestionOption
           key={option.label}
           value={option.label}
-          onSelect={() => askUser.toggleOption(option.label)}
+          onSelect={() => questions.toggleOption(option.label)}
         >
           {option.label}
-        </AskUser.Option>
+        </Composer.QuestionOption>
       ))}
-    </AskUser.Options>
+    </Composer.QuestionOptions>
   );
 };
 
-// activateAskUser moves focus into the options one frame past the commit.
+// activateQuestions moves focus into the options one frame past the commit.
 const flushFrames = () =>
   act(
     () =>
@@ -120,13 +123,13 @@ describe("Escape stops generation", () => {
     expect(notPrevented).toBe(true);
   });
 
-  test("not while an ask-user question is open; Escape dismisses its step", async () => {
+  test("not while a question is open; Escape dismisses its step", async () => {
     const onStop = mock();
     const submitted: ComposerSubmitData[] = [];
     render(
-      <Composer.Root questions={QUESTIONS} onSubmit={(data) => void submitted.push(data)}>
+      <Composer.Root questions={REQUESTS} onSubmit={(data) => void submitted.push(data)}>
         <Composer.Textarea aria-label="Message" />
-        <AskUserOptions />
+        <RequestOptions />
         <Composer.Submit isGenerating onStop={onStop} />
       </Composer.Root>,
     );

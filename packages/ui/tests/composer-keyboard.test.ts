@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { interpretAskUserKey, interpretEditorKey } from "../src/composer/keyboard";
+import { interpretEditorKey, interpretQuestionKey } from "../src/composer/keyboard";
 
 const baseContext = {
   isCommandListOpen: false,
-  hasActiveAskUser: false,
+  hasActiveQuestions: false,
   isEditorEmpty: false,
   hasAttachments: false,
 };
@@ -26,10 +26,10 @@ describe("interpretEditorKey", () => {
     });
   });
 
-  test("ask-user arrows take over when active", () => {
-    const ctx = { ...baseContext, hasActiveAskUser: true };
+  test("question arrows take over when active", () => {
+    const ctx = { ...baseContext, hasActiveQuestions: true };
     expect(interpretEditorKey({ key: "ArrowUp", shiftKey: false }, ctx)).toEqual({
-      type: "ask-user-arrow",
+      type: "question-arrow",
       direction: -1,
     });
   });
@@ -55,8 +55,8 @@ describe("interpretEditorKey", () => {
   });
 });
 
-describe("interpretAskUserKey", () => {
-  const event = (key: string, extra: Partial<Parameters<typeof interpretAskUserKey>[0]> = {}) => ({
+describe("interpretQuestionKey", () => {
+  const event = (key: string, extra: Partial<Parameters<typeof interpretQuestionKey>[0]> = {}) => ({
     key,
     ctrlKey: false,
     metaKey: false,
@@ -66,39 +66,39 @@ describe("interpretAskUserKey", () => {
   });
 
   test("escape dismisses regardless of highlight", () => {
-    expect(interpretAskUserKey(event("Escape"), { hasHighlight: false })).toEqual({
+    expect(interpretQuestionKey(event("Escape"), { hasHighlight: false })).toEqual({
       type: "dismiss-step",
     });
   });
 
   test("without highlight, other keys pass through", () => {
-    expect(interpretAskUserKey(event("ArrowDown"), { hasHighlight: false })).toBeNull();
+    expect(interpretQuestionKey(event("ArrowDown"), { hasHighlight: false })).toBeNull();
   });
 
   test("with highlight, arrows navigate and enter selects", () => {
-    expect(interpretAskUserKey(event("ArrowDown"), { hasHighlight: true })).toEqual({
+    expect(interpretQuestionKey(event("ArrowDown"), { hasHighlight: true })).toEqual({
       type: "navigate-options",
       direction: 1,
     });
-    expect(interpretAskUserKey(event("Enter"), { hasHighlight: true })).toEqual({
+    expect(interpretQuestionKey(event("Enter"), { hasHighlight: true })).toEqual({
       type: "select-option",
     });
-    expect(interpretAskUserKey(event("ArrowLeft"), { hasHighlight: true })).toEqual({
+    expect(interpretQuestionKey(event("ArrowLeft"), { hasHighlight: true })).toEqual({
       type: "go-back",
     });
   });
 
   test("printable characters route back to the input", () => {
-    expect(interpretAskUserKey(event("x"), { hasHighlight: true })).toEqual({
+    expect(interpretQuestionKey(event("x"), { hasHighlight: true })).toEqual({
       type: "insert-character",
       character: "x",
     });
-    expect(interpretAskUserKey(event("x", { metaKey: true }), { hasHighlight: true })).toBeNull();
+    expect(interpretQuestionKey(event("x", { metaKey: true }), { hasHighlight: true })).toBeNull();
   });
 
   test("defaultPrevented events are ignored", () => {
     expect(
-      interpretAskUserKey(event("Escape", { defaultPrevented: true }), { hasHighlight: true }),
+      interpretQuestionKey(event("Escape", { defaultPrevented: true }), { hasHighlight: true }),
     ).toBeNull();
   });
 });
@@ -142,10 +142,10 @@ describe("interpretEditorKey: submitOn", () => {
   });
 });
 
-describe("interpretAskUserKey: Space selects", () => {
+describe("interpretQuestionKey: Space selects", () => {
   test("Space toggles the highlighted option (APG radio/checkbox)", () => {
     expect(
-      interpretAskUserKey(
+      interpretQuestionKey(
         { key: " ", ctrlKey: false, metaKey: false, altKey: false, defaultPrevented: false },
         { hasHighlight: true },
       ),
@@ -153,21 +153,21 @@ describe("interpretAskUserKey: Space selects", () => {
   });
 });
 
-describe("interpretEditorKey: ask-user dismiss", () => {
+describe("interpretEditorKey: question dismiss", () => {
   test("editor-focused Escape dismisses the active question", () => {
     expect(
       interpretEditorKey(
         { key: "Escape", shiftKey: false },
-        { ...baseContext, hasActiveAskUser: true },
+        { ...baseContext, hasActiveQuestions: true },
       ),
-    ).toEqual({ type: "ask-user-dismiss" });
+    ).toEqual({ type: "question-dismiss" });
   });
 
   test("command list still owns Escape when both are active", () => {
     expect(
       interpretEditorKey(
         { key: "Escape", shiftKey: false },
-        { ...baseContext, hasActiveAskUser: true, isCommandListOpen: true },
+        { ...baseContext, hasActiveQuestions: true, isCommandListOpen: true },
       ),
     ).toEqual({ type: "command-close" });
   });

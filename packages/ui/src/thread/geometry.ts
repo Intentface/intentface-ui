@@ -57,7 +57,7 @@ export const queryDock = (root: HTMLElement): HTMLElement | null =>
  * root's bottom, plus the content gap. Measured against the root's bottom
  * rather than the slot's own height, so a dock that floats above the bottom
  * edge still reserves the space beneath it. Parts that must NOT reserve space
- * — the command-list / ask-user panel, the scroll button — are positioned out
+ * — the command-list / ask panel, the scroll button — are positioned out
  * of the slot's flow. Returns null when the slot isn't mounted yet.
  */
 export const measureDockInset = (root: HTMLElement): number | null => {

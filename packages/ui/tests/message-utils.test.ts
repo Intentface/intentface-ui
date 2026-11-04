@@ -50,6 +50,6 @@ describe("groupTurns", () => {
   });
 });
 
-// getAskUserInfo, getSourcesInfo, splitReasoningByHeaders, getChainInfo, and
+// getQuestionsInfo, getSourcesInfo, splitReasoningByHeaders, getChainInfo, and
 // getReasoningInfo moved to the app (lib/ai/steps-info.ts, lib/ai/message-info.ts)
 // — tool contracts, header conventions, and dedup rules are the consumer's.

@@ -19,8 +19,8 @@ import {
 } from "./internals";
 import { type ComposerStore, ComposerStoreContext, createComposerStore } from "./store";
 import type {
-  AskUserQuestion,
   ComposerCommandsMap,
+  ComposerQuestion,
   ComposerSnapshot,
   ComposerSubmitData,
 } from "./types";
@@ -38,7 +38,7 @@ export type ComposerRootProps = Omit<PrimitiveProps<"form", ComposerRootState>, 
   onSubmit?: (data: ComposerSubmitData) => void | Promise<void>;
   isSubmitting?: boolean;
   commands?: ComposerCommandsMap;
-  questions?: AskUserQuestion[];
+  questions?: ComposerQuestion[];
   defaultValue?: ComposerSnapshot;
   value?: ComposerSnapshot;
   onValueChange?: (snapshot: ComposerSnapshot) => void;
@@ -79,9 +79,10 @@ export const ComposerRoot = ({
   const onSubmitRef = useAsRef(onSubmit);
 
   // Register this mount on the store: answers submit through this mount's
-  // onSubmit. React also runs the cleanup without a real unmount (StrictMode,
-  // a hidden <Activity>), where the state lives on, so it only resets an owned
-  // store once React has removed the form — that happens on a real unmount only.
+  // onSubmit. React also runs the cleanup without a real unmount
+  // (StrictMode, a hidden <Activity>), where the state lives on, so it only
+  // resets an owned store once React has removed the form — that happens on a
+  // real unmount only.
   useEffect(() => {
     const form = formRef.current;
     store.submitAnswersRef.current = (answers) =>
@@ -105,13 +106,16 @@ export const ComposerRoot = ({
     store.setIsSubmitting(isSubmitting);
   }, [store, isSubmitting]);
 
-  // Sync the questions prop into the store and arm ask-user mode (editor blur
-  // + document-level keyboard handling) while questions are active.
+  // Sync the questions prop into the store and arm question mode (editor blur
+  // + document-level keyboard handling) while questions are active. An empty
+  // array is normalized to null — otherwise the slice reads active with no
+  // content to render and no keyboard handler attached.
+  const activeQuestions = questions?.length ? questions : null;
   useEffect(() => {
-    store.setQuestions(questions ?? null);
-    if (!questions?.length) return;
-    return store.activateAskUser();
-  }, [store, questions]);
+    store.setQuestions(activeQuestions);
+    if (!activeQuestions) return;
+    return store.activateQuestions();
+  }, [store, activeQuestions]);
 
   const { getRegisteredPrefixes } = useCommandRegistry(commands);
 
@@ -131,10 +135,10 @@ export const ComposerRoot = ({
 
   const handleFormSubmit = async (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const { askUser, attachments } = store.getSnapshot();
+    const { questions, attachments } = store.getSnapshot();
 
-    if (askUser.questions?.length) {
-      askUser.continueStep(store.controller.getText());
+    if (questions.items?.length) {
+      questions.continueStep(store.controller.getText());
       return;
     }
 
@@ -166,7 +170,7 @@ export const ComposerRoot = ({
     const stopGenerating = store.stopGeneratingRef.current;
     if (event.key !== "Escape" || event.defaultPrevented || !stopGenerating) return;
     // While a question is open, Escape dismisses its step instead.
-    if (store.getSnapshot().askUser.questions?.length) return;
+    if (store.getSnapshot().questions.items?.length) return;
     event.preventDefault();
     stopGenerating();
   };

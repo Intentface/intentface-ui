@@ -8,8 +8,8 @@ export type EditorKeyAction =
   | { type: "command-close" }
   | { type: "command-navigate"; direction: 1 | -1 }
   | { type: "command-caret"; direction: 1 | -1 }
-  | { type: "ask-user-arrow"; direction: 1 | -1 }
-  | { type: "ask-user-dismiss" }
+  | { type: "question-arrow"; direction: 1 | -1 }
+  | { type: "question-dismiss" }
   | { type: "remove-last-attachment" }
   | { type: "submit-form" }
   | { type: "soft-break" };
@@ -19,7 +19,7 @@ export type ComposerSubmitOn = "enter" | "shift-enter";
 
 export type EditorKeyContext = {
   isCommandListOpen: boolean;
-  hasActiveAskUser: boolean;
+  hasActiveQuestions: boolean;
   isEditorEmpty: boolean;
   hasAttachments: boolean;
   /** Defaults to "enter" (Enter sends, Shift+Enter breaks). */
@@ -31,7 +31,7 @@ export const interpretEditorKey = (
   context: EditorKeyContext,
 ): EditorKeyAction | null => {
   const { key, shiftKey } = event;
-  const { isCommandListOpen, hasActiveAskUser } = context;
+  const { isCommandListOpen, hasActiveQuestions } = context;
 
   switch (true) {
     case isCommandListOpen && key === "Tab":
@@ -49,14 +49,14 @@ export const interpretEditorKey = (
     case isCommandListOpen && key === "Enter" && !shiftKey:
       return { type: "command-select" };
 
-    case hasActiveAskUser && key === "ArrowUp":
-      return { type: "ask-user-arrow", direction: -1 };
-    case hasActiveAskUser && key === "ArrowDown":
-      return { type: "ask-user-arrow", direction: 1 };
+    case hasActiveQuestions && key === "ArrowUp":
+      return { type: "question-arrow", direction: -1 };
+    case hasActiveQuestions && key === "ArrowDown":
+      return { type: "question-arrow", direction: 1 };
     // Question-mode keys now attach to the options container (roving focus),
     // so an editor-focused Escape must dismiss from here.
-    case hasActiveAskUser && key === "Escape":
-      return { type: "ask-user-dismiss" };
+    case hasActiveQuestions && key === "Escape":
+      return { type: "question-dismiss" };
 
     case key === "Backspace" && context.isEditorEmpty && context.hasAttachments:
       return { type: "remove-last-attachment" };
@@ -77,7 +77,7 @@ export const interpretEditorKey = (
   }
 };
 
-export type AskUserKeyAction =
+export type QuestionKeyAction =
   | { type: "dismiss-step" }
   | { type: "navigate-options"; direction: 1 | -1 }
   | { type: "select-option" }
@@ -85,7 +85,7 @@ export type AskUserKeyAction =
   | { type: "go-next" }
   | { type: "insert-character"; character: string };
 
-export type AskUserKeyEvent = {
+export type QuestionKeyEvent = {
   key: string;
   ctrlKey: boolean;
   metaKey: boolean;
@@ -93,10 +93,10 @@ export type AskUserKeyEvent = {
   defaultPrevented: boolean;
 };
 
-export const interpretAskUserKey = (
-  event: AskUserKeyEvent,
+export const interpretQuestionKey = (
+  event: QuestionKeyEvent,
   context: { hasHighlight: boolean },
-): AskUserKeyAction | null => {
+): QuestionKeyAction | null => {
   const { key } = event;
 
   switch (true) {

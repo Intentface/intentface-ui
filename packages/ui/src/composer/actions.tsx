@@ -35,7 +35,7 @@ export const ComposerContextWindow = ({
   // Yield while any native panel is active — the strip slides back out once they
   // close. (Union of the native slices; no central registry.)
   const anyPanelActive = useComposer(
-    (composer) => composer.commands.active || composer.askUser.active,
+    (composer) => composer.commands.active || composer.questions.active,
   );
   const hasContent = Children.toArray(children).length > 0;
   const open = hasContent && !anyPanelActive;

@@ -130,6 +130,6 @@ export const getFileParts = (segments: readonly MessageSegment[]): FilePart[] =>
     .filter((s): s is MessageSegment & { type: "file" } => s.type === "file")
     .flatMap((s) => s.parts);
 
-// Chain/reasoning/source extraction (and ask-user extraction) is the consuming
+// Chain/reasoning/source extraction (and question extraction) is the consuming
 // app's concern — grouping conventions, header formats, and dedup rules are
 // product policy. This package ships only the generic segmentation above.

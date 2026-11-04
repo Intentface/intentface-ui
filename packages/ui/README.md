@@ -70,14 +70,14 @@ tabs are app-shell parts rather than chat parts, and are useful on their own:
 
 | Import | What it is |
 | --- | --- |
-| `@intentface/ui/composer` | Rich-text input over a purpose-built contenteditable engine: `/` and `@` command palette, inline chips, attachments, ask-user flow. One store per `<Composer.Root>`, or bring your own via `Composer.createStore()`. |
+| `@intentface/ui/composer` | Rich-text input over a purpose-built contenteditable engine: `/` and `@` command palette, inline chips, attachments, questions for the user (clarifying questions and tool approvals). One store per `<Composer.Root>`, or bring your own via `Composer.createStore()`. |
 | `@intentface/ui/thread` | Scroll container with at-bottom detection, auto-follow, and docked-composer measurement. |
 | `@intentface/ui/message` | Message parts, turns, chip-segmented text, selection hooks. |
 | `@intentface/ui/steps`, `/reasoning` | Tool-call timelines and reasoning disclosure. |
 | `@intentface/ui/shell` | A collapsible, resizable sidebar beside the viewport it shares the screen with, with an edge hotspot. |
 | `@intentface/ui/nav` | A nav tree with roving focus, typeahead, collapsible groups, and a guide ladder down the left edge. |
 | `@intentface/ui/tabs` | An open-ended, closable tab collection whose panel renders in the layout or anchored to its own tab. |
-| `@intentface/ui/chip`, `/attachments`, `/ask-user` | The remaining building blocks. |
+| `@intentface/ui/chip`, `/attachments` | The remaining building blocks. |
 | `@intentface/ui/generative` | Experimental. Typed helpers that check a model's UI tool call against a catalog, read it while it streams, resolve its data bindings, and write it as Markdown. |
 | `@intentface/ui/types` | The structural message contract + part type guards. |
 | `@intentface/ui/message-utils` | Part segmentation, turn grouping, reasoning/source derivation. |

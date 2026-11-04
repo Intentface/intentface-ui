@@ -1,13 +1,14 @@
 ---
 title: Composer
-description: Rich-text chat input with chips, slash/mention commands, attachments, and an ask-user flow.
+description: Rich-text chat input with chips, slash/mention commands, attachments, and questions for the user, from clarifying questions to tool approvals.
 source: composer
 ---
 
 import { Basic } from './composer/demos/basic';
 import { Commands } from './composer/demos/commands';
 import { Popover } from './composer/demos/popover';
-import { AskUserFlow } from './composer/demos/ask-user-flow';
+import { ApprovalFlow } from './composer/demos/approval-flow';
+import { QuestionFlow } from './composer/demos/question-flow';
 import { AttachmentsDemo } from './composer/demos/attachments';
 import { Controlled } from './composer/demos/controlled';
 import { Store } from './composer/demos/store';
@@ -18,7 +19,7 @@ import { Store } from './composer/demos/store';
 
 - **Chat input** — a hand-rolled contenteditable over a flat segment model: native typing and IME, inline chips, attachments.
 - **Prefix commands** — type `/`, `@`, or other prefixes to open command lists.
-- **Panel** — hosts command results, live steps, or an ask-user prompt above the field.
+- **Panel** — hosts command results, live steps, or a question prompt above the field.
 - **Headless** — behavior lives in `@intentface/ui`; the demos below show one way to style it, and every class in them is yours to change.
 - **Isolate it from your stream** — see [Why the composer needs isolating](#why-the-composer-needs-isolating). The editor is the most expensive thing on the page to re-render per token.
 - **Get started** — see [Quick start](/quick-start) to add the package.
@@ -31,7 +32,7 @@ The bare nesting — every part is optional except `Composer` and `Container`:
 <Composer.Root onSubmit={handleSubmit}>
   <Composer.Panel>
     {(composer) =>
-      composer.commands.active && (
+      composer.commands.active ? (
         <Composer.Command prefix="@">
           <Composer.CommandLoading />
           <Composer.CommandEmpty />
@@ -43,7 +44,27 @@ The bare nesting — every part is optional except `Composer` and `Container`:
             )}
           </Composer.CommandList>
         </Composer.Command>
-      )
+      ) : composer.questions.active ? (
+        <Composer.Question>
+          <Composer.QuestionHeader>
+            <Composer.QuestionLabel />
+            <Composer.QuestionNavigation>
+              <Composer.QuestionPrevious />
+              <Composer.QuestionStepLabel />
+              <Composer.QuestionNext />
+            </Composer.QuestionNavigation>
+          </Composer.QuestionHeader>
+          <Composer.QuestionOptions>
+            <Composer.QuestionOption>
+              <Composer.QuestionOptionContent>
+                <Composer.QuestionOptionLabel />
+                <Composer.QuestionOptionDescription />
+              </Composer.QuestionOptionContent>
+            </Composer.QuestionOption>
+          </Composer.QuestionOptions>
+          <Composer.QuestionHints />
+        </Composer.Question>
+      ) : null
     }
   </Composer.Panel>
   <Composer.Container>
@@ -59,7 +80,7 @@ The bare nesting — every part is optional except `Composer` and `Container`:
 
 `Composer.Panel` takes plain children or a callback receiving the composer
 state, and shows only while its resolved content is non-empty. Gate each part on
-the state it belongs to (`commands.active`, `askUser.active`, …) and the panel
+the state it belongs to (`commands.active`, `questions.active`, …) and the panel
 opens and closes to match — priority is the order of your branches.
 
 ## Examples
@@ -82,17 +103,25 @@ or the other; the content is identical.
 
 <Demo component={<Popover />} file="primitives/composer/demos/popover.tsx" />
 
-### Ask-user flow
+### Question flow
 
-Setting the `questions` prop — typically from an assistant's clarifying
-question — arms the ask-user flow and flips `askUser.active`; compose the
-`AskUser` parts from `@intentface/ui/ask-user` inside a `Panel` (or
-`Popover`), reading the current step from `useComposer(c => c.askUser)`. The
+Setting the `questions` prop — a clarifying question, a tool approval, any
+choice you put to the user — arms the question flow and flips `questions.active`;
+compose the `Composer.Question` parts inside a `Panel` (or
+`Popover`), reading the current step from `useComposer(c => c.questions)`. The
 flow steps through each question (single- or multi-select), and answering or
-skipping the last one fires `onSubmit` with `{ kind: "answers" }`. Passing a
-fresh `questions` array re-arms it from the first step.
+skipping the last one fires `onSubmit` with `{ kind: "answers" }` — one flat
+answer per question, keyed by the id you minted, carrying option values. Passing
+a fresh `questions` array re-arms it from the first step.
 
-<Demo component={<AskUserFlow />} file="primitives/composer/demos/ask-user-flow.tsx" />
+<Demo component={<QuestionFlow />} file="primitives/composer/demos/question-flow.tsx" />
+
+A tool approval is the same mechanism, not a feature: mint the tool call id as
+the question id, put your decision vocabulary in the option `value`s, and route
+the answer back to the tool in `onSubmit`. A single question mounts no
+step-navigation parts.
+
+<Demo component={<ApprovalFlow />} file="primitives/composer/demos/approval-flow.tsx" />
 
 ### Attachments
 
@@ -147,7 +176,7 @@ const ChatInputInner = memo(({ panel, status }: ChatInputInnerProps) => (
 ));
 ```
 
-`derivePanelState` is yours — what belongs in the panel (an ask-user prompt, a
+`derivePanelState` is yours — what belongs in the panel (a question prompt, a
 status line) is your product's policy. Return a referentially stable value while
 nothing has changed, so the inner composer bails on every chunk except real panel
 transitions.
@@ -156,7 +185,7 @@ transitions.
 
 `Composer.Root` is a `<form>`, so submission and key handling follow form
 semantics. The editor interprets keys by mode — a command list being open, or
-ask-user being active, takes priority over normal typing.
+the question flow being active, takes priority over normal typing.
 
 **Normal typing**
 
@@ -179,9 +208,9 @@ export const commandKeys = [
 
 <KeysTable rows={commandKeys} />
 
-**Ask-user active**
+**Question flow active**
 
-export const askUserKeys = [
+export const requestKeys = [
   { keys: "ArrowUp / ArrowDown", description: "Navigate options; up past the first refocuses the editor." },
   { keys: "ArrowLeft / ArrowRight", description: "Go to the previous / next question." },
   { keys: "Enter", description: "Select the highlighted option." },
@@ -189,7 +218,7 @@ export const askUserKeys = [
   { keys: "Any character", description: "Focus the editor and start typing a free-text answer." },
 ];
 
-<KeysTable rows={askUserKeys} />
+<KeysTable rows={requestKeys} />
 
 While `isGenerating`, `Escape` inside the composer calls `Submit`'s `onStop` (via
 `useComposerSubmit`): from the editor, a button, or a part a positioned `Panel`
@@ -215,9 +244,9 @@ The `<form>` that owns submission, store resolution, drag-and-drop, and the
 prop → store bridges. Renders `data-composer-root`.
 
 export const rootProps = [
-  { name: "onSubmit", type: "(data: ComposerSubmitData) => void | Promise<void>", description: "Fires on message submit and on ask-user answers. Discriminate on data.kind." },
+  { name: "onSubmit", type: "(data: ComposerSubmitData) => void | Promise<void>", description: "Fires on message submit and on answers. Discriminate on data.kind." },
   { name: "commands", type: "ComposerCommandsMap", default: "{}", description: "Prefix → command config (kind, trigger, items, suggestion, placeholder). suggestion: false disables ghost-text completion; placeholder sets the per-prefix empty-query hint (never shown alongside a suggestion — the suggestion wins)." },
-  { name: "questions", type: "AskUserQuestion[]", description: "When set, arms the ask-user flow (blurs the editor, flips askUser.active)." },
+  { name: "questions", type: "ComposerQuestion[]", description: "When set, arms the question flow (blurs the editor, flips questions.active)." },
   { name: "isSubmitting", type: "boolean", default: "false", description: "Flips Submit to a stop affordance and gates re-submits." },
   { name: "value", type: "ComposerSnapshot", description: "Controlled editor content." },
   { name: "defaultValue", type: "ComposerSnapshot", description: "Uncontrolled initial editor content." },
@@ -272,7 +301,7 @@ export const Chat = () => {
 ```ts
 type ComposerSubmitData =
   | { kind: "message"; text: string; files: AttachmentItem[] }
-  | { kind: "answers"; answers: ComposerAnswerEntry[] };
+  | { kind: "answers"; answers: ComposerAnswer[] };
 ```
 
 `files` are the generic attachment descriptors — your `onSubmit` adapts them to
@@ -401,7 +430,7 @@ part-specific props.
 
 A surface region above the field. `children` is either plain nodes or a callback
 `(composer) => ReactNode` receiving the composer state, so you pick what to show
-by priority (`commands.active ? <Command/> : askUser.active ? <AskUser.Root/> :
+by priority (`commands.active ? <Command/> : questions.active ? <Composer.Question/> :
 null`). By default (`anchor`) it renders as a **collision-aware, portaled overlay**
 anchored to the `Container` — flipping / shifting / sizing to stay on screen (via
 `@floating-ui/dom`); anchor a ref/element elsewhere, or pass `anchor={false}` for an
@@ -553,18 +582,132 @@ still flows top-to-bottom — and calls the callback once per group with
 </Composer.CommandGroup>
 ```
 
-### Ask-user
+### Composer.Question
 
-The composer owns the ask-user *state* — `questions`, the current step, the
-answers — but renders none of the question UI. Compose that from the `AskUser`
-namespace in `@intentface/ui/ask-user`, reading the step through
-`useComposer((c) => c.askUser)` and gating the enclosing `Panel` or `Popover` on
-`askUser.active`.
+The composer owns the question *state* — `items`, the current step, the
+drafts — but renders none of the prompt UI. Compose that from the
+`Composer.Question` parts, reading the step through
+`useComposer((c) => c.questions)` and gating the enclosing `Panel` or `Popover`
+on `questions.active`.
 
-`AskUser.Dismiss` is a plain button you wire to `askUser.dismissStep`;
-`AskUser.Continue` is `type="submit"`, so the enclosing `Composer.Root` form
+`Composer.QuestionDismiss` is a plain button you wire to `questions.dismissStep`;
+`Composer.QuestionContinue` is `type="submit"`, so the enclosing `Composer.Root` form
 drives it. Neither ships copy — supply the labels as children, and read
-`askUser.isLastStep` to switch the continue wording.
+`questions.isLastStep` to switch the continue wording.
+
+### Composer.QuestionHeader
+
+Row container for `Composer.QuestionLabel` and an optional
+`Composer.QuestionNavigation`. Renders `data-composer-question-header`. No
+part-specific props or state attributes.
+
+### Composer.QuestionLabel
+
+The question text. Renders `data-composer-question-label` and carries the id
+that `Composer.QuestionOptions` uses as its accessible name, so the group is
+labelled with no wiring. No part-specific props or state attributes.
+
+### Composer.QuestionNavigation
+
+Row container for `Composer.QuestionPrevious`, `Composer.QuestionStepLabel` and
+`Composer.QuestionNext`. A single question needs none of them. Renders
+`data-composer-question-navigation`. No part-specific props or state attributes.
+
+### Composer.QuestionPrevious
+
+Button that moves to the previous step. Wire `onClick` to `questions.goBack` and
+disable it on the first step. Its default accessible name is "Previous
+question"; override it with `aria-label`. Renders
+`data-composer-question-previous`. No part-specific props or state attributes.
+
+### Composer.QuestionStepLabel
+
+The step indicator. It reads the current step and the total from the composer,
+and you supply the text, because there is no default format. Renders
+`data-composer-question-step-label` and carries the id that
+`Composer.QuestionOptions` uses as its description.
+
+export const questionStepLabelProps = [
+  { name: "children", type: "ReactNode | ((state: { current: number; total: number }) => ReactNode)", description: "The step text, or a function of the step and the total. current counts from 1." },
+];
+
+<PropsTable rows={questionStepLabelProps} />
+
+### Composer.QuestionNext
+
+Button that moves to the next step. Wire `onClick` to `questions.goNext` and
+disable it on the last step. Its default accessible name is "Next question";
+override it with `aria-label`. Renders `data-composer-question-next`. No
+part-specific props or state attributes.
+
+### Composer.QuestionOptions
+
+Fieldset wrapper for `Composer.QuestionOption` items. It gives its options
+`multiSelect`, `groupName` and the highlight, and each option registers itself
+on mount. It renders as a `radiogroup`, or a `group` when `multiSelect` is set,
+labelled by `Composer.QuestionLabel` and described by
+`Composer.QuestionStepLabel`.
+
+export const questionOptionsProps = [
+  { name: "multiSelect", type: "boolean", default: "false", description: "Options act as checkboxes instead of radios." },
+  { name: "groupName", type: "string", default: "\"\"", description: "Shared name for every option in the group." },
+  { name: "ref", type: "RefObject<ComposerQuestionOptionsHandle | null>", description: "Keyboard-navigation handle. Pass questions.optionsRef so the composer's question keys reach the options." },
+];
+
+<PropsTable rows={questionOptionsProps} />
+
+export const questionOptionsAttrs = [
+  { attribute: "data-composer-question-options", description: "The fieldset element." },
+];
+
+<AttributesTable rows={questionOptionsAttrs} />
+
+### Composer.QuestionOption
+
+A selectable option. It registers itself with `Composer.QuestionOptions` on
+mount and takes its highlight from there. The option is the control itself: it
+carries the `radio` or `checkbox` role and `aria-checked`, and the highlighted
+option is the group's only tab stop.
+
+export const questionOptionProps = [
+  { name: "value", type: "string", default: "\"\"", description: "The option's identity within the group, used for the highlight." },
+  { name: "selected", type: "boolean", default: "false", description: "Whether the option is selected. Read it from the step's draft." },
+  { name: "onSelect", type: "() => void", description: "Called when the option is clicked. Wire it to questions.toggleOption(value)." },
+];
+
+<PropsTable rows={questionOptionProps} />
+
+export const questionOptionAttrs = [
+  { attribute: "data-composer-question-option", description: "The option element." },
+  { attribute: "data-highlighted", description: "Present while the option is highlighted by keyboard or hover." },
+  { attribute: "data-selected", description: "Present while the option is selected." },
+];
+
+<AttributesTable rows={questionOptionAttrs} />
+
+### Composer.QuestionOptionContent
+
+Column wrapper for `Composer.QuestionOptionLabel` and
+`Composer.QuestionOptionDescription`. Renders
+`data-composer-question-option-content`. No part-specific props or state
+attributes.
+
+### Composer.QuestionOptionLabel
+
+The option's title text. Renders `data-composer-question-option-label`. No
+part-specific props or state attributes.
+
+### Composer.QuestionOptionDescription
+
+The option's description text. Renders
+`data-composer-question-option-description`. No part-specific props or state
+attributes.
+
+### Composer.QuestionHints
+
+Keyboard shortcut hints shown below the options. It ships no copy, so supply
+the hints as children. Renders `data-composer-question-hints`. No part-specific
+props or state attributes.
 
 ### Hooks
 

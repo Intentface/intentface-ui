@@ -15,7 +15,6 @@
 // snapshot.
 
 import { createContext, type RefObject, use, useSyncExternalStore } from "react";
-import type { AskUserOptionsHandle } from "../ask-user";
 import {
   type AttachmentErrorCode,
   type AttachmentItem,
@@ -23,24 +22,25 @@ import {
   toAttachmentItem,
 } from "../attachments";
 import {
-  type AnswerEntry,
-  type AskUserAction,
-  type AskUserEffect,
-  INITIAL_ASK_USER_STATE,
-  isLastStep,
-  transitionAskUser,
-} from "./ask-user-machine";
-import {
   type AttachmentStoreAction,
   type AttachmentStoreConfig,
   attachmentReducer,
   INITIAL_ATTACHMENT_STATE,
 } from "./attachments-machine";
-import { interpretAskUserKey } from "./keyboard";
+import { interpretQuestionKey } from "./keyboard";
+import type { ComposerQuestionOptionsHandle } from "./question";
+import {
+  type AnswerDraft,
+  INITIAL_QUESTIONS_STATE,
+  isLastStep,
+  type QuestionsAction,
+  type QuestionsEffect,
+  transitionQuestions,
+} from "./question-machine";
 import type {
-  AskUserQuestion,
-  ComposerAnswerEntry,
+  ComposerAnswer,
   ComposerEditorHandle,
+  ComposerQuestion,
   RegisteredEditor,
 } from "./types";
 
@@ -90,10 +90,10 @@ export type ComposerAttachmentsState = {
   globalDropRef: RefObject<boolean>;
 };
 
-export type ComposerAskUserState = ComposerPanelSlice & {
-  questions: AskUserQuestion[] | null;
+export type ComposerQuestionsState = ComposerPanelSlice & {
+  items: ComposerQuestion[] | null;
   step: number;
-  answers: Map<number, AnswerEntry>;
+  drafts: Map<number, AnswerDraft>;
   toggleOption: (label: string) => void;
   continueStep: (freeText?: string) => void;
   dismissStep: () => void;
@@ -102,11 +102,11 @@ export type ComposerAskUserState = ComposerPanelSlice & {
   clearSelections: () => void;
   goBack: () => void;
   goNext: () => void;
-  optionsRef: RefObject<AskUserOptionsHandle | null>;
+  optionsRef: RefObject<ComposerQuestionOptionsHandle | null>;
 };
 
-// The shared skeleton every native panel slice (commands, ask-user, and later
-// tool-approval) is built on: `active` is the logical open flag a consumer gates
+// The shared skeleton every native panel slice (commands, questions) is built
+// on: `active` is the logical open flag a consumer gates
 // on (`{commands.active && <…/>}`); `present` is sticky-true — it stays set through
 // the close animation so the panel can keep the last content mounted while it
 // animates out, and is cleared only by finalizePanelClose() once the animation
@@ -135,7 +135,7 @@ export type ComposerState = {
   isSubmitting: boolean;
   commands: ComposerCommandsState;
   attachments: ComposerAttachmentsState;
-  askUser: ComposerAskUserState;
+  questions: ComposerQuestionsState;
 };
 
 // ---------------------------------------------------------------------------
@@ -159,10 +159,10 @@ export type ComposerStore = {
   listboxId: string;
   moveHighlight: (direction: number) => void;
   setHighlight: (index: number) => void;
-  setQuestions: (questions: AskUserQuestion[] | null) => void;
+  setQuestions: (questions: ComposerQuestion[] | null) => void;
   setDragging: (active: boolean) => void;
   resetAttachments: () => void;
-  activateAskUser: () => () => void;
+  activateQuestions: () => () => void;
   // Clears `present` on native panel slices whose `active` is false — the Panel calls
   // this once its close animation finishes, so closing content stays mounted until then.
   finalizePanelClose: () => void;
@@ -180,7 +180,7 @@ export type ComposerStore = {
   containerRef: RefObject<HTMLElement | null>;
   // Co-located refs the mounted Composer wires up at runtime.
   attachmentConfigRef: RefObject<AttachmentStoreConfig>;
-  submitAnswersRef: RefObject<((answers: ComposerAnswerEntry[]) => void) | null>;
+  submitAnswersRef: RefObject<((answers: ComposerAnswer[]) => void) | null>;
   // The mounted Submit's stop while generating; Composer.Root calls it on Escape.
   stopGeneratingRef: RefObject<(() => void) | null>;
   // Invokes the active list's current selection. Registered by the mounted
@@ -189,11 +189,11 @@ export type ComposerStore = {
 };
 
 // ---------------------------------------------------------------------------
-// Ask-user keydown — the document-level handler for question mode, kept out of
-// the store factory so activateAskUser reads as just "blur, listen, unlisten".
+// Question keydown — the document-level handler for question mode, kept out of
+// the store factory so activateQuestions reads as just "blur, listen, unlisten".
 // ---------------------------------------------------------------------------
 
-// Focus moves the ask-user flow makes itself — back to the input, or in from
+// Focus moves the question flow makes itself — back to the input, or in from
 // an option. The composer is on screen already, and the browser's
 // focus-scroll would also move the page around an embedded composer.
 const FOCUS_IN_PLACE: FocusOptions = { preventScroll: true };
@@ -210,22 +210,25 @@ const isEventForComposer = (
   const target = event.target as HTMLElement | null;
   const editableHost = target?.closest<HTMLElement>('input, textarea, [contenteditable="true"]');
   if (editableHost) return editableHost === editorDom;
-  const optionsHost = target?.closest<HTMLElement>("[data-ask-user-options]");
+  const optionsHost = target?.closest<HTMLElement>("[data-composer-question-options]");
   if (optionsHost) return optionsHost === optionsElement;
-  return true;
+  // Only the body fallback the comment above describes. Anything else is a real
+  // element that owns its own keys — Space on an unrelated button must not
+  // select an option here.
+  return target === null || target === document.body;
 };
 
-type AskUserKeydownDeps = {
+type QuestionsKeydownDeps = {
   controller: ComposerEditorState;
-  optionsRef: RefObject<AskUserOptionsHandle | null>;
+  optionsRef: RefObject<ComposerQuestionOptionsHandle | null>;
   editorRef: RefObject<RegisteredEditor | null>;
-  dispatch: (action: AskUserAction) => void;
+  dispatch: (action: QuestionsAction) => void;
 };
 
 // Interpret a key (pure) and drive the machine + editor controller. Mirrors the
-// action union from interpretAskUserKey one-to-one.
-const createAskUserKeydownHandler =
-  ({ controller, optionsRef, editorRef, dispatch }: AskUserKeydownDeps) =>
+// action union from interpretQuestionKey one-to-one.
+const createQuestionsKeydownHandler =
+  ({ controller, optionsRef, editorRef, dispatch }: QuestionsKeydownDeps) =>
   (event: KeyboardEvent) => {
     const scopedOptionsElement = optionsRef.current?.getElement() ?? null;
     if (
@@ -239,7 +242,7 @@ const createAskUserKeydownHandler =
     }
 
     const optionsHandle = optionsRef.current;
-    const action = interpretAskUserKey(
+    const action = interpretQuestionKey(
       {
         key: event.key,
         ctrlKey: event.ctrlKey,
@@ -303,7 +306,7 @@ export const createComposerStore = (): ComposerStore => {
 
   // Imperative refs co-located with the store; not reactive.
   const containerRef: RefObject<HTMLElement | null> = { current: null };
-  const optionsRef: RefObject<AskUserOptionsHandle | null> = { current: null };
+  const optionsRef: RefObject<ComposerQuestionOptionsHandle | null> = { current: null };
   const fileInputRef: RefObject<HTMLInputElement | null> = { current: null };
   const globalDropRef: RefObject<boolean> = { current: false };
   // Permissive defaults: accept everything, no caps, platform-default blob
@@ -318,7 +321,7 @@ export const createComposerStore = (): ComposerStore => {
       destroy: revokeAttachmentUrl,
     },
   };
-  const submitAnswersRef: RefObject<((answers: ComposerAnswerEntry[]) => void) | null> = {
+  const submitAnswersRef: RefObject<((answers: ComposerAnswer[]) => void) | null> = {
     current: null,
   };
   const commandSelectRef: RefObject<(() => void) | null> = { current: null };
@@ -326,7 +329,7 @@ export const createComposerStore = (): ComposerStore => {
 
   // Canonical machine states; the snapshot mirrors them on every update.
   let attachmentState = INITIAL_ATTACHMENT_STATE;
-  let askUserMachine = INITIAL_ASK_USER_STATE;
+  let questionsMachine = INITIAL_QUESTIONS_STATE;
   let snapshot: ComposerState;
 
   // --- Setters
@@ -414,12 +417,12 @@ export const createComposerStore = (): ComposerStore => {
     notify();
   };
 
-  // --- Ask-user
-  // The execute half of the ask-user flow: replay a transition's effects
+  // --- Questions
+  // The execute half of the question flow: replay a transition's effects
   // against the editor controller, the options handle, and the submit
   // callback. Input-content state is the editor engine's own job — engines
   // report programmatic setText/clear through their update path.
-  const executeAskUserEffects = (effects: AskUserEffect[]) => {
+  const executeQuestionsEffects = (effects: QuestionsEffect[]) => {
     for (const effect of effects) {
       switch (effect.type) {
         case "clear-input":
@@ -448,57 +451,57 @@ export const createComposerStore = (): ComposerStore => {
     }
   };
 
-  const dispatchAskUser = (action: AskUserAction) => {
-    const questions = snapshot.askUser.questions;
+  const dispatchQuestions = (action: QuestionsAction) => {
+    const questions = snapshot.questions.items;
     if (!questions || questions.length === 0) return;
-    const { next, effects } = transitionAskUser(askUserMachine, questions, action);
-    if (next !== askUserMachine) {
-      askUserMachine = next;
+    const { next, effects } = transitionQuestions(questionsMachine, questions, action);
+    if (next !== questionsMachine) {
+      questionsMachine = next;
       snapshot = {
         ...snapshot,
-        askUser: {
-          ...snapshot.askUser,
+        questions: {
+          ...snapshot.questions,
           step: next.step,
-          answers: next.answers,
+          drafts: next.drafts,
           isLastStep: isLastStep(next, questions),
         },
       };
       notify();
     }
-    executeAskUserEffects(effects);
+    executeQuestionsEffects(effects);
   };
 
-  const setQuestions = (questions: AskUserQuestion[] | null) => {
-    if (snapshot.askUser.questions === questions) return;
-    askUserMachine = INITIAL_ASK_USER_STATE;
+  const setQuestions = (questions: ComposerQuestion[] | null) => {
+    if (snapshot.questions.items === questions) return;
+    questionsMachine = INITIAL_QUESTIONS_STATE;
     snapshot = {
       ...snapshot,
-      askUser: {
-        ...snapshot.askUser,
+      questions: {
+        ...snapshot.questions,
         active: questions != null,
         // Sticky, same as commands: cleared by finalizePanelClose() after the exit.
-        present: questions != null || snapshot.askUser.present,
-        questions,
-        step: askUserMachine.step,
-        answers: askUserMachine.answers,
-        isLastStep: questions ? isLastStep(askUserMachine, questions) : false,
+        present: questions != null || snapshot.questions.present,
+        items: questions,
+        step: questionsMachine.step,
+        drafts: questionsMachine.drafts,
+        isLastStep: questions ? isLastStep(questionsMachine, questions) : false,
         isSingle: questions ? questions.length === 1 : false,
       },
     };
     notify();
   };
 
-  // Ask-user mode: while questions are active the options own the keyboard.
+  // Question mode: while questions are active the options own the keyboard.
   // Entering moves DOM focus onto the highlighted option (roving tabindex),
   // and the keydown listener sits at the document, scoped by containment
   // (isEventForComposer) — so keys keep flowing after a chrome click drops
   // focus to <body>, while a second composer's editor/options never hear them.
-  const activateAskUser = () => {
-    const handleKeyDown = createAskUserKeydownHandler({
+  const activateQuestions = () => {
+    const handleKeyDown = createQuestionsKeydownHandler({
       controller,
       optionsRef,
       editorRef,
-      dispatch: dispatchAskUser,
+      dispatch: dispatchQuestions,
     });
     document.addEventListener("keydown", handleKeyDown);
 
@@ -536,21 +539,21 @@ export const createComposerStore = (): ComposerStore => {
       fileInputRef,
       globalDropRef,
     },
-    askUser: {
+    questions: {
       active: false,
       present: false,
-      questions: null,
-      step: askUserMachine.step,
-      answers: askUserMachine.answers,
+      items: null,
+      step: questionsMachine.step,
+      drafts: questionsMachine.drafts,
       isLastStep: false,
       isSingle: false,
-      toggleOption: (label) => dispatchAskUser({ type: "toggle-option", label }),
+      toggleOption: (label) => dispatchQuestions({ type: "toggle-option", label }),
       continueStep: (freeText) =>
-        dispatchAskUser({ type: "continue-step", freeText: freeText ?? "" }),
-      dismissStep: () => dispatchAskUser({ type: "dismiss-step" }),
-      clearSelections: () => dispatchAskUser({ type: "clear-selections" }),
-      goBack: () => dispatchAskUser({ type: "step-back", currentText: controller.getText() }),
-      goNext: () => dispatchAskUser({ type: "step-forward", currentText: controller.getText() }),
+        dispatchQuestions({ type: "continue-step", freeText: freeText ?? "" }),
+      dismissStep: () => dispatchQuestions({ type: "dismiss-step" }),
+      clearSelections: () => dispatchQuestions({ type: "clear-selections" }),
+      goBack: () => dispatchQuestions({ type: "step-back", currentText: controller.getText() }),
+      goNext: () => dispatchQuestions({ type: "step-forward", currentText: controller.getText() }),
       optionsRef,
     },
   };
@@ -563,14 +566,16 @@ export const createComposerStore = (): ComposerStore => {
   // the Panel once its close animation finishes, so the last content stays mounted
   // (and keeps animating) until then. Identity-guarded so it no-ops when nothing changed.
   const finalizePanelClose = () => {
-    const { commands, askUser } = snapshot;
-    if (commands.present === commands.active && askUser.present === askUser.active) return;
+    const { commands, questions } = snapshot;
+    if (commands.present === commands.active && questions.present === questions.active) return;
     snapshot = {
       ...snapshot,
       commands:
         commands.present === commands.active ? commands : { ...commands, present: commands.active },
-      askUser:
-        askUser.present === askUser.active ? askUser : { ...askUser, present: askUser.active },
+      questions:
+        questions.present === questions.active
+          ? questions
+          : { ...questions, present: questions.active },
     };
     notify();
   };
@@ -580,7 +585,7 @@ export const createComposerStore = (): ComposerStore => {
   // revoke attachment object URLs, then restore the pristine snapshot.
   const reset = () => {
     dispatchAttachments({ type: "reset" });
-    askUserMachine = INITIAL_ASK_USER_STATE;
+    questionsMachine = INITIAL_QUESTIONS_STATE;
     commandSelectRef.current = null;
     snapshot = initialSnapshot;
     notify();
@@ -604,7 +609,7 @@ export const createComposerStore = (): ComposerStore => {
     setQuestions,
     setDragging,
     resetAttachments: () => dispatchAttachments({ type: "reset" }),
-    activateAskUser,
+    activateQuestions,
     finalizePanelClose,
     reset,
     editorRef,
@@ -656,7 +661,7 @@ export const useComposerStore = <Selected = ComposerState>(
 // Subscribe to composer state from inside the tree. With a selector, the
 // component re-renders only when the selected value changes identity (slices
 // are identity-stable):
-//   const askUser = useComposer((composer) => composer.askUser);
+//   const questions = useComposer((composer) => composer.questions);
 // Without one, it returns the full snapshot and re-renders on any change.
 export const useComposer = <Selected = ComposerState>(
   selector?: (composer: ComposerState) => Selected,

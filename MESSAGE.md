@@ -99,7 +99,6 @@ Renders an assistant turn's reasoning + tool activity as a collapsible timeline 
       <Steps.Body>{markdown}</Steps.Body>
     </Steps.Step>
     <Steps.ToolCall part={toolPart} />
-    <Steps.AskUser part={askUserPart} />
   </Steps.Content>
 </Steps>;
 ```
@@ -112,7 +111,6 @@ Parts:
 - **`Steps.Body`** — markdown inside a step. `Markdown` props.
 - **`Steps.Summary`** — compact result text in a step. `span` props.
 - **`Steps.ToolCall`** — renders a tool invocation from `{ part: ToolPart }` (auto-derives label/status/summary/sources).
-- **`Steps.AskUser`** — renders an answered ask-user exchange from `{ part: ToolPart }`.
 - **`Steps.SearchResults`** / **`Steps.SearchResult`** — search-result badges.
 
 ## Reasoning

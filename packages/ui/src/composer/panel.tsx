@@ -1,6 +1,6 @@
 "use client";
 
-// Composer.Panel — a surface region for the command list / ask-user / steps. `children`
+// Composer.Panel — a surface region for the command list / ask / steps. `children`
 // is either normal nodes or a callback receiving the whole composer state, so you can pick
 // what to show by priority: `{(c) => c.commands.active ? <CommandList/> : …}`.
 //

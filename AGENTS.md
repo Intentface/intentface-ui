@@ -77,7 +77,7 @@ Two constraints follow, and both are load-bearing:
 - **`index.ts` and `index.parts.ts` must never carry `"use client"`.** The directive belongs on the component module one level down. Adding it to either barrel silently reintroduces the bug.
 - **The build must not bundle.** One file gets one top-level directive, so bundling collapses the boundary. `tsconfig.build.json` emits per-module via tsc for exactly this reason — see the comment there before changing it.
 
-This pattern is used throughout: `Message`, `Composer`, `Attachments`, `Chip`, `Thread`, `Steps`, `Reasoning`, `AskUser`.
+This pattern is used throughout: `Message`, `Composer`, `Attachments`, `Chip`, `Thread`, `Steps`, `Reasoning`.
 
 A change to the package needs a changeset, and a changeset is one short line per change, not a write-up: see [`.changeset/README.md`](./.changeset/README.md). The reasoning goes in the PR body.
 

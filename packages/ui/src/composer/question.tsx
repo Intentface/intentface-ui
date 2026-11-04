@@ -1,10 +1,10 @@
 "use client";
 
-// Headless ask-user questionnaire parts. Owns the option registration system
+// Headless ask parts — the question flow widget. Owns the option registration system
 // (cmdk pattern), highlight state, and the imperative keyboard-navigation
 // handle. Input widgets (checkbox/radio), icons, and the answered summary
-// belong to the styled layer, which reads state via useAskUserOptions() /
-// useAskUserOption(). Every part supports the Base UI render prop.
+// belong to the styled layer, which reads state via useQuestionOptions() /
+// useQuestionOption(). Every part supports the Base UI render prop.
 
 import {
   createContext,
@@ -20,114 +20,139 @@ import {
   useRef,
   useState,
 } from "react";
-import { useComposer } from "../composer/store";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRenderElement } from "../internal/render/useRenderElement";
 import { scrollIntoViewWithin } from "../internal/scroll-into-view-within";
+import { useComposer } from "./store";
 
-// Shared ids so Options can label itself from the question text and describe
+// Shared ids so Options can label itself from the question label and describe
 // itself from the step indicator without any consumer wiring: Root mints both,
 // Label/StepLabel stamp them, Options references them.
-type AskUserIdsContextValue = { labelId: string; stepLabelId: string };
+type QuestionIdsContextValue = { labelId: string; stepLabelId: string };
 
-const AskUserIdsContext = createContext<AskUserIdsContextValue>({ labelId: "", stepLabelId: "" });
+const QuestionIdsContext = createContext<QuestionIdsContextValue>({ labelId: "", stepLabelId: "" });
 
-/** AskUser root container. Stateless — consumers manage all state externally. */
-export type AskUserRootProps = PrimitiveProps<"div">;
+/** Ask root container. Stateless — consumers manage all state externally. */
+export type ComposerQuestionProps = PrimitiveProps<"div">;
 
-export const AskUserRoot = ({ className, render, style, ...elementProps }: AskUserRootProps) => {
+export const ComposerQuestion = ({
+  className,
+  render,
+  style,
+  ...elementProps
+}: ComposerQuestionProps) => {
   const labelId = useId();
   const stepLabelId = useId();
   const element = useRenderElement(
     "div",
     { className, render, style },
-    { props: [{ "data-ask-user": "" }, elementProps] },
+    { props: [{ "data-composer-question": "" }, elementProps] },
   );
   const ids = useMemo(() => ({ labelId, stepLabelId }), [labelId, stepLabelId]);
-  return <AskUserIdsContext value={ids}>{element}</AskUserIdsContext>;
+  return <QuestionIdsContext value={ids}>{element}</QuestionIdsContext>;
 };
 
-/** Question heading text. Carries the id `Options` uses as its accessible name. */
-export type AskUserLabelProps = PrimitiveProps<"p">;
+/** Question label text. Carries the id `Options` uses as its accessible name. */
+export type ComposerQuestionLabelProps = PrimitiveProps<"p">;
 
-export const AskUserLabel = ({ className, render, style, ...elementProps }: AskUserLabelProps) => {
-  const { labelId } = use(AskUserIdsContext);
+export const ComposerQuestionLabel = ({
+  className,
+  render,
+  style,
+  ...elementProps
+}: ComposerQuestionLabelProps) => {
+  const { labelId } = use(QuestionIdsContext);
   return useRenderElement(
     "p",
     { className, render, style },
-    { props: [{ id: labelId || undefined, "data-ask-user-label": "" }, elementProps] },
+    { props: [{ id: labelId || undefined, "data-composer-question-label": "" }, elementProps] },
   );
 };
 
 /** Row container for `Label` and optional `Navigation`. */
-export type AskUserHeaderProps = PrimitiveProps<"div">;
+export type ComposerQuestionHeaderProps = PrimitiveProps<"div">;
 
-export const AskUserHeader = ({ className, render, style, ...elementProps }: AskUserHeaderProps) =>
+export const ComposerQuestionHeader = ({
+  className,
+  render,
+  style,
+  ...elementProps
+}: ComposerQuestionHeaderProps) =>
   useRenderElement(
     "div",
     { className, render, style },
-    { props: [{ "data-ask-user-header": "" }, elementProps] },
+    { props: [{ "data-composer-question-header": "" }, elementProps] },
   );
 
 /** Row container for `Previous`, `StepLabel`, and `Next`. */
-export type AskUserNavigationProps = PrimitiveProps<"div">;
+export type ComposerQuestionNavigationProps = PrimitiveProps<"div">;
 
-export const AskUserNavigation = ({
+export const ComposerQuestionNavigation = ({
   className,
   render,
   style,
   ...elementProps
-}: AskUserNavigationProps) =>
+}: ComposerQuestionNavigationProps) =>
   useRenderElement(
     "div",
     { className, render, style },
-    { props: [{ "data-ask-user-navigation": "" }, elementProps] },
+    { props: [{ "data-composer-question-navigation": "" }, elementProps] },
   );
 
 /** Navigate to the previous step. Default accessible name; override via aria-label. */
-export type AskUserPreviousProps = PrimitiveProps<"button">;
+export type ComposerQuestionPreviousProps = PrimitiveProps<"button">;
 
-export const AskUserPrevious = ({
+export const ComposerQuestionPrevious = ({
   className,
   render,
   style,
   ...elementProps
-}: AskUserPreviousProps) =>
+}: ComposerQuestionPreviousProps) =>
   useRenderElement(
     "button",
     { className, render, style },
-    { props: [{ "aria-label": "Previous question", "data-ask-user-previous": "" }, elementProps] },
+    {
+      props: [
+        { "aria-label": "Previous question", "data-composer-question-previous": "" },
+        elementProps,
+      ],
+    },
   );
 
 /** Navigate to the next step. Default accessible name; override via aria-label. */
-export type AskUserNextProps = PrimitiveProps<"button">;
+export type ComposerQuestionNextProps = PrimitiveProps<"button">;
 
-export const AskUserNext = ({ className, render, style, ...elementProps }: AskUserNextProps) =>
+export const ComposerQuestionNext = ({
+  className,
+  render,
+  style,
+  ...elementProps
+}: ComposerQuestionNextProps) =>
   useRenderElement(
     "button",
     { className, render, style },
-    { props: [{ "aria-label": "Next question", "data-ask-user-next": "" }, elementProps] },
+    { props: [{ "aria-label": "Next question", "data-composer-question-next": "" }, elementProps] },
   );
 
 /** Step indicator. Reads the current step + total from the composer store; the
  * consumer supplies the text via `children` — either a node, or a callback
  * receiving `{ current, total }` (1-based current). No default format. */
-export type AskUserStepLabelState = { current: number; total: number };
+export type ComposerQuestionStepLabelState = { current: number; total: number };
 
-export type AskUserStepLabelProps = Omit<PrimitiveProps<"span">, "children"> & {
-  children?: ReactNode | ((state: AskUserStepLabelState) => ReactNode);
+export type ComposerQuestionStepLabelProps = Omit<PrimitiveProps<"span">, "children"> & {
+  children?: ReactNode | ((state: ComposerQuestionStepLabelState) => ReactNode);
 };
 
-export const AskUserStepLabel = ({
+export const ComposerQuestionStepLabel = ({
   children,
   className,
   render,
   style,
   ...elementProps
-}: AskUserStepLabelProps) => {
-  const current = useComposer((composer) => composer.askUser.step) + 1;
-  const total = useComposer((composer) => composer.askUser.questions?.length ?? 0);
-  const { stepLabelId } = use(AskUserIdsContext);
+}: ComposerQuestionStepLabelProps) => {
+  const current = useComposer((composer) => composer.questions.step) + 1;
+  const total = useComposer((composer) => composer.questions.items?.length ?? 0);
+  const { stepLabelId } = use(QuestionIdsContext);
   const content = typeof children === "function" ? children({ current, total }) : children;
 
   return useRenderElement(
@@ -135,7 +160,11 @@ export const AskUserStepLabel = ({
     { className, render, style },
     {
       props: [
-        { id: stepLabelId || undefined, "data-ask-user-step-label": "", children: content },
+        {
+          id: stepLabelId || undefined,
+          "data-composer-question-step-label": "",
+          children: content,
+        },
         elementProps,
       ],
     },
@@ -161,10 +190,10 @@ const OptionsContext = createContext<OptionsContextValue>({
   onItemHover: () => {},
 });
 
-export const useAskUserOptions = () => use(OptionsContext);
+export const useQuestionOptions = () => use(OptionsContext);
 
-/** Imperative handle exposed by `AskUser.Options` for keyboard navigation. */
-export type AskUserOptionsHandle = {
+/** Imperative handle exposed by `Composer.QuestionOptions` for keyboard navigation. */
+export type ComposerQuestionOptionsHandle = {
   /** Move highlight by direction, focusing the newly highlighted option (roving tabindex). Returns the new highlighted value (null = past the list boundary). */
   navigate: (direction: number) => string | null;
   select: () => { value: string } | null;
@@ -177,16 +206,16 @@ export type AskUserOptionsHandle = {
   highlightedValue: string | null;
 };
 
-export type AskUserOptionsProps = Omit<PrimitiveProps<"fieldset">, "value" | "ref"> & {
+export type ComposerQuestionOptionsProps = Omit<PrimitiveProps<"fieldset">, "value" | "ref"> & {
   /** When true, options render as multi-select (checkbox semantics in the styled layer). */
   multiSelect?: boolean;
   /** Shared `name` attribute for all option inputs in this group. */
   groupName?: string;
   /** Imperative ref for keyboard navigation (navigate, select, clearHighlight, resetHighlight). */
-  ref?: RefObject<AskUserOptionsHandle | null>;
+  ref?: RefObject<ComposerQuestionOptionsHandle | null>;
 };
 
-export const AskUserOptions = ({
+export const ComposerQuestionOptions = ({
   multiSelect = false,
   groupName = "",
   ref,
@@ -195,11 +224,11 @@ export const AskUserOptions = ({
   style,
   children,
   ...elementProps
-}: AskUserOptionsProps) => {
+}: ComposerQuestionOptionsProps) => {
   const registeredItems = useRef<string[]>([]);
   const itemElements = useRef<Map<string, () => HTMLElement | null>>(new Map());
   const containerRef = useRef<HTMLFieldSetElement | null>(null);
-  const { labelId, stepLabelId } = use(AskUserIdsContext);
+  const { labelId, stepLabelId } = use(QuestionIdsContext);
   const [highlightedValue, setHighlightedValue] = useState<string | null>(null);
 
   // Track highlight in a ref so imperative methods see latest value without re-binding.
@@ -247,7 +276,7 @@ export const AskUserOptions = ({
     const element = itemElements.current.get(itemValue)?.();
     if (!element) return;
     element.focus({ preventScroll: true });
-    const boundary = element.closest("[data-ask-user]") ?? element;
+    const boundary = element.closest("[data-composer-question]") ?? element;
     scrollIntoViewWithin(element.getBoundingClientRect(), element, boundary);
   }, []);
 
@@ -315,7 +344,7 @@ export const AskUserOptions = ({
           role: multiSelect ? "group" : "radiogroup",
           "aria-labelledby": labelId || undefined,
           "aria-describedby": stepLabelId || undefined,
-          "data-ask-user-options": "",
+          "data-composer-question-options": "",
           children,
         },
         elementProps,
@@ -353,22 +382,22 @@ const OptionContext = createContext<OptionContextValue>({
   onSelect: () => {},
 });
 
-export const useAskUserOption = () => use(OptionContext);
+export const useQuestionOption = () => use(OptionContext);
 
-export type AskUserOptionState = {
+export type ComposerQuestionOptionState = {
   /** Present as data-highlighted while keyboard/hover highlighted. */
   highlighted: boolean;
   /** Present as data-selected while the option is selected. */
   selected: boolean;
 };
 
-export type AskUserOptionProps = PrimitiveProps<"label", AskUserOptionState> & {
+export type ComposerQuestionOptionProps = PrimitiveProps<"label", ComposerQuestionOptionState> & {
   value?: string;
   selected?: boolean;
   onSelect?: () => void;
 };
 
-export const AskUserOption = ({
+export const ComposerQuestionOption = ({
   value = "",
   selected = false,
   onSelect,
@@ -377,7 +406,7 @@ export const AskUserOption = ({
   style,
   children,
   ...elementProps
-}: AskUserOptionProps) => {
+}: ComposerQuestionOptionProps) => {
   const id = useId();
   const { multiSelect, highlightedValue, register, onItemHover } = use(OptionsContext);
   const optionRef = useRef<HTMLLabelElement | null>(null);
@@ -406,7 +435,7 @@ export const AskUserOption = ({
           role: multiSelect ? "checkbox" : "radio",
           "aria-checked": selected,
           tabIndex: isHighlighted ? 0 : -1,
-          "data-ask-user-option": "",
+          "data-composer-question-option": "",
           onMouseMove: () => onItemHover(value),
           // Keep highlight and DOM focus unified when focus arrives by other
           // means (Tab into the group, SR virtual-cursor activation).
@@ -449,86 +478,91 @@ const useItemRegistration = (
 };
 
 /** Flex column wrapper for `OptionLabel` and `OptionDescription`. */
-export type AskUserOptionContentProps = PrimitiveProps<"span">;
+export type ComposerQuestionOptionContentProps = PrimitiveProps<"span">;
 
-export const AskUserOptionContent = ({
+export const ComposerQuestionOptionContent = ({
   className,
   render,
   style,
   ...elementProps
-}: AskUserOptionContentProps) =>
+}: ComposerQuestionOptionContentProps) =>
   useRenderElement(
     "span",
     { className, render, style },
-    { props: [{ "data-ask-user-option-content": "" }, elementProps] },
+    { props: [{ "data-composer-question-option-content": "" }, elementProps] },
   );
 
 /** Option title text. */
-export type AskUserOptionLabelProps = PrimitiveProps<"span">;
+export type ComposerQuestionOptionLabelProps = PrimitiveProps<"span">;
 
-export const AskUserOptionLabel = ({
+export const ComposerQuestionOptionLabel = ({
   className,
   render,
   style,
   ...elementProps
-}: AskUserOptionLabelProps) =>
+}: ComposerQuestionOptionLabelProps) =>
   useRenderElement(
     "span",
     { className, render, style },
-    { props: [{ "data-ask-user-option-label": "" }, elementProps] },
+    { props: [{ "data-composer-question-option-label": "" }, elementProps] },
   );
 
 /** Option subtitle/description text. */
-export type AskUserOptionDescriptionProps = PrimitiveProps<"span">;
+export type ComposerQuestionOptionDescriptionProps = PrimitiveProps<"span">;
 
-export const AskUserOptionDescription = ({
+export const ComposerQuestionOptionDescription = ({
   className,
   render,
   style,
   ...elementProps
-}: AskUserOptionDescriptionProps) =>
+}: ComposerQuestionOptionDescriptionProps) =>
   useRenderElement(
     "span",
     { className, render, style },
-    { props: [{ "data-ask-user-option-description": "" }, elementProps] },
+    { props: [{ "data-composer-question-option-description": "" }, elementProps] },
   );
 
-/** Keyboard shortcut hints displayed below the ask-user options. */
-export type AskUserHintsProps = PrimitiveProps<"div">;
+/** Keyboard shortcut hints displayed below the ask options. */
+export type ComposerQuestionHintsProps = PrimitiveProps<"div">;
 
-export const AskUserHints = ({ className, render, style, ...elementProps }: AskUserHintsProps) =>
+export const ComposerQuestionHints = ({
+  className,
+  render,
+  style,
+  ...elementProps
+}: ComposerQuestionHintsProps) =>
   useRenderElement(
     "div",
     { className, render, style },
-    { props: [{ "data-ask-user-hints": "" }, elementProps] },
+    { props: [{ "data-composer-question-hints": "" }, elementProps] },
   );
 
 /** Dismiss/skip button. Stateless — wire `onClick` to your dismiss handler. */
-export type AskUserDismissProps = PrimitiveProps<"button">;
+export type ComposerQuestionDismissProps = PrimitiveProps<"button">;
 
-export const AskUserDismiss = ({
+export const ComposerQuestionDismiss = ({
   className,
   render,
   style,
   ...elementProps
-}: AskUserDismissProps) =>
+}: ComposerQuestionDismissProps) =>
   useRenderElement(
     "button",
     { className, render, style },
-    { props: [{ type: "button" as const, "data-ask-user-dismiss": "" }, elementProps] },
+    { props: [{ type: "button" as const, "data-composer-question-dismiss": "" }, elementProps] },
   );
 
 /** Continue/submit button — `type=submit` so the enclosing form drives it. */
-export type AskUserContinueProps = PrimitiveProps<"button">;
+export type ComposerQuestionContinueProps = PrimitiveProps<"button">;
 
-export const AskUserContinue = ({
+export const ComposerQuestionContinue = ({
   className,
   render,
   style,
   ...elementProps
-}: AskUserContinueProps) =>
+}: ComposerQuestionContinueProps) =>
   useRenderElement(
     "button",
     { className, render, style },
-    { props: [{ type: "submit" as const, "data-ask-user-continue": "" }, elementProps] },
+    { props: [{ type: "submit" as const, "data-composer-question-continue": "" }, elementProps] },
   );

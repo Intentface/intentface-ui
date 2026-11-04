@@ -4,34 +4,34 @@
 
 import { isToolPart, type ToolPart, type UnknownPart } from "@intentface/ui/types";
 import type { ToolLabels } from "@/lib/ai/tool-labels";
-import type { AskUserInput, AskUserQuestion, StepStatus } from "@/lib/ai/types";
+import type { Question, QuestionsInput, StepStatus } from "@/lib/ai/types";
 
 // ---------------------------------------------------------------------------
-// Ask-user extraction — this app's askUser tool: its part type name, input
+// Question extraction — this app's askUser tool: its part type name, input
 // schema, and output JSON format. Moved here from the package, which now ships
 // only the generic ToolPart contract.
 // ---------------------------------------------------------------------------
 
-/** A single answered ask-user exchange with parsed questions and answers. */
-export type AskUserAnswered = {
+/** A single answered question exchange with parsed questions and answers. */
+export type AnsweredQuestions = {
   toolCallId: string;
-  questions: AskUserQuestion[];
+  questions: Question[];
   answers: Record<string, string>;
 };
 
-/** Ask-user tool call info for a message. */
-export type AskUserInfo = {
-  /** True when at least one ask-user tool is waiting for user input. */
+/** Question tool call info for a message. */
+export type QuestionsInfo = {
+  /** True when at least one askUser tool call is waiting for user input. */
   isAwaitingInput: boolean;
-  /** Answered ask-user exchanges with parsed Q&A pairs. */
-  answered: AskUserAnswered[];
+  /** Answered question exchanges with parsed Q&A pairs. */
+  answered: AnsweredQuestions[];
 };
 
 /**
  * Extracts askUser tool parts and returns structured info: whether any are
  * awaiting input, and parsed Q&A pairs for answered ones.
  */
-export const getAskUserInfo = (allParts: readonly UnknownPart[]): AskUserInfo => {
+export const getQuestionsInfo = (allParts: readonly UnknownPart[]): QuestionsInfo => {
   const parts = allParts.filter(
     (p): p is ToolPart =>
       isToolPart(p) &&
@@ -39,10 +39,10 @@ export const getAskUserInfo = (allParts: readonly UnknownPart[]): AskUserInfo =>
       (p.state === "input-available" || p.state === "output-available"),
   );
 
-  const answered: AskUserAnswered[] = parts
+  const answered: AnsweredQuestions[] = parts
     .filter((p) => p.state === "output-available")
     .map((p) => {
-      const input = p.input as AskUserInput | undefined;
+      const input = p.input as QuestionsInput | undefined;
       let answers: Record<string, string> = {};
       try {
         answers = JSON.parse(p.output as string) as Record<string, string>;
@@ -125,18 +125,18 @@ export const getToolCallInfo = (part: ToolPart, labels: ToolLabels = {}): ToolCa
   return { label, status, summary, errorText, sources };
 };
 
-export type AskUserStepInfo = {
+export type QuestionsStepInfo = {
   label: string;
   status: StepStatus;
-  questions: AskUserQuestion[];
+  questions: Question[];
   answers: Record<string, string>;
   isComplete: boolean;
 };
 
-export const getAskUserStepInfo = (part: ToolPart): AskUserStepInfo => {
+export const getQuestionsStepInfo = (part: ToolPart): QuestionsStepInfo => {
   const isComplete = part.state === "output-available";
-  const input = part.input as AskUserInput | undefined;
-  const questions: AskUserQuestion[] = input?.questions ?? [];
+  const input = part.input as QuestionsInput | undefined;
+  const questions: Question[] = input?.questions ?? [];
 
   let answers: Record<string, string> = {};
   if (isComplete) {

@@ -85,10 +85,6 @@ export type ChatMessage<Metadata = unknown, Part extends UnknownPart = MessagePa
 export type ChatStatus = "submitted" | "streaming" | "ready" | "error";
 
 // ---------------------------------------------------------------------------
-// Ask-user contract
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Part guards
 //
 // `UnknownPart` sits in the `MessagePart` union, so a raw discriminant check

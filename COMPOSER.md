@@ -1,6 +1,6 @@
 # Composer
 
-The chat composer — a form-shaped, headless-ish input surface that handles text, attachments, slash commands, mention chips, and questionnaires. It's a single component (`components/ai/composer.tsx`) exposed as a compound API via `Composer.X` parts.
+The chat composer — a form-shaped, headless-ish input surface that handles text, attachments, slash commands, mention chips, and questions. It's a single component (`components/ai/composer.tsx`) exposed as a compound API via `Composer.X` parts.
 
 Import from `@/components/ai/composer`.
 
@@ -44,10 +44,10 @@ type ComposerSubmitData =
     }
   | {
       kind: "answers";
-      answers: ComposerAnswerEntry[]; // produced by the questionnaire flow
+      answers: ComposerAnswer[]; // produced by the question flow
     };
 
-type ComposerAnswerEntry =
+type ComposerAnswer =
   | { question: string; option: string }                      // single-select, picked an option
   | { question: string; text: string }                        // single-select, typed free text
   | { question: string; options: string[]; text: string }     // multi-select (either field may be empty)
@@ -67,7 +67,7 @@ If the editor is empty but attachments exist, `text` is set to `"Sent with attac
 | `onSubmit` | `(data: ComposerSubmitData) => void \| Promise<void>` | Submit handler. |
 | `isSubmitting` | `boolean` | Disables `Composer.Submit` while truthy. Default `false`. |
 | `commands` | `ComposerCommandsMap` | Prefix → command-list config. See [Commands & chips](#commands--chips). |
-| `questions` | `AskUserQuestion[]` | When present, the composer enters questionnaire mode. See [Questionnaire](#questionnaire). |
+| `questions` | `ComposerQuestion[]` | When present, the composer enters question mode. See [Questions](#add-on-questions). |
 | `defaultValue` | `ComposerSnapshot` | Initial uncontrolled editor content. |
 | `value` | `ComposerSnapshot` | Controlled editor content. |
 | `onValueChange` | `(snapshot) => void` | Fires on editor change. |
@@ -142,7 +142,7 @@ Button that opens the native file picker. Accepts `IconButton` props.
 
 ### Add-on: panel
 
-The panel is the area above the editor that shows command lists, active tool progress, or a questionnaire. It auto-switches to `"command-list"` whenever a command list is open, regardless of the `value` you pass.
+The panel is the area above the editor that shows command lists, active tool progress, or a question prompt. It auto-switches to `"command-list"` whenever a command list is open, regardless of the `value` you pass.
 
 #### `Composer.Panel` / `Composer.PanelItem`
 
@@ -154,8 +154,8 @@ The panel is the area above the editor that shows command lists, active tool pro
   <Composer.PanelItem value="active">
     <ActiveSteps />
   </Composer.PanelItem>
-  <Composer.PanelItem value="ask-user">
-    <Composer.AskUser />
+  <Composer.PanelItem value="questions">
+    <Composer.Question />
   </Composer.PanelItem>
 </Composer.Panel>
 ```
@@ -261,15 +261,15 @@ When the filter matches nothing, the empty row acts as the single highlighted op
 
 The default `<Composer.Commands />` renderer already wires this up.
 
-### Add-on: questionnaire
+### Add-on: questions
 
-Pass `questions` to switch the composer into structured-question mode. The default renderer covers the flow:
+Pass `questions` to switch the composer into question mode — clarifying questions, tool approvals, any choice put to the user. The default renderer covers the flow:
 
 ```tsx
-<Composer onSubmit={handleSubmit} questions={askUserQuestions}>
-  <Composer.Panel value="ask-user">
-    <Composer.PanelItem value="ask-user">
-      <Composer.AskUser />
+<Composer onSubmit={handleSubmit} questions={composerQuestions}>
+  <Composer.Panel value="questions">
+    <Composer.PanelItem value="questions">
+      <Composer.Question />
     </Composer.PanelItem>
   </Composer.Panel>
   <Composer.Container>
@@ -277,23 +277,23 @@ Pass `questions` to switch the composer into structured-question mode. The defau
       <Composer.Placeholder placeholder="Type an answer..." />
     </Composer.Textarea>
     <Composer.Actions className="flex justify-end gap-2">
-      <Composer.AskUserHints />
-      <Composer.AskUserDismiss />
-      <Composer.AskUserContinue />
+      <Composer.QuestionHints />
+      <Composer.QuestionDismiss />
+      <Composer.QuestionContinue />
     </Composer.Actions>
   </Composer.Container>
 </Composer>
 ```
 
 Parts:
-- `Composer.AskUser` — full default UI (question text, options, step counter, nav arrows).
-- `Composer.AskUserHints` — keyboard-hint footer (↑↓ ↵ ← → Esc).
-- `Composer.AskUserDismiss` — skip the current question (`Esc`).
-- `Composer.AskUserContinue` — advance / submit (`Enter`). Auto-toggles label between "Continue" and "Submit".
+- `Composer.Question` — full default UI (question text, options, step counter, nav arrows).
+- `Composer.QuestionHints` — keyboard-hint footer (↑↓ ↵ ← → Esc).
+- `Composer.QuestionDismiss` — skip the current question (`Esc`).
+- `Composer.QuestionContinue` — advance / submit (`Enter`). Auto-toggles label between "Continue" and "Submit".
 
 Keyboard: **↑/↓** navigate options, **Enter** select/advance, **←/→** between questions, **Esc** dismiss, printable keys type free-text.
 
-On completion, `onSubmit` fires with `{ kind: "answers", answers }` where `answers` is a `ComposerAnswerEntry[]` (one entry per question, in order). See [Submit data](#submit-data) for the entry shape.
+On completion, `onSubmit` fires with `{ kind: "answers", answers }` where `answers` is a `ComposerAnswer[]` (one answer per question, in order). See [Submit data](#submit-data) for the entry shape.
 
 ## Imperative API & state
 
@@ -302,7 +302,7 @@ There is no root `ref` handle. Editor content is controlled declaratively via `v
 For live state, read from the store with `useComposer(selector)`. It's a module singleton — no provider — so anything in the subtree, a toolbar, or a sibling panel can subscribe. A selector re-renders only when that slice changes identity:
 
 ```tsx
-const askUser = useComposer((composer) => composer.askUser);         // questionnaire machine + actions
+const questions = useComposer((composer) => composer.questions);    // question machine + actions
 const attachments = useComposer((composer) => composer.attachments); // add, remove, openFileDialog, items, error
 const commands = useComposer((composer) => composer.commands);       // open command-list state (isOpen, trigger, query)
 ```
@@ -325,7 +325,7 @@ const items: CommandItemData[] = [
 
 Exported from `@/components/ai/composer`:
 
-`ComposerEditorHandle`, `ComposerSnapshot`, `ComposerSubmitData`, `ComposerMessageSubmit`, `ComposerAnswersSubmit`, `ComposerAnswerEntry`, `ComposerCommandsMap`, `ComposerCommandsConfig`, `ComposerCommandsItems`, `CommandItemData`, `CommandItemKind`, `PrefixOnSelectContext`, `TriggerRule`, `ChipData`, `AttachmentsApi`.
+`ComposerEditorHandle`, `ComposerSnapshot`, `ComposerSubmitData`, `ComposerMessageSubmit`, `ComposerAnswersSubmit`, `ComposerAnswer`, `ComposerCommandsMap`, `ComposerCommandsConfig`, `ComposerCommandsItems`, `CommandItemData`, `CommandItemKind`, `PrefixOnSelectContext`, `TriggerRule`, `ChipData`, `AttachmentsApi`.
 
 `ChipVariant` is re-used from `@/components/ai/chip`.
 

@@ -5,18 +5,21 @@
 import type { AttachmentItem } from "../attachments";
 import type { ChipData, ChipIconKey } from "../chip-markdown";
 
-// The composer's ask-user question contract — the minimal shape the flow needs
-// to step through questions, toggle options, and compile answers. It carries no
-// app-tool schema: richer consumer types (extra fields like a tab header)
-// satisfy it structurally.
-export type AskUserOption = {
+// The composer's question contract — the minimal shape the flow needs to step
+// through questions, toggle options, and compile answers. It carries no
+// app-tool schema: richer consumer types satisfy it structurally.
+export type ComposerQuestionOption = {
+  /** Machine-readable, echoed back in `selected`. Falls back to `label`. */
+  value?: string;
   label: string;
   description?: string;
 };
 
-export type AskUserQuestion = {
-  question: string;
-  options: AskUserOption[];
+export type ComposerQuestion = {
+  /** Opaque to the package — the consumer mints it and gets it back. */
+  id: string;
+  label: string;
+  options: ComposerQuestionOption[];
   multiSelect?: boolean;
 };
 
@@ -108,15 +111,19 @@ export type ComposerMessageSubmit = {
   files: AttachmentItem[];
 };
 
-export type ComposerAnswerEntry =
-  | { question: string; option: string }
-  | { question: string; text: string }
-  | { question: string; options: string[]; text: string }
-  | { question: string };
+// An answer: the id the consumer minted on its question, plus what the user
+// picked. One flat shape for every kind of question.
+export type ComposerAnswer = {
+  id: string;
+  /** Option values; empty when skipped or text-only. */
+  selected: string[];
+  /** Present only when the user typed something. */
+  text?: string;
+};
 
 export type ComposerAnswersSubmit = {
   kind: "answers";
-  answers: ComposerAnswerEntry[];
+  answers: ComposerAnswer[];
 };
 
 export type ComposerSubmitData = ComposerMessageSubmit | ComposerAnswersSubmit;

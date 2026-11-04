@@ -1,5 +1,5 @@
 "use client";
-import { ArrowUp, Stop } from "@keyline-icons/react";
+import { ArrowUp, Check, ChevronLeft, ChevronRight, Stop } from "@keyline-icons/react";
 
 // Styled composer — thin wrappers over @intentface/ui/composer. Behavior
 // (editor, store, machines, command plumbing) lives in the package; this file
@@ -15,11 +15,12 @@ import {
   useComposerController,
   useComposerStore,
   useComposerSubmit,
+  useQuestionOption,
+  useQuestionOptions,
 } from "@intentface/ui/composer";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { Children, type ComponentProps, type ReactNode, useMemo, useRef } from "react";
-import { AskUser } from "@/components/ai/ask-user";
 import { Attachments } from "@/components/ai/attachments";
 import { Chip } from "@/components/ai/chip";
 import Button from "@/components/ui/button";
@@ -47,7 +48,7 @@ export type {
   AttachmentsApi,
   ChipData,
   CommandItemKind,
-  ComposerAnswerEntry,
+  ComposerAnswer,
   ComposerAnswersSubmit,
   ComposerCommandsConfig,
   ComposerCommandsItems,
@@ -55,6 +56,8 @@ export type {
   ComposerEditorHandle,
   ComposerEditorState,
   ComposerMessageSubmit,
+  ComposerQuestion,
+  ComposerQuestionOption,
   ComposerSnapshot,
   ComposerSubmitData,
   ComposerSubmitOn,
@@ -586,78 +589,169 @@ const ComposerCommands = ({ prefix }: ComposerCommandsProps) => (
 );
 
 // ---------------------------------------------------------------------------
-// AskUser (with sub-Parts) — default render for the ask-user flow registered
-// via the `questions` prop on Composer Root.
+// Question — default render for the question flow armed by the `questions`
+// prop on Composer Root.
 // ---------------------------------------------------------------------------
 
-const ComposerAskUser = () => {
-  const askUser = useComposer((composer) => composer.askUser);
+const questionNavigationButtonClasses =
+  "flex size-6 cursor-pointer items-center justify-center rounded-full text-ink-secondary transition-colors hover:bg-ink-primary/5 hover:text-ink-primary focus-visible:outline-2 focus-visible:outline-accent-bg/60 disabled:pointer-events-none disabled:opacity-30";
 
-  // Content only. The consumer gates the enclosing Panel on `askUser.active`;
-  // this renders the question compound, or null when there are none. `display`
+// Decorative selection indicator: a check for multi-select, the option's
+// 1-based index for single-select. The Option itself carries the radio or
+// checkbox role and checked state, so this is aria-hidden and never focusable:
+// a nested control is invalid inside role=radio and breaks the key scoping.
+const QuestionOptionIndicator = () => {
+  const options = useQuestionOptions();
+  const option = useQuestionOption();
+  const index = options.items.current.indexOf(option.value) + 1;
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "flex size-4 shrink-0 items-center justify-center rounded-[5px] bg-raised font-medium text-[10px] text-ink-secondary tabular-nums shadow-raised",
+        option.selected && "bg-accent-raised text-white shadow-accent",
+      )}
+    >
+      {options.multiSelect ? option.selected && <Check className="size-3" /> : index}
+    </span>
+  );
+};
+
+const ComposerQuestion = () => {
+  const questions = useComposer((composer) => composer.questions);
+
+  // Content only. The consumer gates the enclosing Panel on `questions.active`;
+  // this renders the current question, or null when there are none. `display`
   // keeps the last question on screen through an exit animation.
-  const question = askUser.questions?.[askUser.step] ?? null;
+  const question = questions.items?.[questions.step] ?? null;
   const lastQuestionRef = useRef(question);
   if (question) lastQuestionRef.current = question;
   const display = question ?? lastQuestionRef.current;
 
   if (!display) return null;
 
-  const entry = askUser.answers.get(askUser.step) ?? {
+  const draft = questions.drafts.get(questions.step) ?? {
     selected: new Set<string>(),
     freeText: "",
   };
 
-  const totalQuestions = askUser.questions?.length ?? 0;
+  const totalQuestions = questions.items?.length ?? 0;
 
   return (
-    <AskUser>
-      <AskUser.Header>
-        <AskUser.Label>{display.question}</AskUser.Label>
-        {!askUser.isSingle && totalQuestions > 1 && (
-          <AskUser.Navigation>
-            <AskUser.Previous onClick={askUser.goBack} disabled={askUser.step === 0} />
-            <AskUser.StepLabel>
-              {({ current, total }) => `${current} of ${total} questions`}
-            </AskUser.StepLabel>
-            <AskUser.Next onClick={askUser.goNext} disabled={askUser.step === totalQuestions - 1} />
-          </AskUser.Navigation>
-        )}
-      </AskUser.Header>
-      {display.options && (
-        <AskUser.Options
-          ref={askUser.optionsRef}
-          multiSelect={!!display.multiSelect}
-          groupName={`q-${askUser.step}`}
+    <ComposerPrimitive.Question data-slot="composer-question" className="flex flex-col gap-2 p-2">
+      <ComposerPrimitive.QuestionHeader
+        data-slot="composer-question-header"
+        className="flex h-7 items-center gap-2"
+      >
+        <ComposerPrimitive.QuestionLabel
+          data-slot="composer-question-label"
+          className="min-w-0 flex-1 px-2 font-medium text-sm leading-tight"
         >
-          {display.options.map((option) => (
-            <AskUser.Option
-              key={option.label}
-              value={option.label}
-              selected={entry.selected.has(option.label)}
-              onSelect={() => askUser.toggleOption(option.label)}
+          {display.label}
+        </ComposerPrimitive.QuestionLabel>
+        {!questions.isSingle && totalQuestions > 1 && (
+          <ComposerPrimitive.QuestionNavigation
+            data-slot="composer-question-navigation"
+            className="flex shrink-0 items-center gap-1"
+          >
+            <ComposerPrimitive.QuestionPrevious
+              data-slot="composer-question-previous"
+              onClick={questions.goBack}
+              disabled={questions.step === 0}
+              className={questionNavigationButtonClasses}
             >
-              <AskUser.OptionInput />
-              <AskUser.OptionContent>
-                <AskUser.OptionLabel>{option.label}</AskUser.OptionLabel>
-                {option.description && (
-                  <AskUser.OptionDescription>{option.description}</AskUser.OptionDescription>
+              <ChevronLeft className="size-3.5" />
+            </ComposerPrimitive.QuestionPrevious>
+            <ComposerPrimitive.QuestionStepLabel
+              data-slot="composer-question-step-label"
+              className="text-2xs text-ink-tertiary tabular-nums"
+            >
+              {({ current, total }) => `${current} of ${total} questions`}
+            </ComposerPrimitive.QuestionStepLabel>
+            <ComposerPrimitive.QuestionNext
+              data-slot="composer-question-next"
+              onClick={questions.goNext}
+              disabled={questions.step === totalQuestions - 1}
+              className={questionNavigationButtonClasses}
+            >
+              <ChevronRight className="size-3.5" />
+            </ComposerPrimitive.QuestionNext>
+          </ComposerPrimitive.QuestionNavigation>
+        )}
+      </ComposerPrimitive.QuestionHeader>
+      {display.options && (
+        <ComposerPrimitive.QuestionOptions
+          data-slot="composer-question-options"
+          ref={questions.optionsRef}
+          multiSelect={!!display.multiSelect}
+          groupName={`q-${questions.step}`}
+          className="flex flex-col gap-1.5"
+        >
+          {display.options.map((option) => {
+            // One identity for key, value, lookup and toggle — so a supplied
+            // `value` is what the answer carries.
+            const optionValue = option.value ?? option.label;
+            return (
+              <ComposerPrimitive.QuestionOption
+                key={optionValue}
+                data-slot="composer-question-option"
+                value={optionValue}
+                selected={draft.selected.has(optionValue)}
+                onSelect={() => questions.toggleOption(optionValue)}
+                className={cn(
+                  "flex cursor-pointer items-start gap-2 rounded-lg p-2 leading-tight transition-colors",
+                  "data-highlighted:bg-ink-primary/5",
+                  // Options carry real focus (roving tabindex), but focus always
+                  // tracks the highlight — the highlight wash IS the focus
+                  // indication, same as command items. No extra ring.
+                  "outline-none",
                 )}
-              </AskUser.OptionContent>
-            </AskUser.Option>
-          ))}
-        </AskUser.Options>
+              >
+                <QuestionOptionIndicator />
+                <ComposerPrimitive.QuestionOptionContent
+                  data-slot="composer-question-option-content"
+                  className="flex min-w-0 flex-1 flex-col gap-1"
+                >
+                  <ComposerPrimitive.QuestionOptionLabel
+                    data-slot="composer-question-option-label"
+                    className="text-sm leading-tight"
+                  >
+                    {option.label}
+                  </ComposerPrimitive.QuestionOptionLabel>
+                  {option.description && (
+                    <ComposerPrimitive.QuestionOptionDescription
+                      data-slot="composer-question-option-description"
+                      className="text-ink-secondary text-xs leading-tight"
+                    >
+                      {option.description}
+                    </ComposerPrimitive.QuestionOptionDescription>
+                  )}
+                </ComposerPrimitive.QuestionOptionContent>
+              </ComposerPrimitive.QuestionOption>
+            );
+          })}
+        </ComposerPrimitive.QuestionOptions>
       )}
-    </AskUser>
+    </ComposerPrimitive.Question>
   );
 };
 
-const ComposerAskUserHints = ({ className, ...props }: ComponentProps<typeof AskUser.Hints>) => {
-  const askUser = useComposer((composer) => composer.askUser);
-  const totalQuestions = askUser.questions?.length ?? 0;
+const ComposerQuestionHints = ({
+  className,
+  ...props
+}: ComponentProps<typeof ComposerPrimitive.QuestionHints>) => {
+  const questions = useComposer((composer) => composer.questions);
+  const totalQuestions = questions.items?.length ?? 0;
 
   return (
-    <AskUser.Hints className={cn("flex-1", className)} {...props}>
+    <ComposerPrimitive.QuestionHints
+      data-slot="composer-question-hints"
+      className={cn(
+        "flex flex-1 items-center gap-3 px-2 pt-1 text-2xs text-ink-tertiary",
+        className,
+      )}
+      {...props}
+    >
       <span className="inline-flex items-center gap-1">
         <Kbd size="sm">↑</Kbd>
         <Kbd size="sm">↓</Kbd> navigate
@@ -665,7 +759,7 @@ const ComposerAskUserHints = ({ className, ...props }: ComponentProps<typeof Ask
       <span className="inline-flex items-center gap-1">
         <Kbd size="sm">↵</Kbd> select
       </span>
-      {!askUser.isSingle && totalQuestions > 1 && (
+      {!questions.isSingle && totalQuestions > 1 && (
         <span className="inline-flex items-center gap-1">
           <Kbd size="sm">←</Kbd>
           <Kbd size="sm">→</Kbd> between questions
@@ -674,21 +768,21 @@ const ComposerAskUserHints = ({ className, ...props }: ComponentProps<typeof Ask
       <span className="inline-flex items-center gap-1">
         <Kbd size="sm">esc</Kbd> skip
       </span>
-    </AskUser.Hints>
+    </ComposerPrimitive.QuestionHints>
   );
 };
 
-type ComposerAskUserDismissProps = ComponentProps<typeof Button>;
+type ComposerQuestionDismissProps = ComponentProps<typeof Button>;
 
-const ComposerAskUserDismiss = ({ className, ...props }: ComposerAskUserDismissProps) => {
-  const askUser = useComposer((composer) => composer.askUser);
+const ComposerQuestionDismiss = ({ className, ...props }: ComposerQuestionDismissProps) => {
+  const questions = useComposer((composer) => composer.questions);
   return (
     <Button
       type="button"
       variant="ghost"
-      data-slot="composer-ask-user-dismiss"
+      data-slot="composer-question-dismiss"
       className={cn("gap-2", className)}
-      onClick={askUser.dismissStep}
+      onClick={questions.dismissStep}
       {...props}
     >
       Dismiss
@@ -696,19 +790,19 @@ const ComposerAskUserDismiss = ({ className, ...props }: ComposerAskUserDismissP
   );
 };
 
-type ComposerAskUserContinueProps = ComponentProps<typeof Button>;
+type ComposerQuestionContinueProps = ComponentProps<typeof Button>;
 
-const ComposerAskUserContinue = ({ className, ...props }: ComposerAskUserContinueProps) => {
-  const askUser = useComposer((composer) => composer.askUser);
+const ComposerQuestionContinue = ({ className, ...props }: ComposerQuestionContinueProps) => {
+  const questions = useComposer((composer) => composer.questions);
   return (
     <Button
       type="submit"
       variant="tertiary"
-      data-slot="composer-ask-user-continue"
+      data-slot="composer-question-continue"
       className={cn("gap-2", className)}
       {...props}
     >
-      {askUser.isLastStep ? "Submit" : "Continue"}
+      {questions.isLastStep ? "Submit" : "Continue"}
     </Button>
   );
 };
@@ -729,10 +823,10 @@ export const Composer = Object.assign(ComposerRoot, {
   Panel: ComposerPanel,
   Popover: ComposerPopover,
   Textarea: ComposerTextarea,
-  AskUser: ComposerAskUser,
-  AskUserHints: ComposerAskUserHints,
-  AskUserDismiss: ComposerAskUserDismiss,
-  AskUserContinue: ComposerAskUserContinue,
+  Question: ComposerQuestion,
+  QuestionHints: ComposerQuestionHints,
+  QuestionDismiss: ComposerQuestionDismiss,
+  QuestionContinue: ComposerQuestionContinue,
   Commands: ComposerCommands,
   Command: ComposerCommand,
   CommandList: ComposerCommandList,

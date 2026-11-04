@@ -1,42 +1,46 @@
 "use client";
 
-import { type AskUserQuestion, Composer, type ComposerSubmitData } from "@intentface/ui/composer";
+import { Composer, type ComposerQuestion, type ComposerSubmitData } from "@intentface/ui/composer";
 import { ArrowUp } from "@keyline-icons/react";
 import { useState } from "react";
-import { Controls, Prompt } from "./ask-user";
+import { Controls, Prompt } from "./question";
 
-// Setting `questions` arms the flow and flips askUser.active. Answering or
-// skipping the last one fires onSubmit with { kind: "answers" }.
-const QUESTIONS: AskUserQuestion[] = [
+// Setting `questions` arms the flow and flips questions.active. Answering or
+// skipping the last one fires onSubmit with { kind: "questions" } — entries
+// keyed by the ids minted here, carrying option values (label fallback).
+const QUESTIONS: ComposerQuestion[] = [
   {
-    question: "Which framework are you deploying to?",
+    id: "framework",
+    label: "Which framework are you deploying to?",
     options: [
-      { label: "Next.js", description: "App Router on Vercel." },
-      { label: "Vite", description: "SPA on any static host." },
-      { label: "Remix", description: "Full-stack on a Node server." },
+      { value: "next", label: "Next.js", description: "App Router on Vercel." },
+      { value: "vite", label: "Vite", description: "SPA on any static host." },
+      { value: "remix", label: "Remix", description: "Full-stack on a Node server." },
     ],
   },
   {
-    question: "Which features do you need?",
+    id: "features",
+    label: "Which features do you need?",
     multiSelect: true,
     options: [
-      { label: "Auth", description: "Sessions and sign-in." },
-      { label: "Database", description: "Persistent storage." },
-      { label: "File uploads", description: "Attachments and media." },
+      { value: "auth", label: "Auth", description: "Sessions and sign-in." },
+      { value: "database", label: "Database", description: "Persistent storage." },
+      { value: "uploads", label: "File uploads", description: "Attachments and media." },
     ],
   },
   {
-    question: "What matters most for this project?",
+    id: "priority",
+    label: "What matters most for this project?",
     options: [
-      { label: "Speed", description: "Ship as fast as possible." },
-      { label: "Scale", description: "Handle heavy traffic." },
-      { label: "Cost", description: "Keep the bill low." },
+      { value: "speed", label: "Speed", description: "Ship as fast as possible." },
+      { value: "scale", label: "Scale", description: "Handle heavy traffic." },
+      { value: "cost", label: "Cost", description: "Keep the bill low." },
     ],
   },
 ];
 
-export const AskUserFlow = () => {
-  const [questions, setQuestions] = useState<AskUserQuestion[]>(QUESTIONS);
+export const QuestionFlow = () => {
+  const [questions, setQuestions] = useState<ComposerQuestion[]>(QUESTIONS);
   const [done, setDone] = useState(false);
 
   const handleSubmit = (data: ComposerSubmitData) => {
