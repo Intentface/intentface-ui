@@ -21,9 +21,6 @@ const packageSourceAliases = {
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@intentface/ui"],
-  // React's <ViewTransition>: switching between the docs and the playground
-  // cross-dissolves the viewport (see SiteShell).
-  experimental: { viewTransition: true },
   turbopack: { resolveAlias: packageSourceAliases },
   // Any docs page is readable as markdown by appending `.md` — the convention
   // agents expect, and guessable from a page URL. It maps onto the same handler
