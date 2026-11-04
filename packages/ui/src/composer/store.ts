@@ -593,9 +593,9 @@ export const createComposerStore = (): ComposerStore => {
     const { destroy } = attachmentConfigRef.current;
 
     dispatchAttachments({ type: "hand-off" });
-    controller.clear();
 
     try {
+      controller.clear();
       await onSubmitRef.current?.({
         kind: "message",
         text: trimmedText,

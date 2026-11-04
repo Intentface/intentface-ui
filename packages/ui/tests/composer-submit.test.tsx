@@ -323,12 +323,15 @@ describe("AskUser.Continue", () => {
 });
 
 describe("attachments on submit", () => {
-  const renderWithAttachment = (onSubmit: (data: ComposerSubmitData) => Promise<void>) => {
+  const renderWithAttachment = (
+    onSubmit: (data: ComposerSubmitData) => Promise<void>,
+    textareaProps?: Partial<ComponentProps<typeof Composer.Textarea>>,
+  ) => {
     const released: string[] = [];
     const store = createComposerStore();
     render(
       <Composer.Root store={store} onSubmit={onSubmit}>
-        <Composer.Textarea aria-label="Message" />
+        <Composer.Textarea aria-label="Message" {...textareaProps} />
         <Composer.Attachments
           convert={(file) => ({ id: file.name, url: `blob:test/${file.name}` })}
           destroy={(item) => void released.push(item.id)}
@@ -376,6 +379,22 @@ describe("attachments on submit", () => {
       await expect(store.submit()).rejects.toThrow("offline");
     });
     expect(releasedAtSubmit).toEqual([[]]);
+    expect(released).toEqual(["pixel.png"]);
+  });
+
+  test("items are released when clearing the editor throws", async () => {
+    const onSubmit = mock(async () => {});
+    const { store, released } = renderWithAttachment(onSubmit, {
+      value: "hello",
+      onValueChange: (text) => {
+        if (!text) throw new Error("onValueChange failed");
+      },
+    });
+
+    await act(async () => {
+      await expect(store.submit()).rejects.toThrow("onValueChange failed");
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
     expect(released).toEqual(["pixel.png"]);
   });
 });
