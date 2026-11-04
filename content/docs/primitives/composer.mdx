@@ -261,6 +261,10 @@ Returns a `ComposerStore` handle. Pass it to `store`, read it with
 `getText`, `setText`, `serialize`, `ensureFocus`). `focus` takes the same
 options as `HTMLElement.focus()`: pass `{ preventScroll: true }` to focus a
 composer that's already on screen without scrolling the page around it.
+To subscribe without `useComposerStore`, pass `store.subscribe`,
+`store.getSnapshot` and `store.getServerSnapshot` to `useSyncExternalStore`.
+The server snapshot keeps `size` null, as the server rendered it, so a part
+that hydrates after the root has measured still matches the server HTML.
 
 ```tsx
 import { Composer, useComposerStore } from "@intentface/ui/composer";

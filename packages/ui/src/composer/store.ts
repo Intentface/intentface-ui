@@ -153,6 +153,8 @@ export type ComposerState = {
 export type ComposerStore = {
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => ComposerState;
+  /** The state as the server rendered it, with `size` null. Pass it as useSyncExternalStore's getServerSnapshot, so hydration matches the server HTML after the Root has measured. */
+  getServerSnapshot: () => ComposerState;
   // Everything but `size`, so a Panel or Popover callback doesn't re-render on
   // every wrapped line. Not consumer API, like the bridges below.
   getContentSnapshot: () => Omit<ComposerState, "size">;
@@ -316,6 +318,7 @@ export const createComposerStore = (): ComposerStore => {
   const listeners = new Set<() => void>();
   const notify = () => {
     combined = null;
+    unmeasured = null;
     for (const listener of listeners) listener();
   };
 
@@ -363,6 +366,9 @@ export const createComposerStore = (): ComposerStore => {
   // getSnapshot's merged view, rebuilt after each notify so its identity holds
   // between them, as useSyncExternalStore requires.
   let combined: ComposerState | null = null;
+  // getServerSnapshot's view, rebuilt the same way: the server lays nothing
+  // out, so its size is always null.
+  let unmeasured: ComposerState | null = null;
 
   // --- Setters
   const setSize = (next: ComposerSize | null) => {
@@ -668,6 +674,10 @@ export const createComposerStore = (): ComposerStore => {
       combined ??= { ...snapshot, size };
       return combined;
     },
+    getServerSnapshot: () => {
+      unmeasured ??= { ...snapshot, size: null };
+      return unmeasured;
+    },
     getContentSnapshot: () => snapshot,
     setSize,
     setHasContent,
@@ -723,12 +733,13 @@ export const useComposerStore = <Selected = ComposerState>(
   store: ComposerStore,
   selector?: (composer: ComposerState) => Selected,
 ): Selected => {
-  const getValue = () => {
-    const state = store.getSnapshot();
-    // Safe: without a selector, Selected defaults to ComposerState.
-    return selector ? selector(state) : (state as Selected);
-  };
-  return useSyncExternalStore(store.subscribe, getValue, getValue);
+  // Safe: without a selector, Selected defaults to ComposerState.
+  const select = (state: ComposerState) => (selector ? selector(state) : (state as Selected));
+  return useSyncExternalStore(
+    store.subscribe,
+    () => select(store.getSnapshot()),
+    () => select(store.getServerSnapshot()),
+  );
 };
 
 // Internal: the snapshot without `size`, for Panel and Popover callbacks.

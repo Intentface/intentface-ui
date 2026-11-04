@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act, render } from "@testing-library/react";
-import { Activity, Profiler, StrictMode } from "react";
+import { Activity, Profiler, type ReactNode, StrictMode, Suspense, use } from "react";
+import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { Composer, useComposerStore } from "../src/composer";
+import { Composer, useComposer, useComposerStore } from "../src/composer";
 import type { ComposerSize } from "../src/composer/store";
 
 // happy-dom lays nothing out (offset* read 0) and ships a no-op ResizeObserver,
@@ -374,6 +375,52 @@ describe("the server render", () => {
     );
     expect(html).toContain("data-composer-root");
     expect(html).not.toContain("--composer-");
+  });
+
+  test("a size reader that hydrates after the root has measured matches the server HTML", async () => {
+    // Null on the server, so the reader's boundary suspends only on the client.
+    let gate: Promise<void> | null = null;
+    const Deferred = ({ children }: { children: ReactNode }) => {
+      if (gate) use(gate);
+      return children;
+    };
+    const Height = () => {
+      const height = useComposer((composer) => composer.size?.height ?? null);
+      return <output>{height === null ? "none" : height}</output>;
+    };
+    const app = (
+      <Composer.Root>
+        <Suspense fallback={null}>
+          <Deferred>
+            <Height />
+          </Deferred>
+        </Suspense>
+      </Composer.Root>
+    );
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(app);
+    document.body.append(container);
+
+    let release = () => {};
+    gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const errors: unknown[] = [];
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    await act(async () => {
+      root = hydrateRoot(container, app, { onRecoverableError: (error) => errors.push(error) });
+    });
+    expect(property("--composer-height")).toBe("80px");
+
+    await act(async () => {
+      release();
+      await gate;
+    });
+    expect(errors).toEqual([]);
+    expect(container.querySelector("output")?.textContent).toBe("80");
+
+    act(() => root?.unmount());
+    container.remove();
   });
 });
 
