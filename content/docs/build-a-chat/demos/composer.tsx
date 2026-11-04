@@ -19,7 +19,7 @@ const INITIAL: ChatMessage[] = [
   {
     id: "4",
     role: "assistant",
-    text: "Yes, once your handler runs. Anything you want to keep — the text, the files — is already in the data you were handed.",
+    text: "Yes, before your handler runs. Anything you want to keep — the text, the files — is in the data you're handed.",
   },
   { id: "5", role: "user", text: "Can I stop an empty message from sending?" },
   {
