@@ -25,13 +25,21 @@ const originalOffsets = {
 const observers = new Set<FakeResizeObserver>();
 
 class FakeResizeObserver {
+  private readonly boxes = new Map<Element, ResizeObserverBoxOptions>();
   constructor(private readonly callback: () => void) {
     observers.add(this);
   }
-  observe() {}
-  unobserve() {}
+  observe(element: Element, options?: ResizeObserverOptions) {
+    this.boxes.set(element, options?.box ?? "content-box");
+  }
+  unobserve(element: Element) {
+    this.boxes.delete(element);
+  }
   disconnect() {
     observers.delete(this);
+  }
+  watches(box: ResizeObserverBoxOptions) {
+    return [...this.boxes.values()].includes(box);
   }
   fire() {
     this.callback();
@@ -49,6 +57,15 @@ const resize = (next: { root?: Box; container?: Box }) => {
   Object.assign(sizes, next);
   act(() => {
     for (const observer of observers) observer.fire();
+  });
+};
+
+// Padding or a border changed and the content box didn't: the browser tells
+// only the observers watching the border box.
+const resizeBorderBox = (next: { root?: Box; container?: Box }) => {
+  Object.assign(sizes, next);
+  act(() => {
+    for (const observer of observers) if (observer.watches("border-box")) observer.fire();
   });
 };
 
@@ -186,6 +203,18 @@ describe("the measured size on a mounted composer", () => {
     resize({ root: { width: 600, height: 128 } });
     expect(probeText()).toBe("128");
     expect(property("--composer-height")).toBe("128px");
+  });
+
+  test("a padding or border change alone updates the properties", () => {
+    render(
+      <Composer.Root>
+        <Composer.Container />
+      </Composer.Root>,
+    );
+
+    resizeBorderBox({ root: { width: 600, height: 96 }, container: { width: 560, height: 64 } });
+    expect(property("--composer-height")).toBe("96px");
+    expect(property("--composer-container-height")).toBe("64px");
   });
 
   test("a resize re-renders nothing inside the composer", () => {

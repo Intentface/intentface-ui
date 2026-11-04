@@ -67,7 +67,9 @@ export const createSizeTracker = (
   const observe = (element: HTMLElement) => {
     if (typeof ResizeObserver === "undefined") return;
     observer ??= new ResizeObserver(flush);
-    observer.observe(element);
+    // The border box, to match offset*: padding or a border can change while
+    // the content box, the default, stays the same.
+    observer.observe(element, { box: "border-box" });
   };
 
   const attachRoot = (element: HTMLElement) => {
