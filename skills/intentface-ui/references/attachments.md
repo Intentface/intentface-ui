@@ -21,9 +21,11 @@ import type { FileUIPart } from "ai";
 
 const toFilePart = async (item: AttachmentItem): Promise<FileUIPart> => {
   const blob = await (await fetch(item.url)).blob();
-  const url = await new Promise<string>((resolve) => {
+  const url = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.onabort = () => reject(new Error("The file read was aborted."));
     reader.readAsDataURL(blob);
   });
   return { type: "file", url, mediaType: item.mediaType ?? blob.type, filename: item.filename };
@@ -35,6 +37,6 @@ const handleSubmit = async (data: ComposerSubmitData) => {
 };
 ```
 
-- `onSubmit` is async, so the composer keeps the blob URLs alive until the conversion finishes.
+- `onSubmit` is async, so the composer keeps the blob URLs alive until the conversion finishes. A failed read rejects, so `onSubmit` never stays pending.
 - The data URLs travel with the message, because a server can't read a `blob:` URL. An app with file storage uploads the blob and sends its URL instead.
-- `sendMessage` and `FileUIPart` come from the AI SDK. Another client takes the same converted files.
+- `sendMessage` comes from `useChat()`, and `FileUIPart` from `ai`. Another client takes the same converted files.

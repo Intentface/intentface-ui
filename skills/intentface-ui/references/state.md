@@ -13,7 +13,7 @@ A prop in the first column means the app sets the state and the part reflects it
 | `data-at-top` | `Thread.Root` | while the start is in view | Hide a top fade or a load-older control. |
 | `data-thread-overlay` | `Thread.Overlay` | always, `"top"` or `"bottom"` | Point each fade the right way. The top overlay's rendered height is the landing gap, the space a landed turn keeps below the top edge. With no top overlay it is 0. |
 | `data-thread-content` | `Thread.Content` | always | The message column, for global CSS. |
-| `--thread-overlay-bottom-height` | `Thread.Root` | while `Thread.Composer` is mounted | `Thread.Viewport`'s bottom padding and the bottom overlay's height. It already includes a gap above the composer. |
+| `--thread-overlay-bottom-height` | `Thread.Root` | from the first time `Thread.Composer` is measured. It keeps its last value after the composer unmounts | `Thread.Viewport`'s bottom padding and the bottom overlay's height. It already includes a gap above the composer. |
 | `--thread-turn-min-height` | `Thread.Content` | in `"follow"` and `"jump"` modes | The last turn's minimum height, so a new turn lands at the top. Read it with a `0px` fallback. |
 
 ## Message

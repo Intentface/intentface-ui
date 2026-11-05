@@ -41,7 +41,7 @@ const UNPAGED = new Set(["ask-user"]);
 const SRC = "packages/ui/src";
 const DOCS = "content/docs";
 const SKILLS = "skills";
-const SITE = "https://ui.intentface.com";
+const SITE_PAGE = /https:\/\/ui\.intentface\.com\/([\w/-]+)\.md/g;
 
 // ---------------------------------------------------------------------------
 // Resolve each part's props and state from the type checker
@@ -238,7 +238,7 @@ const auditSkillFile = (file) => {
   const text = readFileSync(file, "utf8");
   const findings = [];
 
-  for (const [entry] of text.matchAll(/@intentface\/ui\/[a-z-]+/g)) {
+  for (const [entry] of text.matchAll(/@intentface\/ui\/[\w-]+/g)) {
     if (!entryPoints.has(entry)) findings.push(`no such entry point: ${entry}`);
   }
   for (const [name, namespace, part] of text.matchAll(PART)) {
@@ -267,7 +267,7 @@ const auditSkillFile = (file) => {
     if (!cssVariables.has(variable) && !defined.has(variable))
       findings.push(`never published: ${variable}`);
   }
-  for (const [url, slug] of text.matchAll(new RegExp(`${SITE}/([\\w/-]+)\\.md`, "g"))) {
+  for (const [url, slug] of text.matchAll(SITE_PAGE)) {
     if (!existsSync(path.join(DOCS, `${slug}.mdx`))) findings.push(`no such docs page: ${url}`);
   }
 

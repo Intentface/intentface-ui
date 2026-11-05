@@ -221,7 +221,7 @@ The parts own roles, keyboard handling and focus movement. Everything visual is 
 | Contrast | Check the contrast of text, the command highlight and the focus indicators in the app's colors. No color ships with the package. |
 | Speaker identity | `data-role` reaches no screen reader. Add a visually hidden speaker label or an `aria-label` to each message. |
 | Validation copy | Validation emits codes, not messages. Map each code to copy of the app's own. |
-| Names on bare controls | Parts with no text of their own, such as `Shell.Trigger`, `Shell.Grip` and `Tabs.Close`, need an `aria-label`. A remove button in a list takes the distinguishing part as a prop, as in `<Attachments.Remove filename>`. |
+| Names on bare controls | Parts with no text of their own, such as `Shell.Trigger`, `Shell.Grip` and `Tabs.Close`, need an `aria-label`. A remove button in a list takes the distinguishing part as a prop, as in `<Attachments.Remove filename={item.filename}>`. |
 | Popups through render keep focus and Escape | A surface the app builds through `render`, such as a chip's hover preview, opens on focus as well as hover, and Escape closes it. |
 
 ## Verify

@@ -47,9 +47,14 @@ import { Question } from "./question";
 type PendingAskUser = { toolCallId: string; questions: AskUserQuestion[] };
 
 const usePendingAskUser = (messages: UIMessage[]): PendingAskUser | null => {
-  const part = messages.at(-1)?.parts.find((candidate) => candidate.type === "tool-askUser");
+  const part = messages
+    .at(-1)
+    ?.parts.find(
+      (candidate) =>
+        isToolPart(candidate) && candidate.type === "tool-askUser" && candidate.state === "input-available",
+    );
   const next =
-    part && isToolPart(part) && part.state === "input-available"
+    part && isToolPart(part)
       ? { toolCallId: part.toolCallId, ...(part.input as { questions: AskUserQuestion[] }) }
       : null;
   const [pending, setPending] = useState(next);
@@ -95,7 +100,7 @@ export const AskingChat = () => {
 ```
 
 - The tool has no `execute`, so its part waits in `"input-available"` until the app adds the output.
-- The pending call is kept as one object per `toolCallId`. Every stream chunk produces new message objects, and a new `questions` array would restart the flow at the first question.
+- The pending call is the first `askUser` part still waiting in `"input-available"`, so a message with several calls asks them one after another. It is kept as one object per `toolCallId`. Every stream chunk produces new message objects, and a new `questions` array would restart the flow at the first question.
 - The composer submits `kind: "answers"` once the last question is answered or skipped. `addToolOutput` moves the part out of `"input-available"`, so `pending` becomes `null` and `questions` unsets, and `sendAutomaticallyWhen` sends the answers to the model.
 - `Question` is the prompt from the composer page's ask-user demo, built from the `AskUser` parts and the composer's `askUser` state.
 - The panel's children gate on `composer.askUser.active`, so the panel opens only while a question is waiting.

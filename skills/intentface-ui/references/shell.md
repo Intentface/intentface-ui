@@ -1,6 +1,6 @@
 # App shell: Shell, Nav and Tabs
 
-`Shell`, `Nav` and `Tabs` work on their own or around a chat. They position nothing, so the layout is the app's. Each page's Keyboard table lists the keys the parts handle.
+`Shell`, `Nav` and `Tabs` work on their own or around a chat, and the layout is the app's. `Shell` and `Nav` position nothing. `Tabs` positions only its anchored popup, through `Tabs.Positioner`. Each page's Keyboard table lists the keys the parts handle.
 
 ## Rules
 
@@ -35,13 +35,19 @@
     aria-label="Resize sidebar"
     className="absolute inset-y-0 left-(--shell-sidebar-width) -translate-x-1/2 data-[state=collapsed]:hidden"
   />
-  <Shell.Viewport className="min-w-0 flex-1">{children}</Shell.Viewport>
+  <Shell.Viewport className="min-w-0 flex-1">
+    <Shell.Trigger aria-label="Expand sidebar" className="data-[state=expanded]:hidden">
+      <PanelLeftIcon />
+    </Shell.Trigger>
+    {children}
+  </Shell.Viewport>
 </Shell.Root>
 ```
 
 - The gutter is the app's own element. It reserves the sidebar's width in the layout and shrinks to 0 while the sidebar slides out.
 - The root gives `--shell-sidebar-width` its default, and the grip overwrites it on every drag, clamped to the sidebar's `min-width` and `max-width`. Those two values are the drag range, and `16rem`, `min-w-48` and `max-w-80` stand for the app's own.
 - Every part carries `data-state` and `data-resizing`, so the sidebar and the grip style themselves, and the gutter reads them from the root through a named group.
+- The sidebar's own trigger slides out with it, so a second `Shell.Trigger` in the content reopens it, shown only while collapsed. A `Shell.Hotspot` or a keyboard shortcut can reopen it too.
 - The grip is a sibling of the sidebar, so a sidebar that clips its overflow can't cut the handle in half.
 - The sidebar's background must be opaque, because the content slides under it.
 
