@@ -1,259 +1,184 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act, render } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
-import { Message } from "../src/message";
 import { Thread, type ThreadAutoScrollMode } from "../src/thread";
 
-const RESERVE = "var(--thread-turn-min-height, 0px)";
-
-type TranscriptProps = {
-  mode: ThreadAutoScrollMode;
-  ids: string[];
-  asTurns?: boolean;
-  trailing?: boolean;
-};
-
-const Transcript = ({ mode, ids, asTurns = true, trailing = false }: TranscriptProps) => (
-  <Thread.Root autoScroll={mode}>
-    <Thread.Viewport>
-      <Thread.Content data-testid="content">
-        {ids.map((id) =>
-          asTurns ? (
-            <Message.Turn key={id} data-testid={id}>
-              {id}
-            </Message.Turn>
-          ) : (
-            <div key={id} data-testid={id}>
-              {id}
-            </div>
-          ),
-        )}
-        {trailing && <div data-testid="trailing">typing…</div>}
-      </Thread.Content>
-    </Thread.Viewport>
-    <Thread.Composer data-testid="composer" />
-  </Thread.Root>
-);
-
-// The thread watches its content with a MutationObserver, which reports after the commit.
+// React commits the composer's measuring effect after the render; settle it.
 const flush = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 
-describe("Thread.Composer", () => {
-  test("docks itself along the bottom edge of the root", () => {
-    const { getByTestId } = render(<Transcript mode="follow" ids={["a"]} />);
-    const style = (getByTestId("composer") as HTMLElement).style;
+// happy-dom's ResizeObserver never fires, so record what each one observes and fire it by hand.
+type Observation = { callback: () => void; targets: Set<Element> };
+const observations: Observation[] = [];
 
-    expect(style.position).toBe("absolute");
-    expect(style.bottom).toBe("0px");
+class FakeResizeObserver {
+  readonly #observation: Observation;
+
+  constructor(callback: () => void) {
+    this.#observation = { callback, targets: new Set() };
+    observations.push(this.#observation);
+  }
+
+  observe(target: Element) {
+    this.#observation.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.#observation.targets.delete(target);
+  }
+
+  disconnect() {
+    this.#observation.targets.clear();
+  }
+}
+
+const resize = (target: Element) =>
+  act(() => {
+    for (const { callback, targets } of observations) if (targets.has(target)) callback();
   });
 
-  test("spans the root's width", () => {
-    // happy-dom drops inset-inline, so read it off the server markup.
-    expect(renderToString(<Thread.Composer />)).toContain("inset-inline:0");
-  });
-
-  test("a style prop wins over the default position", () => {
-    const { getByTestId } = render(
-      <Thread.Root>
-        <Thread.Composer data-testid="composer" style={{ position: "relative", bottom: "8px" }} />
-      </Thread.Root>,
-    );
-    const style = (getByTestId("composer") as HTMLElement).style;
-
-    expect(style.position).toBe("relative");
-    expect(style.bottom).toBe("8px");
-  });
+const composerVariablesOf = (root: HTMLElement) => ({
+  inset: root.style.getPropertyValue("--thread-inset-bottom"),
+  height: root.style.getPropertyValue("--thread-composer-height"),
+  width: root.style.getPropertyValue("--thread-composer-width"),
 });
 
-describe("Thread.Root dock variables", () => {
-  const original = HTMLElement.prototype.getBoundingClientRect;
+const insetOf = (px: number) => `calc(${px}px + var(--thread-composer-gap, 0px))`;
 
-  // Layout does not exist in happy-dom, so give the root and the dock a box.
+describe("Thread.Composer composer variables", () => {
+  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  const OriginalResizeObserver = globalThis.ResizeObserver;
+  let composerTop = 540;
+
+  // Layout does not exist in happy-dom, so give the root and the composer a box.
   beforeEach(() => {
+    composerTop = 540;
+    observations.length = 0;
+    globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver;
     HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
       const box = { top: 0, bottom: 0, width: 0, height: 0 };
       if (this.hasAttribute("data-thread-root")) box.bottom = 600;
       if (this.hasAttribute("data-thread-composer")) {
-        Object.assign(box, { top: 540, width: 640.4, height: 60.2 });
+        Object.assign(box, { top: composerTop, width: 640.4, height: 60.2 });
       }
       return box as DOMRect;
     };
   });
   afterEach(() => {
-    HTMLElement.prototype.getBoundingClientRect = original;
+    HTMLElement.prototype.getBoundingClientRect = originalRect;
+    globalThis.ResizeObserver = OriginalResizeObserver;
   });
 
-  test("publishes the dock's inset and own size on the root", () => {
-    const { container } = render(<Transcript mode="follow" ids={["a"]} />);
+  const WithComposer = ({ composerKey }: { composerKey: string | null }) => (
+    <Thread.Root>
+      <Thread.Viewport>
+        <Thread.Content />
+      </Thread.Viewport>
+      {composerKey !== null && <Thread.Composer key={composerKey} data-testid="composer" />}
+    </Thread.Root>
+  );
+
+  test("publishes the room it takes, plus the consumer's gap, and its own box", () => {
+    const { container } = render(<WithComposer composerKey="a" />);
     const root = container.querySelector("[data-thread-root]") as HTMLElement;
 
-    expect(root.style.getPropertyValue("--thread-dock-inset")).toBe("92px");
-    expect(root.style.getPropertyValue("--thread-dock-height")).toBe("60px");
-    expect(root.style.getPropertyValue("--thread-dock-width")).toBe("640px");
+    // 600 - 540, the room between the composer's top and the root's bottom
+    expect(composerVariablesOf(root)).toEqual({
+      inset: insetOf(60),
+      height: "60px",
+      width: "640px",
+    });
   });
 
-  test("no longer publishes the overlay-named variable", () => {
-    const { container } = render(<Transcript mode="follow" ids={["a"]} />);
+  test("leaves its position to the consumer", () => {
+    const { getByTestId } = render(<WithComposer composerKey="a" />);
+
+    expect((getByTestId("composer") as HTMLElement).style.position).toBe("");
+  });
+
+  test("writes no composer variable while there is no composer", () => {
+    const { container } = render(<WithComposer composerKey={null} />);
     const root = container.querySelector("[data-thread-root]") as HTMLElement;
 
-    expect(root.style.getPropertyValue("--thread-overlay-bottom-height")).toBe("");
+    expect(composerVariablesOf(root)).toEqual({ inset: "", height: "", width: "" });
   });
 
-  test("writes no dock variable while there is no dock", () => {
-    const { container } = render(
-      <Thread.Root>
+  test("publishes all three once a composer mounts after the root", async () => {
+    const { container, rerender } = render(<WithComposer composerKey={null} />);
+    const root = container.querySelector("[data-thread-root]") as HTMLElement;
+
+    rerender(<WithComposer composerKey="a" />);
+    await flush();
+
+    expect(composerVariablesOf(root)).toEqual({
+      inset: insetOf(60),
+      height: "60px",
+      width: "640px",
+    });
+  });
+
+  test("clears them when the composer unmounts", async () => {
+    const { container, rerender } = render(<WithComposer composerKey="a" />);
+    const root = container.querySelector("[data-thread-root]") as HTMLElement;
+
+    rerender(<WithComposer composerKey={null} />);
+    await flush();
+
+    expect(composerVariablesOf(root)).toEqual({ inset: "", height: "", width: "" });
+  });
+
+  test("follows a composer remounted under a new key", async () => {
+    const { container, getByTestId, rerender } = render(<WithComposer composerKey="a" />);
+    const root = container.querySelector("[data-thread-root]") as HTMLElement;
+    rerender(<WithComposer composerKey="b" />);
+    await flush();
+
+    composerTop = 500;
+    await resize(getByTestId("composer"));
+
+    expect(root.style.getPropertyValue("--thread-inset-bottom")).toBe(insetOf(100));
+  });
+});
+
+describe("Thread.Root turn min-height", () => {
+  // happy-dom drops 100cqh values, so read the published variable off the server markup.
+  const publishedIn = (mode: ThreadAutoScrollMode) =>
+    renderToString(
+      <Thread.Root autoScroll={mode}>
         <Thread.Viewport>
           <Thread.Content />
         </Thread.Viewport>
       </Thread.Root>,
     );
-    const root = container.querySelector("[data-thread-root]") as HTMLElement;
-
-    expect(root.style.getPropertyValue("--thread-dock-inset")).toBe("");
-    expect(root.style.getPropertyValue("--thread-dock-height")).toBe("");
-    expect(root.style.getPropertyValue("--thread-dock-width")).toBe("");
-  });
-});
-
-describe("Thread.Content reserve", () => {
-  const minHeightOf = (el: HTMLElement) => el.style.getPropertyValue("min-height");
 
   for (const mode of ["follow", "jump"] as const) {
-    test(`"${mode}" reserves on the last turn only`, () => {
-      const { getByTestId } = render(<Transcript mode={mode} ids={["a", "b"]} />);
-
-      expect(minHeightOf(getByTestId("a"))).toBe("");
-      expect(minHeightOf(getByTestId("b"))).toBe(RESERVE);
-    });
-
-    test(`"${mode}" moves the reserve to a turn appended later`, async () => {
-      const { getByTestId, rerender } = render(<Transcript mode={mode} ids={["a", "b"]} />);
-
-      rerender(<Transcript mode={mode} ids={["a", "b", "c"]} />);
-      await flush();
-
-      expect(minHeightOf(getByTestId("b"))).toBe("");
-      expect(minHeightOf(getByTestId("c"))).toBe(RESERVE);
+    test(`"${mode}" publishes the viewport minus the top inset and the bottom inset`, () => {
+      expect(publishedIn(mode)).toContain(
+        "--thread-turn-min-height:calc(100cqh - var(--thread-inset-top, 0px) - var(--thread-inset-bottom, 0px) - 1px)",
+      );
     });
   }
 
   for (const mode of ["bottom", "off"] as const) {
-    test(`"${mode}" sets nothing`, async () => {
-      const { getByTestId, rerender } = render(<Transcript mode={mode} ids={["a", "b"]} />);
-      rerender(<Transcript mode={mode} ids={["a", "b", "c"]} />);
-      await flush();
-
-      for (const id of ["a", "b", "c"]) expect(minHeightOf(getByTestId(id))).toBe("");
+    test(`"${mode}" publishes 0px`, () => {
+      expect(publishedIn(mode)).toContain("--thread-turn-min-height:0px");
     });
   }
-
-  test("switching to a mode that lands at the bottom clears the reserve", () => {
-    const { getByTestId, rerender } = render(<Transcript mode="follow" ids={["a", "b"]} />);
-    expect(minHeightOf(getByTestId("b"))).toBe(RESERVE);
-
-    rerender(<Transcript mode="bottom" ids={["a", "b"]} />);
-
-    expect(minHeightOf(getByTestId("b"))).toBe("");
-  });
-
-  test("switching to a top-landing mode sets the reserve", () => {
-    const { getByTestId, rerender } = render(<Transcript mode="off" ids={["a", "b"]} />);
-
-    rerender(<Transcript mode="jump" ids={["a", "b"]} />);
-
-    expect(minHeightOf(getByTestId("b"))).toBe(RESERVE);
-  });
-
-  test("unmounting the thread clears the reserve it set", () => {
-    const { getByTestId, unmount } = render(<Transcript mode="follow" ids={["a"]} />);
-    const turn = getByTestId("a") as HTMLElement;
-    expect(minHeightOf(turn)).toBe(RESERVE);
-
-    unmount();
-
-    expect(minHeightOf(turn)).toBe("");
-  });
-
-  test("only clears the element it set the reserve on", async () => {
-    const Pair = ({ mode, ids }: { mode: ThreadAutoScrollMode; ids: string[] }) => (
-      <Thread.Root autoScroll={mode}>
-        <Thread.Viewport>
-          <Thread.Content>
-            {ids.map((id) => (
-              <Message.Turn
-                key={id}
-                data-testid={id}
-                style={id === "a" ? { minHeight: "10px" } : {}}
-              >
-                {id}
-              </Message.Turn>
-            ))}
-          </Thread.Content>
-        </Thread.Viewport>
-      </Thread.Root>
-    );
-    const { getByTestId, rerender } = render(<Pair mode="follow" ids={["a", "b"]} />);
-
-    rerender(<Pair mode="follow" ids={["a", "b", "c"]} />);
-    await flush();
-    expect(minHeightOf(getByTestId("a"))).toBe("10px");
-    expect(minHeightOf(getByTestId("c"))).toBe(RESERVE);
-
-    rerender(<Pair mode="bottom" ids={["a", "b", "c"]} />);
-    expect(minHeightOf(getByTestId("a"))).toBe("10px");
-    expect(minHeightOf(getByTestId("c"))).toBe("");
-  });
 });
 
-describe("Thread.Content turn warning", () => {
-  let warn: ReturnType<typeof spyOn<Console, "warn">>;
-
-  beforeEach(() => {
-    warn = spyOn(console, "warn").mockImplementation(() => {});
-  });
-  afterEach(() => warn.mockRestore());
-
-  test("stays quiet when the children are turns", async () => {
-    const { rerender } = render(<Transcript mode="follow" ids={["a"]} />);
-    rerender(<Transcript mode="follow" ids={["a", "b"]} />);
-    await flush();
-
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  test("stays quiet when the thread does not reserve", () => {
-    render(<Transcript mode="bottom" ids={["a"]} asTurns={false} />);
-
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  test("stays quiet while only the empty-state placeholder shows", () => {
-    render(
+describe("Thread.Content", () => {
+  test("applies no layout of its own", () => {
+    const { container } = render(
       <Thread.Root autoScroll="follow">
         <Thread.Viewport>
           <Thread.Content>
-            <Thread.Placeholder>Start a conversation</Thread.Placeholder>
+            <div>a</div>
           </Thread.Content>
         </Thread.Viewport>
       </Thread.Root>,
     );
+    const content = container.querySelector("[data-thread-content]") as HTMLElement;
 
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  test("stays quiet while the transcript is empty", () => {
-    render(<Transcript mode="follow" ids={[]} asTurns={false} />);
-
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  // The reserve goes on the last child, so a turn earlier in the list doesn't help.
-  test("warns once when the last child is not a turn", async () => {
-    const { rerender } = render(<Transcript mode="follow" ids={["a"]} trailing />);
-    rerender(<Transcript mode="follow" ids={["a", "b"]} trailing />);
-    await flush();
-
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0]?.[0])).toContain("Message.Turn");
+    expect(content.getAttribute("style")).toBeNull();
+    expect((content.lastElementChild as HTMLElement).getAttribute("style")).toBeNull();
   });
 });

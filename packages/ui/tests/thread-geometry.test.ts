@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  DEFAULT_BOTTOM_OFFSET,
-  DOCK_SELECTOR,
-  measureDockInset,
-  measureDockSize,
-  measureLandingGap,
-  queryDock,
+  measureComposer,
   readViewportBox,
   sameViewportBox,
   scrollContainerTo,
@@ -91,101 +86,26 @@ describe("wasPrepended", () => {
   });
 });
 
-describe("queryDock", () => {
-  test("returns the Thread.Composer slot", () => {
-    const dock = { id: "dock" };
-    let queried: string | undefined;
-    const root = {
-      querySelector: (selector: string) => {
-        queried = selector;
-        return dock;
-      },
-    } as unknown as HTMLElement;
-    expect(queryDock(root)).toBe(dock as unknown as HTMLElement);
-    expect(queried).toBe(DOCK_SELECTOR);
+describe("measureComposer", () => {
+  const root = { getBoundingClientRect: () => ({ bottom: 600 }) } as unknown as HTMLElement;
+  const composer = (rect: { top: number; width?: number; height?: number }) =>
+    ({ getBoundingClientRect: () => ({ width: 0, height: 0, ...rect }) }) as unknown as HTMLElement;
+
+  test("insets from the composer's top to the root bottom", () => {
+    // 600 - 540
+    expect(measureComposer(root, composer({ top: 540 })).inset).toBe(60);
   });
 
-  test("null when the slot isn't mounted", () => {
-    const root = { querySelector: () => null } as unknown as HTMLElement;
-    expect(queryDock(root)).toBeNull();
-  });
-});
-
-describe("measureLandingGap", () => {
-  const rootWith = (parts: { scroller?: unknown; content?: unknown }) =>
-    ({
-      querySelector: (selector: string) =>
-        selector === "[data-thread-scroller]" ? (parts.scroller ?? null) : (parts.content ?? null),
-    }) as unknown as HTMLElement;
-  const scroller = (top: number, scrollTop = 0, clientTop = 0) => ({
-    getBoundingClientRect: () => ({ top }),
-    clientTop,
-    scrollTop,
-  });
-  const content = (top: number) => ({ getBoundingClientRect: () => ({ top }) });
-
-  test("is the space between the scroller's top and the content's top", () => {
-    expect(measureLandingGap(rootWith({ scroller: scroller(100), content: content(124) }))).toBe(
-      24,
-    );
-  });
-
-  test("does not change while the scroller is scrolled", () => {
-    expect(
-      measureLandingGap(rootWith({ scroller: scroller(100, 80), content: content(124 - 80) })),
-    ).toBe(24);
-  });
-
-  test("starts below the scroller's border", () => {
-    expect(
-      measureLandingGap(rootWith({ scroller: scroller(100, 0, 2), content: content(126) })),
-    ).toBe(24);
-  });
-
-  test("is 0 until the scroller and the content are mounted", () => {
-    expect(measureLandingGap(rootWith({ content: content(24) }))).toBe(0);
-    expect(measureLandingGap(rootWith({ scroller: scroller(100) }))).toBe(0);
-  });
-});
-
-describe("measureDockInset", () => {
-  const rootWith = (dock: unknown) =>
-    ({
-      querySelector: () => dock,
-      getBoundingClientRect: () => ({ bottom: 600 }),
-    }) as unknown as HTMLElement;
-
-  test("measures from the dock's top to the root bottom + gap", () => {
-    // 600 - 540 + COMPOSER_GAP(32) = 92
-    expect(measureDockInset(rootWith({ getBoundingClientRect: () => ({ top: 540 }) }))).toBe(92);
-  });
-
-  test("reserves the space beneath a dock that floats above the bottom edge", () => {
+  test("reserves the space beneath a composer that floats above the bottom edge", () => {
     // The slot's own height would under-reserve; measuring to the root bottom doesn't.
-    expect(measureDockInset(rootWith({ getBoundingClientRect: () => ({ top: 400 }) }))).toBe(232);
+    expect(measureComposer(root, composer({ top: 400, height: 60 })).inset).toBe(200);
   });
 
-  test("null when the dock isn't mounted yet", () => {
-    expect(measureDockInset(rootWith(null))).toBeNull();
-  });
-});
-
-describe("measureDockSize", () => {
-  const rootWith = (dock: unknown) => ({ querySelector: () => dock }) as unknown as HTMLElement;
-
-  test("is the dock's own box, rounded to whole px", () => {
-    const dock = { getBoundingClientRect: () => ({ width: 640.4, height: 91.6 }) };
-    expect(measureDockSize(rootWith(dock))).toEqual({ width: 640, height: 92 });
-  });
-
-  test("null when the dock isn't mounted yet", () => {
-    expect(measureDockSize(rootWith(null))).toBeNull();
-  });
-});
-
-describe("constants", () => {
-  test("expose the documented defaults", () => {
-    expect(DEFAULT_BOTTOM_OFFSET).toBe(128);
-    expect(DOCK_SELECTOR).toBe("[data-thread-composer]");
+  test("reports the composer's own box, rounded to whole px", () => {
+    const { width, height } = measureComposer(
+      root,
+      composer({ top: 508, width: 640.4, height: 91.6 }),
+    );
+    expect({ width, height }).toEqual({ width: 640, height: 92 });
   });
 });
