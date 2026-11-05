@@ -28,7 +28,7 @@ export type ThreadRootProps = ComponentProps<typeof ThreadPrimitive.Root>;
 const ThreadRoot = ({ className, ...props }: ThreadRootProps) => (
   <ThreadPrimitive.Root
     className={cn(
-      "relative flex h-full w-full overflow-hidden [--chat-top-inset:4rem] [--thread-dock-inset:8rem]",
+      "relative flex h-full w-full overflow-hidden [--thread-inset-top:4rem] [--thread-composer-gap:2rem]",
       className,
     )}
     {...props}
@@ -44,8 +44,8 @@ export type ThreadOverlayProps = ComponentProps<typeof ProgressiveBlur> & {
 };
 
 const OVERLAY_EDGE = {
-  top: ["top-0 h-(--chat-top-inset)", "bg-linear-to-b"],
-  bottom: ["bottom-0 h-(--thread-dock-inset)", "bg-linear-to-t"],
+  top: ["top-0 h-(--thread-inset-top)", "bg-linear-to-b"],
+  bottom: ["bottom-0 h-(--thread-inset-bottom)", "bg-linear-to-t"],
 } as const;
 
 const ThreadOverlay = memo(({ className, direction, ...props }: ThreadOverlayProps) => {
@@ -64,7 +64,7 @@ const ThreadOverlay = memo(({ className, direction, ...props }: ThreadOverlayPro
       <ProgressiveBlur
         direction={direction}
         className={cn(
-          "h-full w-full bg-linear-to-b from-secondary-bg to-transparent pointer-events-none",
+          "h-full w-full from-secondary-bg to-transparent pointer-events-none",
           gradient,
         )}
         {...props}
@@ -93,8 +93,8 @@ const ThreadViewport = ({ children, className, ...props }: ThreadViewportProps) 
       )}
       {...props}
     >
-      <div className="relative flex min-h-full w-full flex-col items-center pt-(--chat-top-inset) pb-(--thread-dock-inset)">
-        <ThreadPrimitive.Content className="mx-auto px-4 flex min-h-full w-full max-w-(--thread-width) flex-col gap-4">
+      <div className="relative flex min-h-full w-full flex-col items-center">
+        <ThreadPrimitive.Content className="mx-auto px-4 flex min-h-full w-full max-w-(--thread-width) flex-col gap-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
           {children}
         </ThreadPrimitive.Content>
       </div>
@@ -110,7 +110,10 @@ export type ThreadComposerProps = ComponentProps<"div">;
 
 const ThreadComposer = ({ className, children, ...props }: ThreadComposerProps) => (
   <ThreadPrimitive.Composer
-    className={cn("mx-auto w-full z-2 max-w-(--thread-width)", className)}
+    className={cn(
+      "absolute inset-x-0 bottom-0 mx-auto w-full z-2 max-w-(--thread-width)",
+      className,
+    )}
     {...props}
   >
     <div className="relative flex w-full flex-col items-center px-4 pb-4 @lg/thread-viewport:px-0">

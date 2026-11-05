@@ -48,7 +48,7 @@ const REPLY =
  * turn land at the top.
  *
  * Each question and its reply share a Message.Turn, so the reserve lands on the
- * whole turn (the primitive puts it on the last child). The docked composer is
+ * whole turn (the primitive puts it on the last child). The floating composer is
  * measured, so the reserve fills exactly the visible area.
  *
  * Remounting on a mode change is this demo's doing, not a requirement: the key
@@ -129,16 +129,16 @@ export const AutoScroll = () => {
         <Thread.Root
           key={mode}
           autoScroll={mode}
-          className="relative flex h-full w-full overflow-hidden"
+          className="relative flex h-full w-full overflow-hidden [--thread-inset-top:1rem] [--thread-composer-gap:2rem]"
         >
-          {/* A fade over the pt-4 below, which is the gap a landed turn leaves at the top. */}
+          {/* A fade over the top inset, the space a landed turn leaves at the top. */}
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 z-1 h-4 bg-linear-to-b from-white to-transparent dark:from-zinc-900"
+            className="pointer-events-none absolute inset-x-0 top-0 z-1 h-(--thread-inset-top) bg-linear-to-b from-white to-transparent dark:from-zinc-900"
           />
           <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
-            <div className="relative flex min-h-full w-full flex-col pt-4 pb-(--thread-dock-inset)">
-              <Thread.Content className="flex min-h-full w-full flex-col gap-5 px-4">
+            <div className="relative flex min-h-full w-full flex-col">
+              <Thread.Content className="flex min-h-full w-full flex-col gap-5 px-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
                 {exchanges.map((exchange, index) => (
                   <Message.Turn key={exchange.id} className="flex flex-col gap-5">
                     {/* biome-ignore lint/a11y/useValidAriaRole: `role` is the message's author, not an ARIA role */}
@@ -164,7 +164,7 @@ export const AutoScroll = () => {
               </Thread.Content>
             </div>
           </Thread.Viewport>
-          <Thread.Composer className="z-2 w-full">
+          <Thread.Composer className="absolute inset-x-0 bottom-0 z-2 w-full">
             <div className="flex w-full flex-col px-4 pb-4">
               <Composer.Root onSubmit={handleSubmit} className="flex w-full flex-col">
                 <Composer.Container className="cursor-text rounded-xl bg-white p-1 shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_1px_2px_-1px_rgb(0_0_0/0.08),0_6px_16px_-6px_rgb(0_0_0/0.1)] dark:bg-zinc-800 dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06),inset_0_0_0_1px_rgb(255_255_255/0.07),0_0_0_1px_rgb(0_0_0/0.2),0_1px_2px_rgb(0_0_0/0.12),0_6px_16px_-6px_rgb(0_0_0/0.22)]">

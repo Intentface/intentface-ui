@@ -25,8 +25,8 @@ const INITIAL: DemoMessage[] = [
 
 const REPLY = "Good question — the short answer is it depends on what you're optimizing for.";
 
-// Thread measures its docked composer and publishes the reserve as
-// --thread-dock-inset, so the scroll area never hides behind it.
+// Thread measures its floating composer and publishes the room it takes as
+// --thread-inset-bottom; Content pads by it, so the scroll area never hides behind it.
 // autoScroll="bottom" pins the transcript to the composer: the latest turn sits
 // right above it instead of landing at the top over an empty reserve. Messages
 // and composer share one centred column, narrower than the window.
@@ -44,10 +44,13 @@ export const Basic = () => {
 
   return (
     <div className="h-[440px] w-full max-w-xl overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.075),0_1px_2px_rgb(0_0_0/0.06),0_4px_8px_-2px_rgb(0_0_0/0.05)] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.05),inset_0_0_0_1px_rgb(255_255_255/0.06),0_0_0_1px_rgb(0_0_0/0.16),0_1px_2px_rgb(0_0_0/0.1)] dark:bg-zinc-900">
-      <Thread.Root autoScroll="bottom" className="relative flex h-full w-full overflow-hidden">
+      <Thread.Root
+        autoScroll="bottom"
+        className="relative flex h-full w-full overflow-hidden [--thread-inset-top:1rem] [--thread-composer-gap:2rem]"
+      >
         <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
-          <div className="relative flex min-h-full w-full flex-col items-center pt-4 pb-(--thread-dock-inset)">
-            <Thread.Content className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-end gap-5 px-4">
+          <div className="relative flex min-h-full w-full flex-col items-center">
+            <Thread.Content className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-end gap-5 px-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
               {messages.map((message, index) => (
                 <Message.Root
                   key={message.id}
@@ -63,7 +66,7 @@ export const Basic = () => {
             </Thread.Content>
           </div>
         </Thread.Viewport>
-        <Thread.Composer className="z-2 w-full">
+        <Thread.Composer className="absolute inset-x-0 bottom-0 z-2 w-full">
           <div className="relative mx-auto flex w-full max-w-lg flex-col items-center px-4 pb-4">
             <ScrollButton />
             <Composer.Root onSubmit={handleSubmit} className="flex w-full flex-col">

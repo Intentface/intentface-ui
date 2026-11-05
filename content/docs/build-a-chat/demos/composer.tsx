@@ -45,9 +45,10 @@ const toTurns = (messages: ChatMessage[]) =>
     return turns;
   }, []);
 
-// Stage 3 — a docked composer appending to local state. Thread measures the
-// dock and publishes the reserve as --thread-dock-inset. Scroll up and
-// the button above the composer brings you back to the latest turn.
+// Stage 3 — a floating composer appending to local state. Thread measures the
+// composer and publishes the room it takes as --thread-inset-bottom, which Content
+// pads by. Scroll up and the button above the composer brings you back to the
+// latest turn.
 export const ComposerStage = () => {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL);
 
@@ -61,15 +62,15 @@ export const ComposerStage = () => {
 
   return (
     <div className="h-[400px] w-full max-w-xl overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.075),0_1px_2px_rgb(0_0_0/0.06),0_4px_8px_-2px_rgb(0_0_0/0.05)] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.05),inset_0_0_0_1px_rgb(255_255_255/0.06),0_0_0_1px_rgb(0_0_0/0.16),0_1px_2px_rgb(0_0_0/0.1)] dark:bg-zinc-900">
-      <Thread.Root className="relative flex h-full w-full overflow-hidden">
+      <Thread.Root className="relative flex h-full w-full overflow-hidden [--thread-inset-top:1rem] [--thread-composer-gap:2rem]">
         {/* A fade over the pt-4 below, which is the gap a landed turn leaves at the top. */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 z-1 h-4 bg-linear-to-b from-white to-transparent dark:from-zinc-900"
         />
         <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
-          <div className="relative flex min-h-full w-full flex-col items-center pt-4 pb-(--thread-dock-inset)">
-            <Thread.Content className="mx-auto flex min-h-full w-full flex-col gap-4 px-4">
+          <div className="relative flex min-h-full w-full flex-col items-center">
+            <Thread.Content className="mx-auto flex min-h-full w-full flex-col gap-4 px-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
               {toTurns(messages).map((turn) => (
                 <Message.Turn key={turn[0].id} className="flex flex-col gap-4">
                   {turn.map((message) => (
@@ -89,7 +90,7 @@ export const ComposerStage = () => {
             </Thread.Content>
           </div>
         </Thread.Viewport>
-        <Thread.Composer className="z-2 w-full">
+        <Thread.Composer className="absolute inset-x-0 bottom-0 z-2 w-full">
           <div className="relative flex w-full flex-col items-center px-4 pb-4">
             <ScrollButton />
             <Composer.Root onSubmit={handleSubmit} className="flex w-full flex-col">
