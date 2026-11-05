@@ -5,7 +5,6 @@
 export {
   ThreadComposer as Composer,
   ThreadContent as Content,
-  ThreadOverlay as Overlay,
   ThreadPlaceholder as Placeholder,
   ThreadRoot as Root,
   ThreadViewport as Viewport,

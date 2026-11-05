@@ -1076,7 +1076,7 @@ const ChatPlaceholder = () => {
 
 // memo: ChatRoot re-renders on every stream chunk and re-creates this element;
 // with no props the memo always bails, so the Thread chrome (header, overlays,
-// composer dock) renders only when the session context actually changes.
+// composer) renders only when the session context actually changes.
 const ChatDefaultLayout = memo(() => {
   const { isEmpty } = useChatSession();
   const scrollMode = useSettingsStore((s) => s.scrollMode);

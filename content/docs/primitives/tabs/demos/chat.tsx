@@ -55,8 +55,8 @@ export const SEEDED: Record<string, Chat> = {
   },
 };
 
-// Thread measures its docked composer and publishes the reserve as
-// --thread-overlay-bottom-height, so the last message never hides behind it.
+// Thread measures its floating composer and publishes the room it takes as
+// --thread-inset-bottom; Content pads by it, so the last message never hides behind it.
 export const ChatThread = ({
   chat,
   onSend,
@@ -84,11 +84,11 @@ export const ChatThread = ({
     <Thread.Root
       autoScroll="bottom"
       onKeyDown={handleKeyDown}
-      className="relative flex h-full w-full overflow-hidden [--thread-overlay-top-height:0.75rem]"
+      className="relative flex h-full w-full overflow-hidden [--thread-inset-top:0.75rem] [--thread-composer-gap:2rem]"
     >
       <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
-        <div className="relative flex min-h-full w-full flex-col pt-(--thread-overlay-top-height) pb-(--thread-overlay-bottom-height)">
-          <Thread.Content className="flex w-full flex-col justify-end gap-4 px-2.5">
+        <div className="relative flex min-h-full w-full flex-col">
+          <Thread.Content className="flex w-full flex-col justify-end gap-4 px-2.5 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
             {chat.turns.map((turn, index) => (
               <Message.Root
                 key={turn.id}
