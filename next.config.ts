@@ -29,11 +29,10 @@ const nextConfig: NextConfig = {
   // agents expect, and guessable from a page URL. It maps onto the same handler
   // that "View as Markdown" uses.
   rewrites: async () => [{ source: "/:slug*.md", destination: "/docs-markdown/:slug*" }],
-  // These routes readFile at request time; the bundler can't trace runtime
+  // This route readFiles at request time; the bundler can't trace runtime
   // paths, so the files must be included in the serverless output explicitly.
   outputFileTracingIncludes: {
     "/api/chat": ["./content/docs/**/*", "./packages/ui/src/**/*"],
-    "/docs-markdown/[...slug]": ["./content/docs/**/*"],
   },
 };
 
