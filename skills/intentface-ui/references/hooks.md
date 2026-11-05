@@ -11,9 +11,9 @@ A prop in the first column means the app sets the state and the part reflects it
 | `autoScroll` | `Thread.Root` | always | `"follow"` keeps the stream in view while the user is at the bottom, and `"jump"` lands each new turn at the top without following. `"bottom"` and `"off"` set no landing reserve. |
 | `data-at-bottom` | `Thread.Root` | while the live end is in view | Hide the scroll-to-bottom button and the bottom fade. Show them while it is absent. |
 | `data-at-top` | `Thread.Root` | while the start is in view | Hide a top fade or a load-older control. |
-| `data-thread-overlay` | `Thread.Overlay` | always, `"top"` or `"bottom"` | Point each fade the right way. The top overlay's rendered height is the thread's top inset. |
+| `data-thread-overlay` | `Thread.Overlay` | always, `"top"` or `"bottom"` | Point each fade the right way. The top overlay's rendered height is the thread's top inset, the gap a landed turn keeps below the top edge. With no top overlay it is 0. |
 | `data-thread-content` | `Thread.Content` | always | The message column, for global CSS. |
-| `--thread-overlay-bottom-height` | `Thread.Root` | while `Thread.Composer` is mounted | The column's bottom padding and the bottom overlay's height. It already includes a gap above the composer. |
+| `--thread-overlay-bottom-height` | `Thread.Root` | while `Thread.Composer` is mounted | `Thread.Viewport`'s bottom padding and the bottom overlay's height. It already includes a gap above the composer. |
 | `--thread-turn-min-height` | `Thread.Content` | in `"follow"` and `"jump"` modes | The last turn's minimum height, so a new turn lands at the top. Read it with a `0px` fallback. |
 
 ## Message
@@ -34,7 +34,10 @@ A prop in the first column means the app sets the state and the part reflects it
 | `data-dragging` | `Composer.Root` | while files are dragged over the drop scope | The drop affordance. |
 | `--composer-height`, `--composer-width` | `Composer.Root` | once measured, in whole px | Sizing or placing elements inside the composer's tree against it. Portaled content can't read them, so read `useComposer((composer) => composer.size)` there. |
 | `--composer-container-height`, `--composer-container-width` | `Composer.Root` | once measured, while a `Composer.Container` is mounted | The same, for the container. |
-| `data-composer-editor` | the editable element inside `Composer.Textarea` | always | The text, the caret and the focus style. It is the element that takes focus. |
+| `data-composer-textarea` | `Composer.Textarea` | always | The padding, the height, the scrolling and the type. The editor and the placeholder inherit them, so their text lines up. |
+| `data-composer-editor` | the editable element inside `Composer.Textarea` | always | The text color, the caret and the focus style. It is the element that takes focus. Font metrics belong on the textarea, or the placeholder won't match. |
+| `data-composer-placeholder` | an overlay over the editor, inside `Composer.Textarea` | while the editor is empty | Nothing. The package positions it at `inset: 0` over the editor, so it already starts where the caret does. |
+| `data-composer-placeholder-text` | `Composer.Placeholder` | while the editor is empty | The placeholder's color. Never position or pad it. |
 | `data-filled` | `Composer.Textarea` | while the editor has content | A filled style, such as showing a clear button. |
 | `data-disabled` | `Composer.Textarea` | while disabled | The disabled style. |
 | `data-mention-chip` | committed chips inside the editor | always | Mentions the user inserted from a command list. |

@@ -5,22 +5,27 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
 ## Chat skeleton
 
 ```tsx
-<Thread.Root autoScroll="follow" className="relative h-full">
-  <Thread.Viewport className="h-full">
-    <div className="pb-(--thread-overlay-bottom-height)">
-      <Thread.Content className="[&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
-        {groupTurns(messages).map((turn) => (
-          <Message.Turn key={turn.key}>
-            {turn.messages.map((message) => (
-              <Row key={message.id} message={message} />
-            ))}
-          </Message.Turn>
-        ))}
-      </Thread.Content>
-    </div>
+<Thread.Root
+  autoScroll="follow"
+  className="relative h-full [--chat-column:48rem] [--chat-top-inset:1rem]"
+>
+  <Thread.Overlay
+    direction="top"
+    className="inset-x-0 top-0 mx-auto h-(--chat-top-inset) w-full max-w-(--chat-column)"
+  />
+  <Thread.Viewport className="h-full pt-(--chat-top-inset) pb-(--thread-overlay-bottom-height) [scrollbar-gutter:stable]">
+    <Thread.Content className="mx-auto w-full max-w-(--chat-column) [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+      {groupTurns(messages).map((turn) => (
+        <Message.Turn key={turn.key}>
+          {turn.messages.map((message) => (
+            <Row key={message.id} message={message} />
+          ))}
+        </Message.Turn>
+      ))}
+    </Thread.Content>
   </Thread.Viewport>
-  <Thread.Composer className="absolute inset-x-0 bottom-0">
-    <Composer.Root onSubmit={handleSubmit}>
+  <Thread.Composer className="pointer-events-none absolute inset-x-0 bottom-0 mx-auto w-full max-w-(--chat-column)">
+    <Composer.Root onSubmit={handleSubmit} className="pointer-events-auto">
       <Composer.Container>
         <Composer.Textarea>
           <Composer.Placeholder placeholder="Ask anything" />
@@ -37,12 +42,46 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
 </Thread.Root>
 ```
 
-- The turns are the direct children of `Thread.Content`, one `Message.Turn` per question and its replies.
-- The column wrapper pads its bottom by the composer's measured height, so no message hides behind it.
+- `Thread.Content` sits directly inside `Thread.Viewport`, and the turns are its direct children, one `Message.Turn` per question and its replies.
+- `Thread.Viewport` pads its bottom by the composer's measured height, so no message hides behind the composer.
 - The last turn's minimum height is the thread's reserve, so a new turn lands at the top of the viewport. The `0px` fallback covers the frames before the thread measures.
+- One app variable, `--chat-top-inset`, is the gap. The top overlay's height reads it, which is where a landed turn stops, and `Thread.Viewport`'s top padding reads it, which places the first turn. Without the overlay the gap is 0, and every new turn touches the top edge.
+- The padding sits on `Thread.Viewport`, never inside `Thread.Content`, and needs no element between the two.
+- The gap depends on the layout around the chat. Here a header sits in flow above the thread, so the inset is only breathing room. A header that floats over the thread adds its own height to it, as the next section shows.
 - The composer sits over the viewport's bottom edge, which is what the thread measures.
+- The overlay and the composer dock keep to the column's width, `--chat-column`, so they never cover the viewport's scrollbar. `scrollbar-gutter: stable` keeps the column from shifting when the scrollbar appears. The dock is click-through, and only the composer catches the pointer, so the scrollbar stays draggable behind it.
+- The textarea carries the padding and the type, and the placeholder takes only a color. The package lays the placeholder over the editor, so any position or padding on it shifts it away from the caret.
 - `"submitted"` counts as generating, so the button turns to stop the moment the message is sent, before the first token.
 - `Row` is the app's memoized message row, shown in the next section.
+
+## Landing gap
+
+A landed turn stops at the bottom of the top overlay. The gap is everything that covers the thread's top, plus breathing room. Here the header floats over the thread, as in the docs site's own playground, so the inset includes its height.
+
+```tsx
+<Thread.Root
+  autoScroll="follow"
+  className="relative h-full [--chat-column:48rem] [--header-height:3.25rem] [--chat-top-inset:calc(var(--header-height)+--spacing(3))]"
+>
+  <header className="absolute top-0 left-0 z-20 flex h-(--header-height) items-center">…</header>
+  <Thread.Overlay
+    direction="top"
+    className="inset-x-0 top-0 mx-auto h-(--chat-top-inset) w-full max-w-(--chat-column)"
+  />
+  <Thread.Viewport className="h-full pt-(--chat-top-inset) pb-(--thread-overlay-bottom-height) [scrollbar-gutter:stable]">
+    <Thread.Content className="mx-auto w-full max-w-(--chat-column) [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+      {turns}
+    </Thread.Content>
+  </Thread.Viewport>
+</Thread.Root>
+```
+
+- **One source for the gap.** `Thread.Root` defines `--chat-top-inset` from the header's height plus breathing room. The overlay and `Thread.Viewport`'s top padding both read it, so the gap can't drift from the header.
+- **Two values, one gap.** The overlay's height is where a landed turn stops. `Thread.Viewport`'s top padding is the same height, so the first turn starts there too, before anything has scrolled.
+- **Measure, never guess.** Add up everything that floats over the thread's top, such as a header, a toolbar or a banner. A header in flow above `Thread.Root` covers nothing, so the gap is only the breathing room.
+- **A panel or a dock.** A chat in a side panel, a popover or a tab, with no header over it, keeps a gap equal to the panel's own inner spacing.
+- **Off the scrollbar.** The header spans only its own contents from the left edge, as in the playground, and the overlay keeps to the column's width, so neither one covers the viewport's scrollbar. A header that must span the full width belongs in flow above `Thread.Root`, where it covers nothing.
+- **The breathing room is the app's.** `--spacing(3)` stands for the app's spacing token. A fade on the overlay is optional, and it is the app's look.
 
 ## A message row from AI SDK parts
 

@@ -54,6 +54,30 @@ This skill names what is easy to get wrong. The docs pages hold everything else.
 | Upgrade by the changelog | Read the release notes between the installed version and the latest at https://ui.intentface.com/changelog.md. Apply the migration in every `[Breaking]` line, oldest release first. Before 1.0, a minor release can break. |
 | The old name | `@intentface/chat` is the package's old name. Version 0.7.0 renamed it and changed nothing else, so swap the dependency and replace `@intentface/chat/` with `@intentface/ui/` in imports. |
 
+## Before building
+
+Most developers don't know everything the package can do. Offer the options the request left open before building, so the developer picks them instead of discovering them later.
+
+| Rule | Summary |
+|------|---------|
+| Discover first | Read the repo before offering anything: the design system, the styling setup, the existing route and client, and the installed version. Never ask what the code answers. |
+| Offer the options once | List the options below that the request left open, each with its default, in one message, and build with the developer's picks. |
+| Never block a run that can't answer | In a headless run, such as `claude -p` or `codex exec`, build what the request names with the defaults. End the report with the options you didn't use, so the developer still learns they exist. |
+
+| Option | Choices | Default |
+|------|------|------|
+| Auto-scroll | `<Thread.Root autoScroll>`: `"follow"` follows the stream and lands each new turn at the top, `"jump"` lands it without following, `"bottom"` keeps the newest message at the bottom, `"off"` does neither | `"follow"` |
+| Send key | `<Composer.Textarea submitOn>`: `"enter"` or `"shift-enter"` | `"enter"` |
+| Attachments | Off, or on with `<Composer.Attachments accept maxFiles maxFileSize globalDrop>` for the accepted types, the limits, and drops anywhere on the page | Off. When on, every type, no limits, drops on the composer only |
+| Mentions and commands | `<Composer.Root commands>`: `@` mentions that insert chips, `/` commands that run an action, or a prefix of the app's own, with items listed or loaded as the user types | None |
+| Command list placement | `Composer.Popover` floating at the typed token, or `Composer.Panel` above the input, anchored or in flow with `<Composer.Panel anchor={false}>` | — |
+| Questions from the model | `<Composer.Root questions>`, fed by a client-side tool and answered in the composer | Off |
+| Reasoning and tool calls | `Reasoning` for the model's thinking, `Steps` for its tool calls | Shown whenever the backend streams them |
+| Layout | A full page, a side panel beside `Shell`, or a dock in `Tabs` | A full page |
+| App shell | A `Shell` sidebar, a `Nav` tree with `<Nav.Root guide>`, and `Tabs` | None |
+| Persistence | Whether past chats survive a reload. The app stores them | None |
+| Generative UI | `@intentface/ui/generative`, experimental | Off |
+
 ## Props, attributes and CSS variables
 
 Every part reports its state the same way. Props carry what the app knows into the part. Data attributes carry state out to CSS. CSS variables carry measured sizes. Once you know which way a state travels, you know where to style it. `references/hooks.md` lists the ones that matter for each primitive.
@@ -85,6 +109,7 @@ Where the styles live is the app's decision. These rules keep them in one place 
 | String className on wrappers | A wrapper merges classes with the app's helper, such as `cn()`, and takes `className` as a string only. The helper drops a function, so a wrapper that accepts the part's function form loses those classes without an error. |
 | State from attributes | Never copy a state the package already exposes into React state or a class of your own. The attribute follows the keyboard, the pointer and the filter, and a copy follows only the events you wired. |
 | Variants on attributes | A variant that depends on a part's state reads the attribute, not a prop the wrapper threads through. |
+| Know what a part sets | `references/styling.md` lists what each part renders, what the package already sets inline, and what it leaves to the app. Never repeat a position, overflow or padding the package sets, and always set what it leaves, such as heights and `z-index`. |
 
 ## Thread
 
@@ -92,12 +117,13 @@ The thread owns scrolling. It follows the stream while the user is at the bottom
 
 | Rule | Summary |
 |------|---------|
-| Build order | `Thread.Root` holds `Thread.Viewport`, the viewport holds a column wrapper around `Thread.Content`, and the turns are the direct children of `Thread.Content`. `Thread.Composer` comes after the viewport and holds `Composer.Root`. |
+| Build order | `Thread.Root` holds `Thread.Viewport`, which holds `Thread.Content` directly, and the turns are the direct children of `Thread.Content`. `Thread.Viewport` carries the top and bottom padding. `Thread.Composer` comes after the viewport and holds `Composer.Root`. |
 | Turns in Content | Never render turns straight into `Thread.Viewport`, even where a docs snippet does. The thread watches only the direct children of `Thread.Content`, so auto-follow and landing stop working. |
 | One turn per exchange | Group messages with `groupTurns`, and wrap each question and its replies in one `Message.Turn`. Otherwise the newest reply lands at the top and pushes its question out of view. |
 | Definite height | `Thread.Root` needs a height from the app's layout. |
-| Read the insets | Pad the column's bottom with `--thread-overlay-bottom-height`, so messages never hide behind the composer. Give the last turn a minimum height of `--thread-turn-min-height`, so a new turn lands at the top. |
-| Top inset | The top inset is the rendered height of `<Thread.Overlay direction="top">`. Size that overlay yourself, and pad the column's top by the same amount. |
+| Read the insets | Pad `Thread.Viewport`'s bottom with `--thread-overlay-bottom-height`, so messages never hide behind the composer. Give the last turn a minimum height of `--thread-turn-min-height`, so a new turn lands at the top. |
+| Gap above a landed turn | A landed turn must never touch the thread's top edge or slide under anything above it. Size the gap from the app's layout: a header or toolbar that floats over the thread needs its full height plus breathing room, and a header in flow above `Thread.Root` needs breathing room only. Define the gap once as an app variable on `Thread.Root`. The height of `<Thread.Overlay direction="top">` reads it, and that is where a landed turn stops, so always render one: without it the gap is 0. `Thread.Viewport`'s top padding reads it too, which places the first turn. Never put that padding inside `Thread.Content`. The landing gap recipe in `references/patterns.md` shows a floating header. |
+| Keep off the scrollbar | Anything the app positions over `Thread.Viewport`, such as the fades, a floating header or the composer dock, must not cover or catch its scrollbar. Limit each one to the content column's width, centered like the column, and give the viewport `scrollbar-gutter: stable` so the scrollbar never shifts the column. Make the dock click-through with `pointer-events: none`, and turn the pointer back on for the composer itself. |
 | Scroll button | There is no scroll-to-bottom part. Build one from `useThread()`, which returns `isAtBottom` and `scrollToBottom`. |
 | Portals | The command popover, the composer panel and the attachment preview render into `document.body`. Give the app root `isolation: isolate`, and put theme classes and tokens on `html` or `body`. |
 
@@ -144,7 +170,9 @@ The composer owns the editor, the commands, the chips and the submit button. Wha
 |------|---------|
 | Required parts | `Composer.Root`, `Composer.Container` and `Composer.Textarea`. The textarea holds `Composer.Placeholder`, and `Composer.Actions` holds `Composer.Submit`. |
 | Submit data | `onSubmit` receives a `ComposerSubmitData`. Check `kind`: `"message"` carries the trimmed `text` and the `files`, and `"answers"` carries the ask-user answers. The editor is already cleared when `onSubmit` runs. |
-| Editor styling | The editable element belongs to the editor engine. Style it from `Composer.Textarea` with descendant selectors on `data-composer-editor`, including its focus style. Never override its `white-space`. |
+| Editor styling | The editable element belongs to the editor engine. Style its text color and focus from `Composer.Textarea` with descendant selectors on `data-composer-editor`. Never override its `white-space`. |
+| Box and type on the textarea | Put the padding, minimum and maximum height, scrolling, and the font family, size and line height on `Composer.Textarea`. The editor and the placeholder both inherit them, so their text lines up. Padding or type on the editor alone moves the caret but not the placeholder. |
+| The placeholder is positioned | While the editor is empty, `Composer.Textarea` lays an overlay, `data-composer-placeholder`, over the editor at `inset: 0`, and `Composer.Placeholder` renders inside it. Never position or pad `Composer.Placeholder`, and give it a color only. An `absolute` with `top` and `left` counts the textarea's padding twice. |
 | Send-to-stop | `<Composer.Submit isGenerating onStop>` turns the button into stop while generating. Count both of `useChat`'s `"submitted"` and `"streaming"` as generating. `<Composer.Root isSubmitting>` only blocks sending. |
 | Never disable Submit for streaming | `disabled` on `Composer.Submit` replaces its automatic disabled state, so the button turns on with an empty field. |
 | Panel opens on children | `Composer.Panel` and `Composer.Popover` open whenever they have children. Gate inside, as in `{(composer) => composer.askUser.active && <Question />}`. A child that returns `null` still opens an empty panel. |
@@ -209,6 +237,18 @@ These parts are disclosures and inline tokens with no copy of their own.
 | Only the open tab renders | Switching tabs unmounts the rest. Keep live state, such as a streaming chat, in a store outside the tab. |
 | Tabs popup placement | Never set `position`, `left` or `top` on `Tabs.Positioner`. Animate `Tabs.Popup`, set its `z-index`, and size it from `--anchor-width` and `--anchor-available-height`. |
 
+## Motion
+
+A polished chat animates its state changes. The parts provide the hooks and time their own mount and unmount, and the app provides every duration and easing. `references/motion.md` lists what can move in each primitive and the hook that drives it.
+
+| Rule | Summary |
+|------|---------|
+| Animate the state changes | Animate panels and popovers opening and closing, disclosures expanding, the send and stop swap, the drop affordance, and new messages arriving. A chat with only hover fades feels unfinished. |
+| Timing from the design system | Take durations and easing from the app's motion tokens, such as a Motion section in its `DESIGN.md`. Without tokens, match the app's existing motion, then the docs demos. Never invent values. |
+| Frames drive enter and exit | Transition from `data-starting-style` and to `data-ending-style`, on the part's own element. The part waits for that transition before it unmounts. `Composer.Popover` has no frames and never unmounts, so animate it between `data-open` and `data-closed`. |
+| Reduced motion | Gate movement and scale behind `prefers-reduced-motion`, and keep opacity fades or nothing. |
+| New messages are the app's | The package doesn't animate message rows. Give new rows an entrance of the app's own, and skip the rows present at mount, so a reload doesn't replay the transcript. |
+
 ## Keyboard
 
 The parts already handle their keys. The app adds shortcuts around them, never on top of them. Each page's Keyboard table has the full list.
@@ -258,9 +298,14 @@ A chat that builds can still hide messages behind the composer or lose the keybo
 | Type-check and build | Run the app's type-check and build. A part or prop that fails the type-check doesn't exist, so fix the name instead of casting. |
 | Send and stream | Send a message and watch the reply stream. The thread follows while you're at the bottom and stops following when you scroll up. Stop works from the button, and from Escape inside the composer. |
 | Grow and resize | Type several lines into the composer and resize the window. No message hides behind the composer, and a new turn lands at the top. |
+| Landing gap | Send a second message once the first reply is long. The new turn lands with its gap below the header or the thread's top edge, never touching it or hidden under it. |
 | Keyboard pass | Tab through the chat. Open a command list with its prefix, move with the arrow keys and pick with Enter. Every focused control shows its focus. |
 | Styles read the package | Every state the styles show comes from a part's attribute, and every measured size from the package's CSS variables. |
 
 Hooks: `references/hooks.md` lists the props, attributes and CSS variables of each primitive, with where each one sits, when it is present and what it is for.
 
-Examples: `references/patterns.md` has the chat skeleton, a message row rendering AI SDK parts, the chat lifecycle, commands and chips, ask-user from a tool call, the attachment submit, the collapsible height animation, the shell gutter, and nav rows as router links. The examples carry only the classes the behavior needs. The look is the app's.
+Structure: `references/styling.md` lists what each part renders, what the package sets inline and what the app sets.
+
+Motion: `references/motion.md` lists what can animate in each primitive, the hook that drives it, and how the part times its unmount.
+
+Examples: `references/patterns.md` has the chat skeleton, the landing gap under a floating header, a message row rendering AI SDK parts, the chat lifecycle, commands and chips, ask-user from a tool call, the attachment submit, the collapsible height animation, the shell gutter, and nav rows as router links. The examples carry only the classes the behavior needs. The look is the app's.
