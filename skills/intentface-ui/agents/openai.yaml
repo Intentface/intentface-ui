@@ -1,0 +1,3 @@
+interface:
+  display_name: "@intentface/ui"
+  short_description: "Build chats and app shells with @intentface/ui"
