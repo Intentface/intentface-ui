@@ -7,10 +7,10 @@ What each part renders, what the package already sets on it inline, and what the
 | Element | The package sets | The app sets |
 |------|------|------|
 | `Thread.Root`, `data-thread-root` | `position: relative`, `overflow: hidden` | A definite height from its layout. |
-| `Thread.Viewport`, `data-thread-scroller` | `overflow-y: auto`, `overflow-x: hidden`, a tab stop and `role="region"` | Its height, usually the root's full height, a top padding from the app's top-inset variable, the same one the top overlay's height reads, a bottom padding from `--thread-overlay-bottom-height`, and `scrollbar-gutter: stable`. |
+| `Thread.Viewport`, `data-thread-scroller` | `overflow-y: auto`, `overflow-x: hidden`, a tab stop and `role="region"` | Its height, usually the root's full height, a top padding from the app's landing-gap variable, the same one the top overlay's height reads, a bottom padding from `--thread-overlay-bottom-height`, and `scrollbar-gutter: stable`. |
 | Edge sentinels, `data-thread-top` and `data-thread-bottom` | 1px elements rendered just before and after `Thread.Content`, as its siblings | Nothing. A flex gap on their parent spaces them like any other child. |
 | `Thread.Content`, `data-thread-content` | `role="log"`, nothing visual. It sits directly inside `Thread.Viewport` | The column's width and gap, and the last turn's minimum height from `--thread-turn-min-height`. The sentinels sit outside it, so `:last-child` is the last turn. Never its top padding, which belongs on `Thread.Viewport`. |
-| `Thread.Overlay`, `data-thread-overlay` | `position: absolute`, `pointer-events: none` | Its inset, its height and its fade. The top overlay is required: its height is the gap a landed turn keeps below the top edge, and without it that gap is 0. Size it from the layout, including the full height of any header that floats over the thread. Keep it to the content column's width, so it never covers the viewport's scrollbar. |
+| `Thread.Overlay`, `data-thread-overlay` | `position: absolute`, `pointer-events: none` | Its inset, its height and its fade. The top overlay is required. Its height is the landing gap, and without it the gap is 0. Size it from the layout, including the full height of any header that floats over the thread. Keep it to the content column's width, so it never covers the viewport's scrollbar. |
 | `Thread.Composer` | Nothing | Its position, usually absolute at the bottom over the viewport, kept to the content column's width. Make it click-through with `pointer-events: none` and turn the pointer back on for the composer, so the scrollbar behind it stays draggable. |
 
 ## Composer
@@ -27,7 +27,7 @@ What each part renders, what the package already sets on it inline, and what the
 | `Composer.Submit`, `data-composer-submit` | `type="button"`, and `disabled` while there is nothing to send | Everything visual, per `:disabled` and `data-generating`. |
 | `Composer.Attachments` | A hidden file input | Nothing. The strip is the app's own markup. |
 | `Composer.Panel`, `data-composer-panel` | By default a portal to `document.body`, `position: absolute` and hidden until placed. In flow with `anchor={false}` | Its width from `--anchor-width`, its `z-index` and its surface. |
-| `Composer.Popover`, `data-composer-popover` | A portal to `document.body`, `position: absolute`, hidden until placed, and mounted while closed | Its width, its `z-index`, its surface, and hiding it on `data-closed`. |
+| `Composer.Popover`, `data-composer-popover` | A portal to `document.body`, mounted while closed. `position: absolute` and placed from its first open. Before that it is an unpositioned element at the end of `body` | Its width, its `z-index`, its surface, and hiding it on `data-closed`. |
 
 ## Message
 
@@ -61,16 +61,8 @@ What each part renders, what the package already sets on it inline, and what the
 |------|------|------|
 | Every `Shell` part | Nothing positioned. The grip writes `--shell-sidebar-width` on the root | The sidebar out of flow, the gutter, the width with its `min-width` and `max-width`, an opaque background, and the hotspot's position. |
 | `Nav.List` | `--nav-depth`, and `--nav-list-height` during transitions | The indent and the collapse. |
-| `Nav.Item`, `Nav.Trigger` | A `div` with `role="button"` unless rendered as a link | A row height that matches the rail. Never `overflow: hidden`. |
-| `Tabs.Positioner` | `position: absolute`, its `left` and `top`, and hidden until placed | Its `z-index` only. |
+| `Nav.Item`, `Nav.Trigger` | A `div` with `role="button"`, which a row rendered as a link keeps | A row height that matches the rail. Never `overflow: hidden`. |
+| `Tabs.Positioner` | `position: absolute`, its `left` and `top`, and hidden until placed | Its `z-index` only. `Tabs.Popup` inside it carries the surface. |
 | `Tabs.Popup` | Nothing | The surface and its transitions. |
 | `Tabs.Trigger` | A `div` with `role="button"` | `position: relative` and `overflow: hidden` when a close button sits over the label. |
 | `Tabs.Close` | Out of the tab order | An `aria-label`. |
-
-## Portals
-
-`Composer.Panel`, `Composer.Popover` and `Tabs.Portal` render into `document.body`, and render nothing on the server or on the first client render. They sit outside the app's wrappers, so:
-
-- Give the app root `isolation: isolate`, so no `z-index` in the layout paints over them.
-- Put theme classes and tokens on `html` or `body`, so portaled content inherits them.
-- Read the composer's size from `useComposer((composer) => composer.size)` there, because the composer's size variables don't reach a portal.
