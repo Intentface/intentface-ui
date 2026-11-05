@@ -304,12 +304,12 @@ export const Thread = Object.assign(ThreadRoot, {
 | --------------------- | ----------------------------------------------------------------------------- |
 | `Thread`              | Layout shell + scroll/auto-scroll owner (`role="log"`). Props add `autoScroll?: "off" \| "bottom" \| "jump" \| "follow"` (default `"follow"`) |
 | `Thread.Viewport`     | Scroll container. Place mapped messages here                                  |
-| `Thread.Composer`     | Bottom-anchored composer dock (`absolute inset-x-0 bottom-0`)                 |
+| `Thread.Composer`     | Bottom-anchored composer (`absolute inset-x-0 bottom-0`)                 |
 | `Thread.ScrollButton` | "Jump to latest" pill; hides when the bottom sentinel is in view              |
 | `Thread.Overlay`      | One component with a required `direction: "top" \| "bottom"` — progressive-blur fade masks at the viewport edges |
 | `Thread.Placeholder`  | Empty-state slot (renders its children)                                       |
 
-There is **no `Thread.Spacer`**. The end-of-list reserve that lets the newest turn land at the top is applied by the package: while an `autoScroll` mode lands at the top, `Thread.Content` sets `min-height: var(--thread-turn-min-height, 0px)` inline on its last child, a measured visible-area value (`root.clientHeight − the space above the content − the dock inset`). Auto-scroll behavior is driven by `use-stick-to-bottom`; `ScrollButton` reads `isAtBottom` from an `IntersectionObserver` on a bottom sentinel.
+There is **no `Thread.Spacer`**. The newest turn lands at the top because the app's `Thread.Viewport` gives the content column's last child `min-height: var(--thread-turn-min-height)`. The package publishes that variable on its root: in `"follow"` and `"jump"` it is the viewport's height minus `--thread-inset-top` and `--thread-inset-bottom`, and in `"bottom"` and `"off"` it is `0px`. The app's root sets `[--thread-inset-top:4rem] [--thread-composer-gap:2rem]`, the content column pads by `pt-(--thread-inset-top) pb-(--thread-inset-bottom)`, and the app's `Thread.Composer` positions the package's slot with `absolute inset-x-0 bottom-0`. The package applies none of this layout. Auto-scroll is the package's own, and `ScrollButton` reads `isAtBottom` from an `IntersectionObserver` on a bottom sentinel.
 
 ---
 

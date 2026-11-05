@@ -59,19 +59,21 @@ popover.
 
 ## Assemble a component
 
-Three primitives make a chat: `Thread` owns the scroll area and reserves space
-for its docked composer, `Message` renders each turn, and `Composer` takes input.
+Three primitives make a chat: `Thread` owns the scroll area and measures its
+floating composer, `Message` renders each turn, and `Composer` takes input.
 Every part renders semantic DOM with `data-*` state attributes and no classes of
 its own — you pass `className` to each one, so the look is yours from the first
 render.
 
 <Demo component={<Hero />} file="quick-start/demos/hero.tsx" />
 
-`Composer.Submit` disables itself while the field is empty. `Thread.Composer`
-positions itself along the bottom edge, and `Thread` publishes the room it takes
-as `--thread-dock-inset` so the scroll area never hides behind it. See [Composer](/primitives/composer),
-[Thread](/primitives/thread), and [Message](/primitives/message) for
-the full part lists.
+`Composer.Submit` disables itself while the field is empty. `Thread` applies no
+layout of its own. It publishes CSS variables, such as the room the composer takes
+as `--thread-inset-bottom`, and the demo's classes position the composer and pad
+the content with them so the scroll area never hides behind it. See
+[Composer](/primitives/composer), [Thread](/primitives/thread), and
+[Message](/primitives/message) for the full part lists, and the Thread page's
+[Anatomy](/primitives/thread#anatomy) for the layout classes a thread needs.
 
 ## Pre-styled components
 

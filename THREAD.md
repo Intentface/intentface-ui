@@ -1,12 +1,12 @@
 # Thread
 
-The scrollable message viewport — a layout container that frames a chat: a scroll area, top/bottom blur overlays, a bottom-anchored composer dock, an empty-state placeholder, a "scroll to latest" button, and built-in auto-scroll. It knows nothing about chats or messages; you compose those inside it. Single component (`components/ai/thread.tsx`), exposed as a compound API via `Thread.X`.
+The scrollable message viewport — a layout container that frames a chat: a scroll area, top/bottom blur overlays, a bottom-anchored composer, an empty-state placeholder, a "scroll to latest" button, and built-in auto-scroll. It knows nothing about chats or messages; you compose those inside it. Single component (`components/ai/thread.tsx`), exposed as a compound API via `Thread.X`.
 
 Import from `@/components/ai/thread`.
 
 ## Minimal usage
 
-The bare skeleton — a scroll area with a composer dock:
+The bare skeleton — a scroll area with a composer:
 
 ```tsx
 import { Thread } from "@/components/ai/thread";
@@ -39,7 +39,7 @@ A realistic chat — overlays, auto-scroll, a scroll-to-latest button, and messa
 </Thread>;
 ```
 
-`Thread` is a plain layout container. `Thread.Composer` positions itself along the bottom edge, the thread measures the dock and publishes the room it takes, and `Thread.Overlay` (this app's own component, a plain `div`) fades content at the edges. Scroll state is exposed via context. Auto-scroll is **built in**: the `autoScroll` prop defaults to `"follow"`; pass `"off"` for a plain scroll area.
+`Thread` is a plain layout container. This app's `Thread.Composer` places the package's composer slot along the bottom edge, the package measures the slot and publishes the room it takes, and `Thread.Overlay` (this app's own component, a plain `div`) fades content at the edges. Scroll state is exposed via context. Auto-scroll is **built in**: the `autoScroll` prop defaults to `"follow"`; pass `"off"` for a plain scroll area.
 
 ## Auto-scroll modes
 
@@ -55,8 +55,8 @@ The `autoScroll` prop on `<Thread>` controls how the view reacts when a turn is 
 Notes:
 
 - **Follow is conditional.** When following, the view sticks to the bottom only while the user is already at the bottom; scrolling up releases it (and `Thread.ScrollButton` reappears). Scrolling back to the bottom re-engages.
-- **"Lands at top"** means the newest turn is lifted so its top sits at the top of the viewport — the reply streams into the space below. It works by reserving a viewport-tall `min-height` on the last child of the content column, so each child must be a `Message.Turn` (see [Layout](#layout)).
-- **`autoScroll="off"`** = a plain scroll area: no landing, no follow, no reserve. The scroll-to-latest button still works.
+- **"Lands at top"** means the newest turn is lifted so its top sits at the top of the viewport — the reply streams into the space below. It works because the content column gives its last child `min-height: var(--thread-turn-min-height)`, which fills the viewport between the top and bottom padding, so each child must be a `Message.Turn` (see [Layout](#layout)).
+- **`autoScroll="off"`** = a plain scroll area: no landing and no follow. The scroll-to-latest button still works.
 
 ```tsx
 <Thread autoScroll={scrollMode}>   {/* scrollMode: ThreadAutoScrollMode */}
@@ -86,20 +86,20 @@ Throws if used outside `<Thread>`.
 ## Compound parts
 
 ### `Thread` (root)
-The layout container and scroll-state provider. Standard `div` props. Measures the composer dock, defaults `--chat-top-inset` and `--thread-dock-inset`, and sets up the scroll context.
+The layout container and scroll-state provider. Standard `div` props. Sets `--thread-inset-top: 4rem` and `--thread-composer-gap: 2rem` for the package, which publishes `--thread-turn-min-height` on it, and sets up the scroll context.
 
 | Prop | Type | Default | Notes |
 |---|---|---|---|
 | `autoScroll` | `ThreadAutoScrollMode` | `"follow"` | `"off" \| "bottom" \| "jump" \| "follow"`. See [Auto-scroll modes](#auto-scroll-modes). |
 
 ### `Thread.Viewport`
-The scroll area — holds the content column (your turns) and the edge sentinels. Standard `div` props + `children`. It pads the content column by `--chat-top-inset` above (the gap a landed turn leaves at the top) and `--thread-dock-inset` below. The package puts the newest-turn reserve on the content column's last child, so pass `Message.Turn`s as `children`.
+The scroll area — holds the content column (your turns) and the edge sentinels. Standard `div` props + `children`. The content column pads itself with `pt-(--thread-inset-top) pb-(--thread-inset-bottom)` and gives its last child `min-height: var(--thread-turn-min-height)`, so pass `Message.Turn`s as `children`.
 
 ### `Thread.Composer`
-Bottom-anchored dock for your composer + the scroll button. Standard `div` props + `children`. It positions itself (`position: absolute` along the bottom edge; pass `style` to override), and Thread measures it to reserve bottom space, so content never hides behind it. Parts that shouldn't push content up — the scroll button, an overlay panel — must sit out of the slot's flow (absolute or portaled).
+Bottom-anchored slot for your composer + the scroll button. Standard `div` props + `children`. This wrapper positions the package's slot with `absolute inset-x-0 bottom-0`, and the package measures the slot into `--thread-inset-bottom`, which the content column pads by, so content never hides behind it. Parts that shouldn't push content up — the scroll button, an overlay panel — must sit out of the slot's flow (absolute or portaled).
 
 ### `Thread.Overlay`
-A progressive-blur band fading content into the top or bottom edge. A plain `div` of this app (the package has no overlay part): `aria-hidden` and `pointer-events-none`, so clicks pass through to the content. Its top height is `--chat-top-inset` and its bottom height is `--thread-dock-inset`.
+A progressive-blur band fading content into the top or bottom edge. A plain `div` of this app (the package has no overlay part): `aria-hidden` and `pointer-events-none`, so clicks pass through to the content. Its top height is `--thread-inset-top` and its bottom height is `--thread-inset-bottom`.
 
 | Prop | Type | Notes |
 |---|---|---|
@@ -114,53 +114,21 @@ A floating "Latest" button that appears (animated) only when the user is not at 
 
 ## Layout
 
-Thread writes a few CSS variables on its root via a `ResizeObserver` (not React state — composer growth never re-renders the thread):
+The package applies no layout. It publishes CSS variables on the root, and this app's parts read them as classes. The composer slot's `ResizeObserver` writes the composer variables, not React state, so composer growth never re-renders the thread.
 
 | Variable | Meaning |
 |---|---|
-| `--thread-dock-inset` | Space the `Thread.Composer` slot (`[data-thread-composer]`) takes from the root's bottom edge, plus a 32px gap. The content wrapper's bottom padding and the bottom overlay's height. Default `8rem` until the slot is measured. |
-| `--thread-dock-height` | Height of the `Thread.Composer` slot, in whole pixels. |
-| `--thread-dock-width` | Width of the `Thread.Composer` slot, in whole pixels. |
-| `--thread-turn-area` | The visible thread area (root − space above the content − dock inset). The top-landing `autoScroll` modes map the last child's reserve to this. |
+| `--thread-width` | This app's own, set in `app/globals.css` to `672px`. The max width of the content column, the overlays and the composer slot. The package never reads it. |
+| `--thread-inset-top` | Set by this app's root to `4rem`. The space above a landed turn. The content column's top padding and the top overlay's height. |
+| `--thread-composer-gap` | Set by this app's root to `2rem`. The room between the last line and the composer, folded into `--thread-inset-bottom`. |
+| `--thread-inset-bottom` | Written by the package. The distance from the root's bottom edge up to the top of the `Thread.Composer` slot (`[data-thread-composer]`), plus `--thread-composer-gap`. The content column's bottom padding and the bottom overlay's height. |
+| `--thread-composer-height` | Written by the package. Height of the `Thread.Composer` slot, in whole pixels. |
+| `--thread-composer-width` | Written by the package. Width of the `Thread.Composer` slot, in whole pixels. |
+| `--thread-turn-min-height` | Written by the package. In `"follow"` and `"jump"`, the viewport's height minus `--thread-inset-top` and `--thread-inset-bottom`. In `"bottom"` and `"off"`, `0px`. The content column's last child takes it as `min-height`. |
 
-`--chat-top-inset` (default `4rem`) is this app's own variable, not the package's: the top padding above the content column and the top overlay's height. A landed turn sits exactly this far from the top.
+To change the spacing, change `--thread-inset-top` and `--thread-composer-gap` on the root. The padding, the overlays and the last turn's `min-height` all read the same variables, so a landed turn stays exactly `--thread-inset-top` from the top.
 
-You normally don't touch these — they keep the composer-dock spacing and the top-landing reserve self-adjusting.
-
-### Without Tailwind
-
-The package emits only behavior-critical inline styles (`position`, `overflow`, the sentinels, the composer's position, the last child's `min-height`). The minimum a plain-CSS consumer writes is the root's size, the viewport's scroll, the padding wrapper and the turns:
-
-```css
-.chat { height: 100%; }
-.chat-viewport { height: 100%; }
-.chat-pad {
-  box-sizing: border-box;
-  min-height: 100%;
-  padding-top: 24px; /* the landing gap */
-  padding-bottom: var(--thread-dock-inset, 128px);
-}
-.chat-turns { display: flex; flex-direction: column; gap: 16px; }
-```
-
-```tsx
-import { Message } from "@intentface/ui/message";
-import { groupTurns } from "@intentface/ui/message-utils";
-import { Thread } from "@intentface/ui/thread";
-
-<Thread.Root className="chat">
-  <Thread.Viewport className="chat-viewport">
-    <div className="chat-pad">
-      <Thread.Content className="chat-turns">
-        {groupTurns(messages).map((turn) => (
-          <Message.Turn key={turn.key}>{/* question, then reply */}</Message.Turn>
-        ))}
-      </Thread.Content>
-    </div>
-  </Thread.Viewport>
-  <Thread.Composer>{/* your composer */}</Thread.Composer>
-</Thread.Root>
-```
+The package's full layout contract, including a plain-CSS version, is on the docs site's [Thread](https://ui.intentface.com/primitives/thread) page (`content/docs/primitives/thread.mdx`).
 
 ## Reference: types
 
