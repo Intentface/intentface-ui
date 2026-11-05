@@ -14,6 +14,7 @@
 //
 // Checks per skill file: every entry point, part, attribute, CSS variable and
 // docs page it names exists, and every prop it passes to a part in JSX is real.
+// CSS variables the skill defines itself are the app's and pass.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -256,11 +257,15 @@ const auditSkillFile = (file) => {
     const attribute = `data-${arbitrary ?? plain}`;
     if (!anyPartAttributes.has(attribute)) findings.push(`never emitted: ${attribute}`);
   }
-  const variables = text
-    .replace(SHELL_BLOCK, "")
-    .matchAll(/(?<![\w-])(--[a-z][a-z0-9-]*[a-z0-9])/g);
-  for (const [, variable] of variables) {
-    if (!cssVariables.has(variable)) findings.push(`never published: ${variable}`);
+  // A variable the skill defines itself, as in [--header-height:3.5rem], is the
+  // app's. A name followed by "(" is a function, such as Tailwind's --spacing().
+  const code = text.replace(SHELL_BLOCK, "");
+  const defined = new Set(
+    [...code.matchAll(/(?:\[|^\s*|;\s*)(--[a-z][a-z0-9-]*[a-z0-9])\s*:/gm)].map(([, v]) => v),
+  );
+  for (const [, variable] of code.matchAll(/(?<![\w-])(--[a-z][a-z0-9-]*[a-z0-9])(?![\w(-])/g)) {
+    if (!cssVariables.has(variable) && !defined.has(variable))
+      findings.push(`never published: ${variable}`);
   }
   for (const [url, slug] of text.matchAll(new RegExp(`${SITE}/([\\w/-]+)\\.md`, "g"))) {
     if (!existsSync(path.join(DOCS, `${slug}.mdx`))) findings.push(`no such docs page: ${url}`);
