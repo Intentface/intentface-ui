@@ -7,14 +7,10 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
 ```tsx
 <Thread.Root
   autoScroll="follow"
-  className="h-full [--chat-column:48rem] [--chat-landing-gap:1rem]"
+  className="h-full [--chat-column:48rem] [--thread-inset-top:1rem] [--thread-composer-gap:1rem]"
 >
-  <Thread.Overlay
-    direction="top"
-    className="inset-x-0 top-0 mx-auto h-(--chat-landing-gap) w-full max-w-(--chat-column)"
-  />
-  <Thread.Viewport className="h-full pt-(--chat-landing-gap) pb-(--thread-overlay-bottom-height) [scrollbar-gutter:stable]">
-    <Thread.Content className="mx-auto w-full max-w-(--chat-column) [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+  <Thread.Viewport className="h-full scroll-pt-(--thread-inset-top) scroll-pb-(--thread-inset-bottom) [scrollbar-gutter:stable]">
+    <Thread.Content className="mx-auto w-full max-w-(--chat-column) pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
       {groupTurns(messages).map((turn) => (
         <Message.Turn key={turn.key}>
           {turn.messages.map((message) => (
@@ -42,47 +38,51 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
 </Thread.Root>
 ```
 
-- `Thread.Content` sits directly inside `Thread.Viewport`, and the turns are its direct children, one `Message.Turn` per question and its replies.
-- `Thread.Viewport` pads its bottom by the composer's measured height, so no message hides behind the composer.
-- The last turn's minimum height leaves room for a new turn to land at the top of the viewport. The `0px` fallback covers the frames before the thread measures.
-- One app variable, `--chat-landing-gap`, is the landing gap. The top overlay's height reads it, which is where a landed turn stops, and `Thread.Viewport`'s top padding reads it, which places the first turn. Without the overlay the gap is 0, and every new turn touches the top edge.
-- The padding sits on `Thread.Viewport`, never inside `Thread.Content`, and needs no element between the two.
-- The gap depends on the layout around the chat. Here a header sits in flow above the thread, so the gap is only a spacing token. A header that floats over the thread adds its own height to it, as the next section shows.
-- The composer sits over the viewport's bottom edge, which is what the thread measures.
-- The overlay and the composer dock keep to the column's width, `--chat-column`, so they never cover the viewport's scrollbar. `scrollbar-gutter: stable` keeps the column from shifting when the scrollbar appears. The dock is click-through, and only the composer catches the pointer, so the scrollbar stays draggable behind it.
+- `Thread.Content` sits inside `Thread.Viewport`, and the turns are its direct children, one `Message.Turn` per question and its replies.
+- `Thread.Root` sets the two insets. `--thread-inset-top` is the space a landed turn keeps below the top edge, only a spacing token here because nothing floats over the thread. `--thread-composer-gap` is the room between the last line and the composer.
+- `Thread.Composer` measures the room it takes at the root's bottom edge, adds the gap and writes the sum as `--thread-inset-bottom`. The thread positions nothing, so the slot sits absolute over the viewport's bottom edge and the transcript scrolls under it.
+- `Thread.Content` carries both paddings, and its last turn's minimum height leaves room for a new turn to land at the top. The paddings and the minimum height read the same variables, so the turn lands exactly `--thread-inset-top` below the edge. Any other padding, margin or gap between the viewport and the turns shifts it.
+- `Thread.Viewport` is a size container, so it needs a definite height, here the root's full height. Its `scroll-padding` keeps both insets clear wherever a row scrolls into view, such as through `scrollToMessage`, keyboard paging or a focus move.
+- The composer slot keeps to the column's width, `--chat-column`, so it never covers the viewport's scrollbar. `scrollbar-gutter: stable` keeps the column from shifting when the scrollbar appears. The slot is click-through, and only the composer catches the pointer, so clicks and drags around the composer reach the transcript and its scrollbar.
 - The textarea carries the padding and the type, and the placeholder takes only a color. The package lays the placeholder over the editor, so any position or padding on it shifts it away from the caret.
 - `"submitted"` counts as generating, so the button turns to stop the moment the message is sent, before the first token.
 - `48rem` and `1rem` stand for the app's own tokens.
 - `Row` is the app's memoized message row, shown in the section after next.
 
-## Landing gap
+## A floating header and fades
 
-A landed turn stops at the bottom of the top overlay. The landing gap is everything that covers the thread's top, plus a spacing token. Here the header floats over the thread, as in the docs site's own playground, so the gap includes its height.
+The top inset is everything that covers the thread's top, plus a spacing token. Here the header floats over the thread, as in the docs site's own playground, so the inset includes its height.
 
 ```tsx
 <Thread.Root
   autoScroll="follow"
-  className="h-full [--chat-column:48rem] [--header-height:3.25rem] [--chat-landing-gap:calc(var(--header-height)+--spacing(3))]"
+  className="h-full [--chat-column:48rem] [--header-height:3.25rem] [--thread-inset-top:calc(var(--header-height)+--spacing(3))] [--thread-composer-gap:--spacing(4)]"
 >
   <header className="absolute top-0 left-0 z-20 flex h-(--header-height) items-center">…</header>
-  <Thread.Overlay
-    direction="top"
-    className="inset-x-0 top-0 mx-auto h-(--chat-landing-gap) w-full max-w-(--chat-column)"
+  <div
+    aria-hidden
+    className="pointer-events-none absolute inset-x-0 top-0 z-1 mx-auto h-(--thread-inset-top) w-full max-w-(--chat-column) bg-linear-to-b from-background"
   />
-  <Thread.Viewport className="h-full pt-(--chat-landing-gap) pb-(--thread-overlay-bottom-height) [scrollbar-gutter:stable]">
-    <Thread.Content className="mx-auto w-full max-w-(--chat-column) [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+  <Thread.Viewport className="h-full scroll-pt-(--thread-inset-top) scroll-pb-(--thread-inset-bottom) [scrollbar-gutter:stable]">
+    <Thread.Content className="mx-auto flex w-full max-w-(--chat-column) flex-col gap-6 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
       {turns}
     </Thread.Content>
   </Thread.Viewport>
+  <div
+    aria-hidden
+    className="pointer-events-none absolute inset-x-0 bottom-0 z-1 mx-auto h-(--thread-inset-bottom) w-full max-w-(--chat-column) bg-linear-to-t from-background"
+  />
+  <Thread.Composer className="pointer-events-none absolute inset-x-0 bottom-0 z-2 mx-auto w-full max-w-(--chat-column)">
+    {composer}
+  </Thread.Composer>
 </Thread.Root>
 ```
 
-- **One source for the gap.** `Thread.Root` defines `--chat-landing-gap` from the header's height plus a spacing token. The overlay and `Thread.Viewport`'s top padding both read it, so the gap can't drift from the header.
-- **Two values, one gap.** The overlay's height is where a landed turn stops. `Thread.Viewport`'s top padding is the same height, so the first turn starts there too, before anything has scrolled.
-- **Measure, never guess.** Add up everything that floats over the thread's top, such as a header, a toolbar or a banner. A header in flow above `Thread.Root` covers nothing, so the gap is only the spacing token.
-- **A panel or a dock.** A chat in a side panel, a popover or a tab, with no header over it, keeps a gap equal to the panel's own inner spacing.
-- **Off the scrollbar.** The header spans only its own contents from the left edge, as in the playground, and the overlay keeps to the column's width, so neither one covers the viewport's scrollbar. A header that must span the full width belongs in flow above `Thread.Root`, where it covers nothing.
-- **The numbers are the app's.** `3.25rem` and `--spacing(3)` stand for the app's own tokens. A fade on the overlay is optional, and it is the app's look.
+- **The header sets the inset.** `--thread-inset-top` is the header's height plus a spacing token, so a landed turn stops below the header. A header in flow above `Thread.Root` covers nothing, so the inset is only the spacing token. A chat in a side panel or a tab, with nothing over it, keeps an inset equal to the panel's inner spacing.
+- **Fades are plain `div`s.** Each one is `aria-hidden` and `pointer-events-none`, and its inset sets its height. The composer sits above the bottom fade, so it stays sharp. Both are optional, and their gradients are the app's look.
+- **The inset and the turn spacing are separate.** When `--thread-inset-top` is larger than the gap between turns, the end of the previous turn shows above a landed turn. The top fade covers it.
+- **Off the scrollbar.** The header spans only its own contents from the left edge, as in the playground, and the fades and the composer slot keep to the column's width, so none of them covers the viewport's scrollbar. A header that must span the full width belongs in flow above `Thread.Root`, where it covers nothing.
+- **The numbers are the app's.** `3.25rem`, `--spacing(3)`, `--spacing(4)`, `gap-6` and `background` stand for the app's own tokens.
 
 ## A message row from AI SDK parts
 
@@ -186,7 +186,7 @@ export const Transcript = () => {
 
   return (
     <>
-      <Thread.Content className="[&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+      <Thread.Content className="pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
         {turns.map((turn, index) => {
           const isLastTurn = index === turns.length - 1;
           return (

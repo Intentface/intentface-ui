@@ -15,8 +15,11 @@ The composer collects files and hands them to `onSubmit`. Storing and sending th
 ## Attachment submit
 
 ```tsx
+"use client";
+
+import { useChat } from "@ai-sdk/react";
 import type { AttachmentItem } from "@intentface/ui/attachments";
-import type { ComposerSubmitData } from "@intentface/ui/composer";
+import { Composer, type ComposerSubmitData } from "@intentface/ui/composer";
 import type { FileUIPart } from "ai";
 
 const toFilePart = async (item: AttachmentItem): Promise<FileUIPart> => {
@@ -31,12 +34,18 @@ const toFilePart = async (item: AttachmentItem): Promise<FileUIPart> => {
   return { type: "file", url, mediaType: item.mediaType ?? blob.type, filename: item.filename };
 };
 
-const handleSubmit = async (data: ComposerSubmitData) => {
-  if (data.kind !== "message") return;
-  sendMessage({ text: data.text, files: await Promise.all(data.files.map(toFilePart)) });
+export const Chat = () => {
+  const { sendMessage } = useChat();
+
+  const handleSubmit = async (data: ComposerSubmitData) => {
+    if (data.kind !== "message") return;
+    sendMessage({ text: data.text, files: await Promise.all(data.files.map(toFilePart)) });
+  };
+
+  return <Composer.Root onSubmit={handleSubmit}>{/* … */}</Composer.Root>;
 };
 ```
 
 - `onSubmit` is async, so the composer keeps the blob URLs alive until the conversion finishes. A failed read rejects, so `onSubmit` never stays pending.
 - The data URLs travel with the message, because a server can't read a `blob:` URL. An app with file storage uploads the blob and sends its URL instead.
-- `sendMessage` comes from `useChat()`, and `FileUIPart` from `ai`. Another client takes the same converted files.
+- A client other than `useChat` sends the same converted files.

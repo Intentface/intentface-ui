@@ -62,7 +62,7 @@ In a non-interactive run, such as `claude -p` or `codex exec`, ask nothing. Buil
 | Command list placement | `Composer.Popover` floating at the typed token, or `Composer.Panel` above the input, anchored or in flow with `<Composer.Panel anchor={false}>` | `Composer.Popover` | This file |
 | Questions from the model | `<Composer.Root questions>`, fed by a client-side tool and answered in the composer | Off | `references/ask-user.md` |
 | Reasoning and tool calls | `Reasoning` for the model's thinking, `Steps` for its tool calls | Shown whenever the backend streams them | This file |
-| Layout | A full page, a side panel beside `Shell`, or a dock in `Tabs` | A full page | `references/shell.md` for `Shell` and `Tabs` |
+| Layout | A full page, a side panel beside `Shell`, or a chat inside `Tabs` | A full page | `references/shell.md` for `Shell` and `Tabs` |
 | App shell | A `Shell` sidebar, a `Nav` tree with `<Nav.Root guide>`, and `Tabs` | None | `references/shell.md` |
 | Persistence | Whether past chats survive a reload. The app stores them | None | The app's own |
 | Generative UI | `@intentface/ui/generative`, experimental | Off | `references/generative.md` |
@@ -76,7 +76,7 @@ In a non-interactive run, such as `claude -p` or `codex exec`, ask nothing. Buil
 
 ## Props, attributes and CSS variables
 
-Every part reports its state the same way. Props carry what the app knows into the part. Data attributes carry state out to CSS. CSS variables carry measured sizes. `references/state.md` lists them for each primitive, with the element each one sits on and when it is present.
+Every part reports its state the same way. Props carry what the app knows into the part. Data attributes carry state out to CSS. CSS variables carry measured sizes out, and the thread's insets and scroll timing in. `references/state.md` lists them for each primitive, with the element each one sits on and when it is present.
 
 | Rule | Summary |
 |------|---------|
@@ -88,9 +88,9 @@ Every part reports its state the same way. Props carry what the app knows into t
 | Where an attribute reaches | An attribute styles its own element, its descendants through a parent selector, and its ancestors through `:has()`. Many parts repeat their primitive's main state, such as `data-state` on every `Shell` part and `data-status` on `Steps.Icon` and `Steps.Label`, so a child can often style itself directly. |
 | Open, closed and the frames between | A disclosure carries `data-open` or `data-closed`. On its first frame open it also carries `data-starting-style`, and while closing `data-ending-style`. Transition from and to those two, and the part waits for the transition to end before it unmounts. Content that must stay in the DOM while closed needs `keepMounted`. |
 | Positioned surfaces | `Composer.Panel`, `Composer.Popover` and `Tabs.Positioner` carry `data-side` and `data-align` while positioned, the side they landed on after flipping. `Tabs.Popup` sits inside its positioner and reads them from there. Animate from that side. |
-| Variables flow down | A CSS variable is a measured size in px, written on one element. It reaches that element and its descendants, never its ancestors, its siblings or anything rendered in a portal. Each variable's row in `references/state.md` says which element holds it. |
-| Variables have a lifetime | The composer's sizes, such as `--composer-height`, are absent until first measured, so read them with a fallback. `--shell-sidebar-width` is absent until the first drag, so set its default on `Shell.Root`. `--panel-height` and `--nav-list-height` exist only while a transition runs. Read those two with no fallback, so an open panel takes its natural height. |
-| Only measured variables come from the package | Some demos define variables of their own, such as a height for the thread's top overlay. Those are the app's to define. The thread page's CSS variables table also lists the top overlay's height and the column width, which the package never sets. |
+| Variables flow down | A variable the package writes sits on one element. It reaches that element and its descendants, never its ancestors, its siblings or anything rendered in a portal. Each variable's row in `references/state.md` says which element holds it. |
+| Variables have a lifetime | The composer's sizes, such as `--composer-height`, are absent until first measured, so read them with a fallback. `--thread-inset-bottom`, `--thread-composer-height` and `--thread-composer-width` exist only while `Thread.Composer` is mounted. `--shell-sidebar-width` is absent until the first drag, so set its default on `Shell.Root`. `--panel-height` and `--nav-list-height` exist only while a transition runs. Read those two with no fallback, so an open panel takes its natural height. |
+| The app sets the inputs | `Thread.Root` reads `--thread-inset-top`, `--thread-composer-gap` and the `--thread-scroll` timing, which the app sets. The thread page marks them "Set by you". Any other variable a demo defines, such as a column width, is the app's own, and the package never reads it. |
 | No feedback loops | Never size an element's own contents from a variable measured on that element. Sizing `Composer.Root`'s contents from `--composer-height` grows the root, which raises the variable again. |
 | `className` and `style` functions | Both accept a function of the part's state, for a value computed in JavaScript. Prefer the attribute when a selector can express it, because it needs no render. |
 | `render` | Swap the element, or render the part as one of the app's components, as in `render={<Button />}`. The component must spread the props it receives onto its DOM element and accept `ref` as a prop. The part keeps its behavior and attributes. |
@@ -109,18 +109,21 @@ Where the styles live is the app's decision. These rules keep them in one place 
 
 ## Thread
 
-The thread owns scrolling. It follows the stream while the user is at the bottom, lands each new turn at the top and measures the composer. The app owns the layout and reads the measurements.
+The thread owns scrolling. It follows the stream while the user is at the bottom, lands each new turn at the top, measures the composer and publishes CSS variables. The app applies all the layout from them: the composer's position, the padding and the last turn's minimum height.
 
 | Rule | Summary |
 |------|---------|
-| Build order | `Thread.Root` holds `Thread.Viewport`, which holds `Thread.Content` directly, and the turns are the direct children of `Thread.Content`. `Thread.Viewport` carries the top and bottom padding. `Thread.Composer` comes after the viewport and holds `Composer.Root`. |
+| Build order | `Thread.Root` holds `Thread.Viewport`, which holds `Thread.Content`, and the turns are the direct children of `Thread.Content`. `Thread.Composer` comes after the viewport and holds `Composer.Root`. |
 | Content from the start | Render `Thread.Content` together with `Thread.Root`, even with no messages. A `Thread.Content` mounted later, as in `{messages.length > 0 && <Thread.Content>}`, never lands or follows. |
-| Turns in Content | Never render turns straight into `Thread.Viewport`, even where a docs snippet does. The thread watches only the direct children of `Thread.Content`, so auto-follow and landing stop working. |
-| One turn per exchange | Group messages with `groupTurns`, and wrap each question and its replies in one `Message.Turn`. Otherwise the newest reply lands at the top and pushes its question out of view. |
-| Definite height | `Thread.Root` needs a height from the app's layout. |
-| Read the insets | Pad `Thread.Viewport`'s bottom with `--thread-overlay-bottom-height`, so messages never hide behind the composer. Give the last turn a minimum height of `--thread-turn-min-height`, so a new turn lands at the top. |
-| Landing gap | The landing gap is the space a landed turn keeps below the thread's top edge. Define it once, as an app variable on `Thread.Root`. Set the height of `<Thread.Overlay direction="top">` and the top padding of `Thread.Viewport` from it. A landed turn stops at the overlay's bottom edge, so always render the top overlay. Without it the gap is 0. Make the gap the height of anything that floats over the thread, plus a spacing token. A header in flow above `Thread.Root` adds nothing. `references/patterns.md` has both cases. |
-| Keep off the scrollbar | Anything the app positions over `Thread.Viewport`, such as the fades, a floating header or the composer dock, must not cover or catch its scrollbar. Limit each one to the content column's width, centered like the column, and give the viewport `scrollbar-gutter: stable` so the scrollbar never shifts the column. Make the dock click-through with `pointer-events: none`, and turn the pointer back on for the composer itself. |
+| Turns in Content | Never render turns straight into `Thread.Viewport`. The thread watches only the direct children of `Thread.Content`, so auto-follow and landing stop working. |
+| One turn per exchange | Group messages with `groupTurns`, and wrap each question and its replies in one `Message.Turn`. Otherwise the newest reply lands at the top and pushes its question out of view. A flat transcript with one row per message needs `autoScroll="bottom"`. |
+| Definite height | `Thread.Root` needs a height from the app's layout. `Thread.Viewport` is a size container, so it needs a definite height too, such as `h-full`. A viewport sized only by `max-height` collapses. |
+| Set the insets | Set `--thread-inset-top` on `Thread.Root` for the space a landed turn keeps below the thread's top edge, and `--thread-composer-gap` for the room between the last line and the composer. Both default to 0. Make the top inset the height of anything that floats over the thread, plus a spacing token. A header in flow above `Thread.Root` adds nothing. `references/patterns.md` has both cases. |
+| Pad the content | Pad `Thread.Content`'s top with `--thread-inset-top` and its bottom with `--thread-inset-bottom`, and give its last child a minimum height of `--thread-turn-min-height`. A turn lands exactly at the top inset only while these three agree, so add no other padding, margin or gap between the viewport and the turns. The minimum height is `0px` in `"bottom"` and `"off"`, so the rule stays in every mode. |
+| Position the composer | `Thread.Composer` has no position of its own. Place it over the viewport's bottom edge, as in `absolute inset-x-0 bottom-0`, so the transcript scrolls under it. It writes the room it takes, plus the gap, as `--thread-inset-bottom` on the root. Without a `Thread.Composer`, nothing writes it, so set it yourself when the transcript needs room at the bottom. Make anything inside it that must not add to the inset absolute or portaled, such as a scroll button. |
+| Fades are the app's | There is no overlay part. A fade is the app's own `div` inside `Thread.Root`, absolute, `aria-hidden` and `pointer-events-none`. Make the top one `--thread-inset-top` tall and the bottom one `--thread-inset-bottom` tall. |
+| Keep off the scrollbar | Anything the app positions over `Thread.Viewport`, such as the fades, a floating header or `Thread.Composer`, must not cover or catch its scrollbar. Limit each one to the content column's width, centered like the column, and give the viewport `scrollbar-gutter: stable` so the scrollbar never shifts the column. Make `Thread.Composer` click-through with `pointer-events: none`, and turn the pointer back on for `Composer.Root`. |
+| Jump to a message | `scrollToMessage(id)` from `useThread()` scrolls only the thread's viewport, to the row carrying `data-message-id={id}`. Put the attribute on each row to reach, as in `<Message.Turn data-message-id={turn.key}>`. Give `Thread.Viewport` the insets as its `scroll-padding`, `scroll-pt-(--thread-inset-top) scroll-pb-(--thread-inset-bottom)` in Tailwind, so a row lands clear of the top fade and the composer. A `scroll-margin` on a row adds room around it. |
 | Scroll button | There is no scroll-to-bottom part. Build one from `useThread()`, which returns `isAtBottom` and `scrollToBottom`. |
 | Portals | `Composer.Popover`, an anchored `Composer.Panel` and `Tabs.Portal` render into `document.body`, and render nothing on the server or on the first client render. Give the app root `isolation: isolate`, and put theme classes and tokens on `html` or `body`. The composer's size variables don't reach a portal, so read `useComposer((composer) => composer.size)` there. |
 
@@ -200,6 +203,7 @@ The parts time their own mount and unmount, and the app provides every duration 
 | Timing from the design system | Take durations and easing from the app's motion tokens, such as a Motion section in its `DESIGN.md`. Without tokens, match the app's existing motion, then the docs demos. Never invent values. |
 | Reduced motion | Gate movement and scale behind `prefers-reduced-motion`, and keep opacity fades or nothing. |
 | New messages are the app's | The package doesn't animate message rows. Give new rows an entrance of the app's own, and skip the rows present at mount, so a reload doesn't replay the transcript. |
+| Time the thread's scroll | The thread runs every scroll itself, so never animate the scroll in your own code. Its smooth scrolls are the browser's own until the app sets `--thread-scroll` on `Thread.Root`, a duration and an easing from the motion tokens. Set it once. `references/motion.md` has the rules. |
 
 ## Keyboard
 
@@ -233,7 +237,7 @@ A chat that builds can still hide messages behind the composer or lose the keybo
 | Type-check and build | Run the app's type-check and build. A part or prop that fails the type-check doesn't exist, so fix the name instead of casting. |
 | Send and stream | Send a message and watch the reply stream. The thread follows while you're at the bottom and stops following when you scroll up. Stop works from the button, and from Escape inside the composer. |
 | Grow and resize | Type several lines into the composer and resize the window. No message hides behind the composer, and a new turn lands at the top. |
-| Landing gap | Send a second message once the first reply is long. The new turn lands with its gap below the header or the thread's top edge, never touching it or hidden under it. |
+| Landing | Send a second message once the first reply is long. The new turn's top stops `--thread-inset-top` below the thread's top edge, clear of any floating header. |
 | Keyboard pass | Tab through the chat. Open a command list with its prefix, move with the arrow keys and pick with Enter. Every focused control shows its focus. |
 | Styles read the package | Every state the styles show comes from a part's attribute, and every measured size from the package's CSS variables. |
 

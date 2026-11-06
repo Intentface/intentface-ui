@@ -2,19 +2,23 @@
 
 The props, attributes and CSS variables that carry state and size for each primitive, with the element each one sits on, when it is present, and what it is for. The docs pages' Attributes tables remain the full list. This file adds where and when.
 
-A prop in the first column means the app sets the state and the part reflects it. An attribute or variable alone means the part tracks it itself.
+A prop in the first column means the app sets the state and the part reflects it. An attribute or variable alone means the part tracks it itself, unless its row says the app sets it.
 
 ## Thread
 
 | Name | On | Present | Use it for |
 |------|----|---------|------------|
-| `autoScroll` | `Thread.Root` | always | `"follow"` keeps the stream in view while the user is at the bottom, and `"jump"` lands each new turn at the top without following. `"bottom"` and `"off"` set no minimum height on the last turn. |
+| `autoScroll` | `Thread.Root` | always | `"follow"` keeps the stream in view while the user is at the bottom, and `"jump"` lands each new turn at the top without following. `"bottom"` and `"off"` publish `--thread-turn-min-height` as `0px`. |
 | `data-at-bottom` | `Thread.Root` | while the live end is in view | Hide the scroll-to-bottom button and the bottom fade. Show them while it is absent. |
 | `data-at-top` | `Thread.Root` | while the start is in view | Hide a top fade or a load-older control. |
-| `data-thread-overlay` | `Thread.Overlay` | always, `"top"` or `"bottom"` | Point each fade the right way. The top overlay's rendered height is the landing gap, the space a landed turn keeps below the top edge. With no top overlay it is 0. |
+| `data-scrolling` | `Thread.Root` | while a timed scroll animates: `"land"`, `"bottom"`, `"top"` or `"message"`. Never for the follow, which a timed thread pins | Styling while the thread scrolls, such as hiding the scroll button. Never a timing, which the thread reads before the attribute appears. |
 | `data-thread-content` | `Thread.Content` | always | The message column, for global CSS. |
-| `--thread-overlay-bottom-height` | `Thread.Root` | from the first time `Thread.Composer` is measured. It keeps its last value after the composer unmounts | `Thread.Viewport`'s bottom padding and the bottom overlay's height. It already includes a gap above the composer. |
-| `--thread-turn-min-height` | `Thread.Content` | in `"follow"` and `"jump"` modes | The last turn's minimum height, so a new turn lands at the top. Read it with a `0px` fallback. |
+| `data-message-id` | each row the app wants to reach | when the app sets it | Finding a row. `scrollToMessage` and `useThreadVisibility` look rows up by it. |
+| `--thread-inset-top`, `--thread-composer-gap` | `Thread.Root` | when the app sets them, 0 otherwise | The space a landed turn keeps below the top edge, and the room between the last line and the composer. The thread folds the gap into `--thread-inset-bottom`. |
+| `--thread-inset-bottom` | `Thread.Root` | while `Thread.Composer` is mounted. Without one, the app sets it when the transcript needs room at the bottom | `Thread.Content`'s bottom padding, the bottom fade's height and the viewport's bottom `scroll-padding`. It already includes `--thread-composer-gap`. |
+| `--thread-composer-height`, `--thread-composer-width` | `Thread.Root` | while `Thread.Composer` is mounted, in whole px | The composer slot's own box. |
+| `--thread-turn-min-height` | `Thread.Root` | always, from the first render | The last turn's minimum height. In `"follow"` and `"jump"` it is the viewport's height minus both insets, so a new turn lands at the top. In `"bottom"` and `"off"` it is `0px`. It needs no fallback. |
+| `--thread-scroll`, `--thread-scroll-duration`, `--thread-scroll-easing`, `--thread-scroll-speed` | `Thread.Root` | when the app sets them | The timing of the thread's smooth scrolls, as `motion.md` says. |
 
 ## Message
 

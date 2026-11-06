@@ -6,7 +6,7 @@ What can animate in each primitive, the attribute or variable that drives it, an
 
 - **Animate the part's own element.** A part that unmounts after its exit waits for the transition on its own element, so put the transition there, not on a wrapper or a child. `Nav.List` is the exception: it waits for transitions anywhere in its `Nav.Group`.
 - **Heights through the variables.** Animate a height only between 0 and the variable the part publishes, never with `max-height` tricks or a measured height of your own.
-- **Never animate the scroll.** The thread scrolls itself while it follows the stream and when a turn lands.
+- **Time the thread's scroll, never script it.** The thread runs every scroll itself: the follow, the landing, `scrollToBottom`, `scrollToTop` and `scrollToMessage`. Shape its smooth scrolls with the `--thread-scroll` variables below, never with a scroll animation of your own.
 
 ## By primitive
 
@@ -28,3 +28,19 @@ What can animate in each primitive, the attribute or variable that drives it, an
 | A tab panel switching | `data-activation-direction` on `Tabs.Viewport` says which way to slide | A different component replaces the old one at once. The same component keeps its instance and receives the new id, unless the content is keyed by the tab |
 | A new message | The app's own entrance on its row. Skip the rows present at mount, so a reload doesn't replay the transcript | The row mounts with its message |
 | The pending indicator | The app's own, while `useChat` reports `"submitted"`, and while `"streaming"` until the reply has a segment to show | Mounts and unmounts with that state |
+| The thread's smooth scrolls | `--thread-scroll` on `Thread.Root`, as the next section says. `data-scrolling` names the scroll that runs | Nothing mounts. Any wheel, touch, scroll key or scrollbar press stops the scroll where it is |
+
+## The thread's scroll
+
+Smooth scrolls are the browser's own until the app sets a timing on `Thread.Root`:
+
+```tsx
+<Thread.Root className="[--thread-scroll:400ms_cubic-bezier(0.2,0.8,0.2,1)]">{/* … */}</Thread.Root>
+```
+
+- **One shorthand.** `--thread-scroll` reads like `transition`, a duration and any CSS easing in either order, `linear()` included. Motion's `spring()` prints that pair, so a spring goes in through `style`, as in `style={{ "--thread-scroll": String(spring(0.5, 0)) } as CSSProperties}`. React's `CSSProperties` lists no custom properties, hence the cast. Keep the bounce at 0, because the scroller clips an overshoot at the bottom into a hard stop.
+- **Longhands and speed.** `--thread-scroll-duration` and `--thread-scroll-easing` override the shorthand. `--thread-scroll-speed` paces a scroll by its distance, in pixels per second, and a duration set alongside it becomes the cap.
+- **Off, instant and reduced motion.** `--thread-scroll: none` keeps the native smooth scroll over any longhand, and `0ms` makes every scroll instant. Under `prefers-reduced-motion` every scroll is instant already, so the timing needs no gate.
+- **The follow is pinned.** A timed thread pins the follow instead of animating it. `autoScroll` decides which scrolls happen, and the timing shapes the ones that animate.
+- **One timing, set once.** The thread reads the timing when a scroll starts, before `data-scrolling` appears. A timing under `[data-scrolling=top]` or any other per-kind selector never applies, and every change restyles every message, because custom properties inherit.
+- **`data-scrolling` is for styling.** It names the running scroll, `land`, `bottom`, `top` or `message`, and never `follow`. Use it for styles such as hiding the scroll button mid-flight.
