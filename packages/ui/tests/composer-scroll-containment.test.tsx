@@ -4,12 +4,12 @@ import { AskUser } from "../src/ask-user";
 import { Composer } from "../src/composer";
 import { scrollCaretIntoView } from "../src/composer/editor-dom";
 import { useComposer } from "../src/composer/store";
-import type { AskUserQuestion } from "../src/composer/types";
+import type { AskUserQuestion, CommandItemData } from "../src/composer/types";
 import { scrollIntoViewWithin } from "../src/internal/scroll-into-view-within";
 
 // A composer embedded in a scrolling page scrolls only its own scroll areas:
-// programmatic writes and the ask-user flow's focus moves must leave the page
-// where it is (CHAT-42).
+// programmatic writes, the ask-user flow's focus moves and the command list's
+// highlight must leave the page where it is (CHAT-42, CHAT-48).
 
 // happy-dom has no layout, so each element gets a stubbed box.
 type Box = { top: number; height: number; scrollHeight?: number };
@@ -151,8 +151,10 @@ describe("scrollIntoViewWithin", () => {
 
   test("the boundary itself may scroll", () => {
     const { textArea, editor } = embeddedComposer({ textAreaOverflows: true });
-    scrollIntoViewWithin({ top: 380, bottom: 400, height: 20 } as DOMRect, editor, textArea);
-    expect(textArea.scrollTop).toBe(-30);
+    textArea.scrollTop = 100;
+    const rect = { top: 380, bottom: 400, height: 20 } as DOMRect;
+    scrollIntoViewWithin({ rect, from: editor }, textArea);
+    expect(textArea.scrollTop).toBe(70);
   });
 
   test("nested scroll areas inside the boundary each scroll their share", () => {
@@ -161,7 +163,8 @@ describe("scrollIntoViewWithin", () => {
     composer.style.overflowY = "auto";
     place(composer, { top: 400, height: 140, scrollHeight: 300 });
     place(textArea, { top: 520, height: 100, scrollHeight: 400 });
-    scrollIntoViewWithin({ top: 700, bottom: 720, height: 20 } as DOMRect, editor, composer);
+    const rect = { top: 700, bottom: 720, height: 20 } as DOMRect;
+    scrollIntoViewWithin({ rect, from: editor }, composer);
     expect(textArea.scrollTop).toBe(100);
     expect(composer.scrollTop).toBe(80);
     expect(page.scrollTop).toBe(0);
@@ -169,7 +172,22 @@ describe("scrollIntoViewWithin", () => {
 
   test("an element with no scrollable ancestor inside the boundary scrolls nothing", () => {
     const { page, editor } = embeddedComposer({ textAreaOverflows: false });
-    scrollIntoViewWithin({ top: 0, bottom: 20, height: 20 } as DOMRect, editor, editor);
+    scrollIntoViewWithin(
+      { rect: { top: 0, bottom: 20, height: 20 } as DOMRect, from: editor },
+      editor,
+    );
+    expect(page.scrollTop).toBe(0);
+  });
+
+  test("an element target aligns by `block`, its scroll-margin included", () => {
+    const { page, composer, textArea, editor } = embeddedComposer({ textAreaOverflows: true });
+    const line = document.createElement("p");
+    line.style.scrollMarginTop = "8px";
+    editor.append(line);
+    // 120px into the text area's content.
+    place(line, { top: 530, height: 20 });
+    scrollIntoViewWithin(line, composer, { block: "start" });
+    expect(textArea.scrollTop).toBe(112);
     expect(page.scrollTop).toBe(0);
   });
 });
@@ -284,5 +302,64 @@ describe("ask-user focus moves keep the page in place", () => {
     const input = screen.getByRole("textbox", { name: "Message" });
     expect(document.activeElement).toBe(input);
     expect(focusesOf(input).at(-1)?.options).toEqual({ preventScroll: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The command list's highlight
+// ---------------------------------------------------------------------------
+
+const ITEMS: CommandItemData[] = [
+  { value: "rasmus", label: "Rasmus" },
+  { value: "maija", label: "Maija" },
+];
+
+describe("the command list's highlight keeps the page in place", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  test("arrowing to a row outside the list's view scrolls the list, not the page", () => {
+    const page = document.createElement("div");
+    page.style.overflowY = "auto";
+    document.body.append(page);
+    const store = Composer.createStore();
+    render(
+      <Composer.Root
+        store={store}
+        onSubmit={() => {}}
+        commands={{ "@": { kind: "insert", trigger: "word-boundary", items: ITEMS } }}
+      >
+        <Composer.Textarea aria-label="Message" />
+        <Composer.Command prefix="@">
+          <Composer.CommandList>
+            {(item) => (
+              <Composer.CommandItem key={item.value} value={item.value}>
+                {item.label}
+              </Composer.CommandItem>
+            )}
+          </Composer.CommandList>
+        </Composer.Command>
+      </Composer.Root>,
+      { container: page },
+    );
+    act(() => store.setCommands({ active: true, trigger: "@", query: "" }));
+
+    // The list pads its view by 4px at each edge; the second row sits just
+    // below it, and the list runs past the page's view, so a scroll that
+    // leaked out of the composer would move the page.
+    const list = page.querySelector<HTMLElement>("[data-composer-command-list]");
+    if (!list) throw new Error("command list not rendered");
+    list.style.overflowY = "auto";
+    list.style.scrollPaddingTop = "4px";
+    list.style.scrollPaddingBottom = "4px";
+    place(page, { top: 0, height: 420, scrollHeight: 2000 });
+    place(list, { top: 400, height: 60, scrollHeight: 160 });
+    place(screen.getByRole("option", { name: "Maija" }), { top: 460, height: 40 });
+
+    act(() => store.moveHighlight(1));
+    // The row's bottom (100px in) at the padded band's bottom: 100 - 4 - (60 - 8).
+    expect(list.scrollTop).toBe(44);
+    expect(page.scrollTop).toBe(0);
   });
 });

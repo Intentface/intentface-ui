@@ -37,7 +37,11 @@ import {
 } from "@/lib/interface-theme";
 import { multipleQuestions, singleQuestion } from "@/lib/playground-demo";
 import { usePlaygroundStore } from "@/lib/store/playground";
-import { type CommandSurface, useSettingsStore } from "@/lib/store/settings";
+import {
+  type CommandSurface,
+  type ScrollTimingOption,
+  useSettingsStore,
+} from "@/lib/store/settings";
 import { cn } from "@/lib/utils";
 
 // Right-aligned compact selects share one footprint across the rows.
@@ -67,6 +71,42 @@ const LabeledRow = ({
 // Divider-separated group inside a tab panel.
 const SettingsSection = ({ children }: { children: ReactNode }) => (
   <div className="border-ink-primary/6 border-b py-1 last:border-0">{children}</div>
+);
+
+// A single-thumb slider sized for a row's control slot.
+const CompactSlider = ({
+  label,
+  value,
+  onValueChange,
+  min,
+  max,
+  step,
+}: {
+  label: string;
+  value: number;
+  onValueChange: (value: number) => void;
+  min: number;
+  max: number;
+  step: number;
+}) => (
+  <Slider
+    aria-label={label}
+    className="w-[6.5rem]"
+    value={value}
+    onValueChange={(next) => {
+      if (typeof next === "number") onValueChange(next);
+    }}
+    min={min}
+    max={max}
+    step={step}
+  >
+    <Slider.Control>
+      <Slider.Track>
+        <Slider.Indicator />
+        <Slider.Thumb aria-label={label} />
+      </Slider.Track>
+    </Slider.Control>
+  </Slider>
 );
 
 // Inline boolean row. The Settings.Label span carries no id, so the switch
@@ -205,24 +245,14 @@ const ThemeTab = () => {
       </LabeledRow>
 
       <LabeledRow label="Contrast" description="Surface separation.">
-        <Slider
-          aria-label="Contrast"
-          className="w-[6.5rem]"
+        <CompactSlider
+          label="Contrast"
           value={seeds.con}
-          onValueChange={(value) => {
-            if (typeof value === "number") setSeed("con", value);
-          }}
+          onValueChange={(value) => setSeed("con", value)}
           min={CONTRAST_MIN}
           max={CONTRAST_MAX}
           step={CONTRAST_STEP}
-        >
-          <Slider.Control>
-            <Slider.Track>
-              <Slider.Indicator />
-              <Slider.Thumb aria-label="Contrast" />
-            </Slider.Track>
-          </Slider.Control>
-        </Slider>
+        />
       </LabeledRow>
     </div>
   );
@@ -239,6 +269,24 @@ const SCROLL_MODE_OPTIONS: ReadonlyArray<{ value: ThreadAutoScrollMode; label: s
   { value: "off", label: "Off" },
 ];
 
+const SCROLL_TIMING_OPTIONS: ReadonlyArray<{ value: ScrollTimingOption; label: string }> = [
+  { value: "default", label: "Default" },
+  { value: "native", label: "Native" },
+  { value: "ease-out", label: "Ease out" },
+  { value: "ease-in-out", label: "Ease in-out" },
+  { value: "linear", label: "Linear" },
+  { value: "spring", label: "Spring" },
+];
+
+// Up to 5s, so a landing still running when the reply starts streaming is
+// easy to watch.
+const SCROLL_DURATION_MIN = 100;
+const SCROLL_DURATION_MAX = 5000;
+const SCROLL_DURATION_STEP = 50;
+// 0 is off: the duration stays fixed.
+const SCROLL_SPEED_MAX = 5000;
+const SCROLL_SPEED_STEP = 250;
+
 const ThreadTab = () => {
   const scrollMode = useSettingsStore((state) => state.scrollMode);
   const setScrollMode = useSettingsStore((state) => state.setScrollMode);
@@ -246,6 +294,14 @@ const ThreadTab = () => {
   const setShowScrollButton = useSettingsStore((state) => state.setShowScrollButton);
   const showOverlays = useSettingsStore((state) => state.showOverlays);
   const setShowOverlays = useSettingsStore((state) => state.setShowOverlays);
+  const scrollTiming = useSettingsStore((state) => state.scrollTiming);
+  const setScrollTiming = useSettingsStore((state) => state.setScrollTiming);
+  // Default and Native bring their own timing; the sliders shape the rest.
+  const customTiming = scrollTiming !== "default" && scrollTiming !== "native";
+  const scrollDuration = useSettingsStore((state) => state.scrollDuration);
+  const setScrollDuration = useSettingsStore((state) => state.setScrollDuration);
+  const scrollSpeed = useSettingsStore((state) => state.scrollSpeed);
+  const setScrollSpeed = useSettingsStore((state) => state.setScrollSpeed);
 
   return (
     <div className="py-1">
@@ -270,6 +326,63 @@ const ThreadTab = () => {
           </Select.Content>
         </Select>
       </LabeledRow>
+      <LabeledRow label="Scroll timing" description="Easing of every smooth scroll">
+        <Select
+          value={scrollTiming}
+          onValueChange={(value: ScrollTimingOption | null) => {
+            if (value) setScrollTiming(value);
+          }}
+        >
+          <Select.Trigger className={COMPACT_CONTROL_CLASS} size="sm">
+            <Select.Value>
+              {SCROLL_TIMING_OPTIONS.find((option) => option.value === scrollTiming)?.label}
+            </Select.Value>
+          </Select.Trigger>
+          <Select.Content>
+            {SCROLL_TIMING_OPTIONS.map((option) => (
+              <Select.Item key={option.value} value={option.value}>
+                {option.label}
+              </Select.Item>
+            ))}
+          </Select.Content>
+        </Select>
+      </LabeledRow>
+      {customTiming && (
+        <>
+          <LabeledRow
+            label="Duration"
+            description={
+              scrollTiming === "spring"
+                ? `${scrollDuration}ms spring`
+                : scrollSpeed > 0
+                  ? `At most ${scrollDuration}ms`
+                  : `${scrollDuration}ms`
+            }
+          >
+            <CompactSlider
+              label="Scroll duration"
+              value={scrollDuration}
+              onValueChange={setScrollDuration}
+              min={SCROLL_DURATION_MIN}
+              max={SCROLL_DURATION_MAX}
+              step={SCROLL_DURATION_STEP}
+            />
+          </LabeledRow>
+          <LabeledRow
+            label="Speed"
+            description={scrollSpeed > 0 ? `${scrollSpeed}px/s` : "Off: fixed duration"}
+          >
+            <CompactSlider
+              label="Scroll speed"
+              value={scrollSpeed}
+              onValueChange={setScrollSpeed}
+              min={0}
+              max={SCROLL_SPEED_MAX}
+              step={SCROLL_SPEED_STEP}
+            />
+          </LabeledRow>
+        </>
+      )}
       <ToggleRow
         label="Scroll button"
         description="Jump-to-bottom affordance"

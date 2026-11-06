@@ -248,7 +248,7 @@ export const AskUserOptions = ({
     if (!element) return;
     element.focus({ preventScroll: true });
     const boundary = element.closest("[data-ask-user]") ?? element;
-    scrollIntoViewWithin(element.getBoundingClientRect(), element, boundary);
+    scrollIntoViewWithin(element, boundary);
   }, []);
 
   useImperativeHandle(

@@ -534,7 +534,7 @@ export const scrollCaretIntoView = (root: HTMLElement): void => {
   caret.collapse(true);
   const rect = measureCaret(caret);
   if (!rect) return;
-  scrollIntoViewWithin(rect, root, root.closest("[data-composer-root]") ?? root);
+  scrollIntoViewWithin({ rect, from: root }, root.closest("[data-composer-root]") ?? root);
 };
 
 // ---------------------------------------------------------------------------

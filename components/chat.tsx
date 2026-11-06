@@ -23,11 +23,12 @@ import {
 // Keyline has no sandbox icon, so this one stays on Tabler.
 import { IconSandbox } from "@tabler/icons-react";
 import type { ChatStatus } from "ai";
-import { AnimatePresence, stagger } from "motion/react";
+import { AnimatePresence, spring, stagger } from "motion/react";
 import * as m from "motion/react-m";
 import { useRouter } from "next/navigation";
 import {
   Children,
+  type CSSProperties,
   createContext,
   memo,
   use,
@@ -70,7 +71,7 @@ import { fetchPlaygroundIssues, GroupedIssueCommands } from "@/lib/playground-de
 import { useChatStore } from "@/lib/store/chat";
 import { useModelStore } from "@/lib/store/model";
 import { usePlaygroundStore } from "@/lib/store/playground";
-import { useSettingsStore } from "@/lib/store/settings";
+import { type ScrollTimingOption, useSettingsStore } from "@/lib/store/settings";
 import { cn } from "@/lib/utils";
 import { LogoTile } from "./icons/logo-tile";
 import { TextShimmer } from "./ui/text-shimmer";
@@ -1074,14 +1075,41 @@ const ChatPlaceholder = () => {
   );
 };
 
+// The playground's scroll-timing settings as the thread's CSS variables.
+// "default" sets none, keeping the styled Thread's timing; "native" opts back
+// into the browser's smooth scroll. A spring prints its own
+// `<duration> linear(…)` pair, and that duration stays its cap under a speed;
+// the other easings are capped by the slider's duration.
+const toScrollTimingStyle = (
+  option: ScrollTimingOption,
+  duration: number,
+  speed: number,
+): CSSProperties | undefined => {
+  if (option === "default") return undefined;
+  if (option === "native") return { "--thread-scroll": "none" } as CSSProperties;
+  const timing =
+    option === "spring" ? String(spring(duration / 1000, 0)) : `${duration}ms ${option}`;
+  return {
+    "--thread-scroll": timing,
+    ...(speed > 0 && { "--thread-scroll-speed": String(speed) }),
+  } as CSSProperties;
+};
+
 // memo: ChatRoot re-renders on every stream chunk and re-creates this element;
 // with no props the memo always bails, so the Thread chrome (header, overlays,
-// composer dock) renders only when the session context actually changes.
+// composer) renders only when the session context actually changes.
 const ChatDefaultLayout = memo(() => {
   const { isEmpty } = useChatSession();
   const scrollMode = useSettingsStore((s) => s.scrollMode);
   const showScrollButton = useSettingsStore((s) => s.showScrollButton);
   const showOverlays = useSettingsStore((s) => s.showOverlays);
+  const scrollTiming = useSettingsStore((s) => s.scrollTiming);
+  const scrollDuration = useSettingsStore((s) => s.scrollDuration);
+  const scrollSpeed = useSettingsStore((s) => s.scrollSpeed);
+  const scrollTimingStyle = useMemo(
+    () => toScrollTimingStyle(scrollTiming, scrollDuration, scrollSpeed),
+    [scrollTiming, scrollDuration, scrollSpeed],
+  );
 
   return (
     <>
@@ -1090,7 +1118,7 @@ const ChatDefaultLayout = memo(() => {
           following, "follow" lands at the top and follows, "off" disables it. */}
       {/* A row, so the settings card pushes the thread over instead of covering it. */}
       <div className="relative flex h-full min-h-0 w-full">
-        <Thread autoScroll={scrollMode} className="min-w-0 flex-1">
+        <Thread autoScroll={scrollMode} style={scrollTimingStyle} className="min-w-0 flex-1">
           <Header />
           {showOverlays && <Thread.Overlay direction="top" />}
           <Thread.Viewport>

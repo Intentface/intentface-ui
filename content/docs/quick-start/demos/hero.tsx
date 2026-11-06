@@ -2,6 +2,7 @@
 
 import { Composer, type ComposerSubmitData } from "@intentface/ui/composer";
 import { Message } from "@intentface/ui/message";
+import { groupTurns } from "@intentface/ui/message-utils";
 import { Thread } from "@intentface/ui/thread";
 import { ArrowUp } from "@keyline-icons/react";
 import { useState } from "react";
@@ -18,7 +19,7 @@ const INITIAL: ChatMessage[] = [
 ];
 
 // Three primitives assembled: Thread owns the scroll area and reserves space
-// for its docked composer, Message renders each turn, Composer takes input.
+// for its floating composer, Message renders each turn, Composer takes input.
 export const Hero = () => {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL);
 
@@ -32,26 +33,30 @@ export const Hero = () => {
 
   return (
     <div className="h-[360px] w-full max-w-xl overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.075),0_1px_2px_rgb(0_0_0/0.06),0_4px_8px_-2px_rgb(0_0_0/0.05)] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.05),inset_0_0_0_1px_rgb(255_255_255/0.06),0_0_0_1px_rgb(0_0_0/0.16),0_1px_2px_rgb(0_0_0/0.1)] dark:bg-zinc-900">
-      <Thread.Root className="relative flex h-full w-full overflow-hidden [--thread-overlay-top-height:1rem]">
-        {/* Measured by the primitive: a landed turn sits this far below the top. */}
-        <Thread.Overlay
-          direction="top"
-          className="inset-x-0 top-0 z-1 h-(--thread-overlay-top-height) bg-linear-to-b from-white to-transparent dark:from-zinc-900"
+      <Thread.Root className="relative flex h-full w-full overflow-hidden [--thread-inset-top:1rem] [--thread-composer-gap:2rem]">
+        {/* A fade over the pt-4 below, which is the gap a landed turn leaves at the top. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 z-1 h-4 bg-linear-to-b from-white to-transparent dark:from-zinc-900"
         />
         <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
-          <div className="relative flex min-h-full w-full flex-col items-center pt-(--thread-overlay-top-height) pb-(--thread-overlay-bottom-height)">
-            <Thread.Content className="mx-auto flex min-h-full w-full flex-col gap-4 px-4 [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
-              {messages.map((message, index) => (
-                <Message.Root
-                  key={message.id}
-                  role={message.role}
-                  isLast={index === messages.length - 1}
-                  className="group flex w-full flex-col gap-1.5 data-[role=user]:items-end"
-                >
-                  <Message.Text className="text-sm text-zinc-700 leading-6 group-data-[role=user]:max-w-[80%] group-data-[role=user]:rounded-[20px] group-data-[role=user]:bg-white group-data-[role=user]:px-3.5 group-data-[role=user]:py-1.5 group-data-[role=user]:text-zinc-900 group-data-[role=user]:shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_1px_2px_rgb(0_0_0/0.04)] dark:text-zinc-300 dark:group-data-[role=user]:bg-zinc-800 dark:group-data-[role=user]:text-zinc-100 dark:group-data-[role=user]:shadow-[inset_0_1px_0_rgb(255_255_255/0.05),inset_0_0_0_1px_rgb(255_255_255/0.06),0_0_0_1px_rgb(0_0_0/0.16)]">
-                    {message.text}
-                  </Message.Text>
-                </Message.Root>
+          <div className="relative flex min-h-full w-full flex-col items-center">
+            <Thread.Content className="mx-auto flex min-h-full w-full flex-col gap-4 px-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
+              {groupTurns(messages).map((turn) => (
+                <Message.Turn key={turn.key} className="flex flex-col gap-4">
+                  {turn.messages.map((message) => (
+                    <Message.Root
+                      key={message.id}
+                      role={message.role}
+                      isLast={message.id === messages.at(-1)?.id}
+                      className="group flex w-full flex-col gap-1.5 data-[role=user]:items-end"
+                    >
+                      <Message.Text className="text-sm text-zinc-700 leading-6 group-data-[role=user]:max-w-[80%] group-data-[role=user]:rounded-[20px] group-data-[role=user]:bg-white group-data-[role=user]:px-3.5 group-data-[role=user]:py-1.5 group-data-[role=user]:text-zinc-900 group-data-[role=user]:shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_1px_2px_rgb(0_0_0/0.04)] dark:text-zinc-300 dark:group-data-[role=user]:bg-zinc-800 dark:group-data-[role=user]:text-zinc-100 dark:group-data-[role=user]:shadow-[inset_0_1px_0_rgb(255_255_255/0.05),inset_0_0_0_1px_rgb(255_255_255/0.06),0_0_0_1px_rgb(0_0_0/0.16)]">
+                        {message.text}
+                      </Message.Text>
+                    </Message.Root>
+                  ))}
+                </Message.Turn>
               ))}
             </Thread.Content>
           </div>

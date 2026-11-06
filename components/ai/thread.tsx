@@ -25,10 +25,15 @@ export type { ThreadAutoScrollMode, ThreadVisibilityState };
 
 export type ThreadRootProps = ComponentProps<typeof ThreadPrimitive.Root>;
 
+// Every smooth scroll eases out over 400ms; the thread pins the follow itself.
+// `--thread-scroll: none` opts the whole thread back into the native scroll.
+const SCROLL_TIMING = "[--thread-scroll:400ms_cubic-bezier(0.2,0.8,0.2,1)]";
+
 const ThreadRoot = ({ className, ...props }: ThreadRootProps) => (
   <ThreadPrimitive.Root
     className={cn(
-      "relative flex h-full w-full overflow-hidden [--thread-overlay-top-height:4rem] [--thread-overlay-bottom-height:8rem]",
+      "relative flex h-full w-full overflow-hidden [--thread-inset-top:4rem] [--thread-composer-gap:2rem]",
+      SCROLL_TIMING,
       className,
     )}
     {...props}
@@ -43,27 +48,35 @@ export type ThreadOverlayProps = ComponentProps<typeof ProgressiveBlur> & {
   direction: "top" | "bottom";
 };
 
-const ThreadOverlay = memo(({ className, direction, ...props }: ThreadOverlayProps) => (
-  <ThreadPrimitive.Overlay
-    direction={direction}
-    className={cn(
-      "group/thread-overlay pointer-events-none absolute right-0 left-0 z-1 mx-auto w-full max-w-(--thread-width)",
-      'data-[thread-overlay="top"]:h-(--thread-overlay-top-height) data-[thread-overlay="top"]:top-0',
-      'data-[thread-overlay="bottom"]:h-(--thread-overlay-bottom-height) data-[thread-overlay="bottom"]:bottom-0',
-      className,
-    )}
-  >
-    <ProgressiveBlur
-      direction={direction}
+const OVERLAY_EDGE = {
+  top: ["top-0 h-(--thread-inset-top)", "bg-linear-to-b"],
+  bottom: ["bottom-0 h-(--thread-inset-bottom)", "bg-linear-to-t"],
+} as const;
+
+const ThreadOverlay = memo(({ className, direction, ...props }: ThreadOverlayProps) => {
+  const [edge, gradient] = OVERLAY_EDGE[direction];
+
+  return (
+    <div
+      aria-hidden
+      data-slot="thread-overlay"
       className={cn(
-        "h-full w-full bg-linear-to-b from-secondary-bg to-transparent pointer-events-none",
-        "group-data-[thread-overlay='top']/thread-overlay:bg-linear-to-b",
-        "group-data-[thread-overlay='bottom']/thread-overlay:bg-linear-to-t",
+        "pointer-events-none absolute right-0 left-0 z-1 mx-auto w-full max-w-(--thread-width)",
+        edge,
+        className,
       )}
-      {...props}
-    />
-  </ThreadPrimitive.Overlay>
-));
+    >
+      <ProgressiveBlur
+        direction={direction}
+        className={cn(
+          "h-full w-full from-secondary-bg to-transparent pointer-events-none",
+          gradient,
+        )}
+        {...props}
+      />
+    </div>
+  );
+});
 
 ThreadOverlay.displayName = "ThreadOverlay";
 
@@ -74,7 +87,10 @@ ThreadOverlay.displayName = "ThreadOverlay";
 export type ThreadViewportProps = ComponentProps<"div">;
 
 const ThreadViewport = ({ children, className, ...props }: ThreadViewportProps) => (
-  <ThreadPrimitive.Viewport className="h-full w-full overflow-y-auto overflow-x-hidden [overflow-anchor:auto] scrollbar-gutter-stable scrollbar-thin [scrollbar-color:var(--color-ink-tertiary)_transparent] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-bg/40">
+  // scroll-padding keeps the overlays' insets clear wherever something is
+  // scrolled into view: scrollToMessage, keyboard paging, focus moves. A row
+  // jumped to lands below the top fade and above the composer, not under them.
+  <ThreadPrimitive.Viewport className="h-full w-full overflow-y-auto overflow-x-hidden [overflow-anchor:auto] scroll-pt-(--thread-inset-top) scroll-pb-(--thread-inset-bottom) scrollbar-gutter-stable scrollbar-thin [scrollbar-color:var(--color-ink-tertiary)_transparent] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-bg/40">
     <div
       data-slot="thread-viewport"
       className={cn(
@@ -85,11 +101,8 @@ const ThreadViewport = ({ children, className, ...props }: ThreadViewportProps) 
       )}
       {...props}
     >
-      <div className="relative flex min-h-full w-full flex-col items-center pt-(--thread-overlay-top-height) pb-(--thread-overlay-bottom-height)">
-        {/* Content column — children are direct, so the auto-scroll reserve
-            lives here as the last child's min-height. Consumers don't wire it:
-            the autoScroll prop sets --thread-turn-min-height (0 when off/unset). */}
-        <ThreadPrimitive.Content className="mx-auto px-4 flex min-h-full w-full max-w-(--thread-width) flex-col gap-4 [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+      <div className="relative flex min-h-full w-full flex-col items-center">
+        <ThreadPrimitive.Content className="mx-auto px-4 flex min-h-full w-full max-w-(--thread-width) flex-col gap-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
           {children}
         </ThreadPrimitive.Content>
       </div>

@@ -12,21 +12,29 @@ Tailwind, meant to be copied and restyled.
 "use client";
 import { Composer } from "@intentface/ui/composer";
 import { Message } from "@intentface/ui/message";
+import { groupTurns } from "@intentface/ui/message-utils";
 import { Thread } from "@intentface/ui/thread";
 
 export const Chat = ({ messages, send }: ChatProps) => (
-  <Thread.Root autoScroll="follow" className="relative flex h-dvh flex-col">
-    <Thread.Viewport className="flex-1 overflow-y-auto">
-      <Thread.Content className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
-        {messages.map((message) => (
-          <Message.Root key={message.id} role={message.role}>
-            <Message.Text>{message.text}</Message.Text>
-          </Message.Root>
+  <Thread.Root
+    autoScroll="follow"
+    className="relative h-dvh [--thread-inset-top:1rem] [--thread-composer-gap:2rem]"
+  >
+    <Thread.Viewport className="h-full">
+      <Thread.Content className="mx-auto flex max-w-2xl flex-col gap-4 px-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
+        {groupTurns(messages).map((turn) => (
+          <Message.Turn key={turn.key} className="flex flex-col gap-4">
+            {turn.messages.map((message) => (
+              <Message.Root key={message.id} role={message.role}>
+                <Message.Text>{message.text}</Message.Text>
+              </Message.Root>
+            ))}
+          </Message.Turn>
         ))}
       </Thread.Content>
     </Thread.Viewport>
 
-    <Thread.Composer className="p-4">
+    <Thread.Composer className="absolute inset-x-0 bottom-0 mx-auto max-w-2xl p-4">
       <Composer.Root onSubmit={send}>
         <Composer.Container className="rounded-xl border p-2">
           <Composer.Textarea placeholder="Ask anything" />
@@ -40,8 +48,13 @@ export const Chat = ({ messages, send }: ChatProps) => (
 );
 ```
 
-Every class above is yours; delete them and the chat still works, it just looks
-like unstyled HTML.
+Every class above is yours, layout included. The thread applies no layout. It
+publishes CSS variables instead, such as `--thread-inset-bottom` for the room the
+composer takes and `--thread-turn-min-height` for the newest turn. The classes
+position the composer, give the viewport a height, pad the content by those
+variables and give the last turn its `min-height`, so the newest question and
+its reply land together at the top. That is why each child of `Thread.Content` is a
+`Message.Turn`. For a flat list of messages, use `autoScroll="bottom"` instead.
 
 ## Status
 
@@ -71,7 +84,7 @@ tabs are app-shell parts rather than chat parts, and are useful on their own:
 | Import | What it is |
 | --- | --- |
 | `@intentface/ui/composer` | Rich-text input over a purpose-built contenteditable engine: `/` and `@` command palette, inline chips, attachments, ask-user flow. One store per `<Composer.Root>`, or bring your own via `Composer.createStore()`. |
-| `@intentface/ui/thread` | Scroll container with at-bottom detection, auto-follow, and docked-composer measurement. |
+| `@intentface/ui/thread` | Scroll container with at-bottom detection, auto-follow, and composer measurement. |
 | `@intentface/ui/message` | Message parts, turns, chip-segmented text, selection hooks. |
 | `@intentface/ui/steps`, `/reasoning` | Tool-call timelines and reasoning disclosure. |
 | `@intentface/ui/shell` | A collapsible, resizable sidebar beside the viewport it shares the screen with, with an edge hotspot. |
