@@ -40,8 +40,8 @@ import {
 import { interpretAskUserKey } from "./keyboard";
 import type {
   AskUserQuestion,
-  ComposerAnswerEntry,
   ComposerEditorHandle,
+  ComposerSubmitData,
   RegisteredEditor,
 } from "./types";
 
@@ -127,6 +127,12 @@ export type ComposerCommandsState = ComposerPanelSlice & {
   activeOptionId: string | null;
 };
 
+/** A part's layout box in whole CSS px (offsetWidth / offsetHeight). */
+export type ComposerBox = { readonly width: number; readonly height: number };
+
+/** Composer.Root's box, with Composer.Container's nested: no container size without a root size. */
+export type ComposerSize = ComposerBox & { readonly container: ComposerBox | null };
+
 export type ComposerState = {
   // Data only — the reactive editor flags. The imperative methods live on
   // store.controller (or useComposerController()), so a component that only
@@ -137,6 +143,8 @@ export type ComposerState = {
   commands: ComposerCommandsState;
   attachments: ComposerAttachmentsState;
   askUser: ComposerAskUserState;
+  /** null while no Composer.Root is mounted (server, before the first commit, after an explicit store's Root unmounts). 0 is a real measurement. */
+  size: ComposerSize | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -146,7 +154,13 @@ export type ComposerState = {
 export type ComposerStore = {
   subscribe: (listener: () => void) => () => void;
   getSnapshot: () => ComposerState;
+  /** The state as the server rendered it, with `size` null. Pass it as useSyncExternalStore's getServerSnapshot, so hydration matches the server HTML after the Root has measured. */
+  getServerSnapshot: () => ComposerState;
+  // Everything but `size`, so a Panel or Popover callback doesn't re-render on
+  // every wrapped line. Not consumer API, like the bridges below.
+  getContentSnapshot: () => Omit<ComposerState, "size">;
   // Bridges for props and editor/document integrations — not consumer API.
+  setSize: (next: ComposerSize | null) => void;
   setHasContent: (value: boolean) => void;
   setIsSubmitting: (value: boolean) => void;
   setCommands: (next: { active: boolean; trigger: string | null; query: string }) => void;
@@ -167,6 +181,13 @@ export type ComposerStore = {
   // Clears `present` on native panel slices whose `active` is false — the Panel calls
   // this once its close animation finishes, so closing content stays mounted until then.
   finalizePanelClose: () => void;
+  /**
+   * Sends the composer: advances the question step while questions are open,
+   * otherwise delivers the message through the mounted Root's onSubmit and
+   * clears the editor and attachments. Enter, Composer.Submit, and
+   * AskUser.Continue all send through it.
+   */
+  submit: () => Promise<void>;
   reset: () => void;
   // The store's editor engine: registered by the mounted Textarea as a
   // RegisteredEditor adapter, driven through the controller (a null-safe port
@@ -179,15 +200,23 @@ export type ComposerStore = {
   // observes this box to reposition — the badge moves when the container grows
   // (attachments strip, multi-line input).
   containerRef: RefObject<HTMLElement | null>;
+  // The mounted Composer.Root's element, a <form> when rendered as one.
+  rootRef: RefObject<HTMLElement | null>;
   // Co-located refs the mounted Composer wires up at runtime.
   attachmentConfigRef: RefObject<AttachmentStoreConfig>;
-  submitAnswersRef: RefObject<((answers: ComposerAnswerEntry[]) => void) | null>;
+  onSubmitRef: RefObject<((data: ComposerSubmitData) => void | Promise<void>) | null>;
   // The mounted Submit's stop while generating; Composer.Root calls it on Escape.
   stopGeneratingRef: RefObject<(() => void) | null>;
   // Invokes the active list's current selection. Registered by the mounted
   // CommandList via a callback ref (commit-time), not an effect.
   commandSelectRef: RefObject<(() => void) | null>;
 };
+
+// Enter and Composer.Submit send through the store, not a native submit, so a
+// <form> root runs its validation here: a required, empty Composer.Textarea
+// blocks an attachment-only send as it would a native submit.
+const isRootValid = (root: HTMLElement | null) =>
+  !(root instanceof HTMLFormElement) || root.noValidate || root.reportValidity();
 
 // ---------------------------------------------------------------------------
 // Ask-user keydown — the document-level handler for question mode, kept out of
@@ -290,6 +319,8 @@ export const createComposerStore = (): ComposerStore => {
   // --- Subscriptions & refs
   const listeners = new Set<() => void>();
   const notify = () => {
+    combined = null;
+    unmeasured = null;
     for (const listener of listeners) listener();
   };
 
@@ -305,6 +336,7 @@ export const createComposerStore = (): ComposerStore => {
 
   // Imperative refs co-located with the store; not reactive.
   const containerRef: RefObject<HTMLElement | null> = { current: null };
+  const rootRef: RefObject<HTMLElement | null> = { current: null };
   const optionsRef: RefObject<AskUserOptionsHandle | null> = { current: null };
   const fileInputRef: RefObject<HTMLInputElement | null> = { current: null };
   const globalDropRef: RefObject<boolean> = { current: false };
@@ -320,7 +352,7 @@ export const createComposerStore = (): ComposerStore => {
       destroy: revokeAttachmentUrl,
     },
   };
-  const submitAnswersRef: RefObject<((answers: ComposerAnswerEntry[]) => void) | null> = {
+  const onSubmitRef: RefObject<((data: ComposerSubmitData) => void | Promise<void>) | null> = {
     current: null,
   };
   const commandSelectRef: RefObject<(() => void) | null> = { current: null };
@@ -329,9 +361,24 @@ export const createComposerStore = (): ComposerStore => {
   // Canonical machine states; the snapshot mirrors them on every update.
   let attachmentState = INITIAL_ATTACHMENT_STATE;
   let askUserMachine = INITIAL_ASK_USER_STATE;
-  let snapshot: ComposerState;
+  let snapshot: Omit<ComposerState, "size">;
+  // Owned by the size tracker, so reset() leaves it alone: nulling it under a
+  // mounted Root would leave the tracker's last value blocking the next publish.
+  let size: ComposerSize | null = null;
+  // getSnapshot's merged view, rebuilt after each notify so its identity holds
+  // between them, as useSyncExternalStore requires.
+  let combined: ComposerState | null = null;
+  // getServerSnapshot's view, rebuilt the same way: the server lays nothing
+  // out, so its size is always null.
+  let unmeasured: ComposerState | null = null;
 
   // --- Setters
+  const setSize = (next: ComposerSize | null) => {
+    if (size === next) return;
+    size = next;
+    notify();
+  };
+
   const setHasContent = (value: boolean) => {
     if (snapshot.textarea.hasContent === value) return;
     snapshot = { ...snapshot, textarea: { ...snapshot.textarea, hasContent: value } };
@@ -444,7 +491,7 @@ export const createComposerStore = (): ComposerStore => {
           optionsRef.current?.resetHighlight();
           break;
         case "submit-answers":
-          submitAnswersRef.current?.(effect.answers);
+          onSubmitRef.current?.({ kind: "answers", answers: effect.answers });
           break;
       }
     }
@@ -557,6 +604,42 @@ export const createComposerStore = (): ComposerStore => {
     },
   };
 
+  const submit = async () => {
+    const { askUser, attachments, isSubmitting } = snapshot;
+
+    if (askUser.questions?.length) {
+      askUser.continueStep(controller.getText());
+      return;
+    }
+
+    if (isSubmitting || !isRootValid(rootRef.current)) return;
+
+    const serialized = controller.serialize();
+    const trimmedText = serialized.text.trim();
+    if (!trimmedText && !attachments.items.length) return;
+
+    // Emit the generic attachment descriptors; the consumer's onSubmit adapts
+    // them to its wire format (e.g. FilePart via prepareAttachmentsForSend).
+    // Text may be empty on an attachments-only submit — any placeholder copy
+    // is the consumer's.
+    const files = attachments.items;
+    const { destroy } = attachmentConfigRef.current;
+
+    // From the hand-off on the store no longer holds the files, so everything
+    // after it runs inside the try and the finally is their only release.
+    try {
+      dispatchAttachments({ type: "hand-off" });
+      controller.clear();
+      await onSubmitRef.current?.({
+        kind: "message",
+        text: trimmedText,
+        files,
+      });
+    } finally {
+      for (const item of files) destroy(item);
+    }
+  };
+
   // Pristine state for reset() — slice actions and refs are reused, so action
   // identities stay stable across resets.
   const initialSnapshot = snapshot;
@@ -595,7 +678,16 @@ export const createComposerStore = (): ComposerStore => {
         listeners.delete(listener);
       };
     },
-    getSnapshot: () => snapshot,
+    getSnapshot: () => {
+      combined ??= { ...snapshot, size };
+      return combined;
+    },
+    getServerSnapshot: () => {
+      unmeasured ??= { ...snapshot, size: null };
+      return unmeasured;
+    },
+    getContentSnapshot: () => snapshot,
+    setSize,
     setHasContent,
     setIsSubmitting,
     setCommands,
@@ -608,13 +700,15 @@ export const createComposerStore = (): ComposerStore => {
     resetAttachments: () => dispatchAttachments({ type: "reset" }),
     activateAskUser,
     finalizePanelClose,
+    submit,
     reset,
     editorRef,
     controller,
     registerEditor,
     containerRef,
+    rootRef,
     attachmentConfigRef,
-    submitAnswersRef,
+    onSubmitRef,
     stopGeneratingRef,
     commandSelectRef,
   };
@@ -647,12 +741,19 @@ export const useComposerStore = <Selected = ComposerState>(
   store: ComposerStore,
   selector?: (composer: ComposerState) => Selected,
 ): Selected => {
-  const getValue = () => {
-    const state = store.getSnapshot();
-    // Safe: without a selector, Selected defaults to ComposerState.
-    return selector ? selector(state) : (state as Selected);
-  };
-  return useSyncExternalStore(store.subscribe, getValue, getValue);
+  // Safe: without a selector, Selected defaults to ComposerState.
+  const select = (state: ComposerState) => (selector ? selector(state) : (state as Selected));
+  return useSyncExternalStore(
+    store.subscribe,
+    () => select(store.getSnapshot()),
+    () => select(store.getServerSnapshot()),
+  );
+};
+
+// Internal: the snapshot without `size`, for Panel and Popover callbacks.
+export const useComposerContent = () => {
+  const store = useComposerContextStore();
+  return useSyncExternalStore(store.subscribe, store.getContentSnapshot, store.getContentSnapshot);
 };
 
 // Subscribe to composer state from inside the tree. With a selector, the

@@ -34,13 +34,12 @@ export type ChipVariant = NonNullable<VariantProps<typeof chipVariants>["variant
 const CHIP_ICON_WRAPPER_CLASSES =
   "mr-0.5 inline-block size-3.5 align-[-0.15em] opacity-70 [&>svg]:block [&>svg]:size-3.5";
 
-type ChipRootProps = Omit<ComponentProps<typeof ChipPrimitive.Root>, "variant"> & {
+type ChipRootProps = ComponentProps<typeof ChipPrimitive.Root> & {
   variant?: ChipVariant;
 };
 
 const ChipRoot = ({ variant, className, ...props }: ChipRootProps) => (
   <ChipPrimitive.Root
-    variant={variant}
     className={cn(chipVariants({ variant }), className)}
     renderWithPreview={(badge, preview) => (
       <HoverCard>

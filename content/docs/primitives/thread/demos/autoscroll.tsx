@@ -47,9 +47,9 @@ const REPLY =
  * `jump`, notice the space reserved beneath the newest turn: it is what lets the
  * turn land at the top.
  *
- * Each question and its reply share a Message.Turn, so the reserve the primitive
- * publishes lands on the whole turn (it goes on the last child). The docked
- * composer is measured, so the reserve fills exactly the visible area.
+ * Each question and its reply share a Message.Turn, so the reserve lands on the
+ * whole turn (the primitive puts it on the last child). The floating composer is
+ * measured, so the reserve fills exactly the visible area.
  *
  * Remounting on a mode change is this demo's doing, not a requirement: the key
  * forces a fresh scroll subsystem so each mode is observed from its own
@@ -129,17 +129,16 @@ export const AutoScroll = () => {
         <Thread.Root
           key={mode}
           autoScroll={mode}
-          className="relative flex h-full w-full overflow-hidden [--thread-overlay-top-height:1rem]"
+          className="relative flex h-full w-full overflow-hidden [--thread-inset-top:1rem] [--thread-composer-gap:2rem]"
         >
-          {/* Measured by the primitive: a landed turn sits this far below the top. */}
-          <Thread.Overlay
-            direction="top"
-            className="inset-x-0 top-0 z-1 h-(--thread-overlay-top-height) bg-linear-to-b from-white to-transparent dark:from-zinc-900"
+          {/* A fade over the top inset, the space a landed turn leaves at the top. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 z-1 h-(--thread-inset-top) bg-linear-to-b from-white to-transparent dark:from-zinc-900"
           />
           <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
-            <div className="relative flex min-h-full w-full flex-col pt-(--thread-overlay-top-height) pb-(--thread-overlay-bottom-height)">
-              {/* The reserve the primitive publishes lands on the last child: the newest turn. */}
-              <Thread.Content className="flex min-h-full w-full flex-col gap-5 px-4 [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+            <div className="relative flex min-h-full w-full flex-col">
+              <Thread.Content className="flex min-h-full w-full flex-col gap-5 px-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
                 {exchanges.map((exchange, index) => (
                   <Message.Turn key={exchange.id} className="flex flex-col gap-5">
                     {/* biome-ignore lint/a11y/useValidAriaRole: `role` is the message's author, not an ARIA role */}

@@ -1,8 +1,9 @@
 "use client";
 
 // Composer.Panel — a surface region for the command list / ask-user / steps. `children`
-// is either normal nodes or a callback receiving the whole composer state, so you can pick
-// what to show by priority: `{(c) => c.commands.active ? <CommandList/> : …}`.
+// is either normal nodes or a callback receiving the composer state, so you can pick what to
+// show by priority: `{(c) => c.commands.active ? <CommandList/> : …}`. The state omits `size`,
+// which moves on every wrapped line and would re-render the content; read it with useComposer.
 //
 // Two layouts:
 //   • positioned overlay (default, `anchor`) — collision-aware (flip/shift/size) + portaled to
@@ -31,14 +32,16 @@ import {
 import { type TransitionStatus, useOpenTransition } from "../internal/render/transition";
 import { useRenderElement } from "../internal/render/useRenderElement";
 import { openStateMapping, transitionStatusMapping } from "../internal/state-mappings";
-import { type ComposerState, useComposer, useComposerContextStore } from "./store";
+import { type ComposerState, useComposerContent, useComposerContextStore } from "./store";
 
 export type ComposerPanelState = {
   open: boolean;
   transitionStatus: TransitionStatus;
 };
 
-export type ComposerPanelChildren = ReactNode | ((composer: ComposerState) => ReactNode);
+export type ComposerPanelChildren =
+  | ReactNode
+  | ((composer: Omit<ComposerState, "size">) => ReactNode);
 
 export type ComposerPanelProps = Omit<PrimitiveProps<"div", ComposerPanelState>, "children"> & {
   children?: ComposerPanelChildren;
@@ -71,7 +74,7 @@ export const ComposerPanel = ({
   ...elementProps
 }: ComposerPanelProps) => {
   const store = useComposerContextStore();
-  const composer = useComposer((c) => c);
+  const composer = useComposerContent();
   const content = typeof children === "function" ? children(composer) : children;
   // Logical open — from the raw, source-gated content, so it goes false immediately on close.
   const open = Children.toArray(content).length > 0;

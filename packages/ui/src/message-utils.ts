@@ -71,7 +71,7 @@ export const getSegmentedParts = (parts: readonly UnknownPart[]): MessageSegment
 // ---------------------------------------------------------------------------
 
 /** A conversational turn: a user message plus its trailing assistant/tool replies. */
-export type Turn<Message extends ChatMessage<unknown, UnknownPart> = ChatMessage> = {
+export type Turn<Message extends { id: string; role: string } = ChatMessage> = {
   key: string;
   messages: Message[];
 };
@@ -83,7 +83,7 @@ export type Turn<Message extends ChatMessage<unknown, UnknownPart> = ChatMessage
  * key is the first message's id — stable while the trailing assistant message
  * streams, so React keys and entrance animations stay put.
  */
-export const groupTurns = <Message extends ChatMessage<unknown, UnknownPart>>(
+export const groupTurns = <Message extends { id: string; role: string }>(
   messages: readonly Message[],
   // The role that starts a new turn — opaque, so consumers with a different
   // role set can group correctly.
