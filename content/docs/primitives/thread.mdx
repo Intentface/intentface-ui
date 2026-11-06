@@ -7,6 +7,7 @@ source: thread
 import { AutoScroll } from './thread/demos/autoscroll';
 import { Basic } from './thread/demos/basic';
 import { Jump } from './thread/demos/jump';
+import { ScrollTiming } from './thread/demos/scroll-timing';
 
 <Demo component={<Basic />} file="primitives/thread/demos/basic.tsx" />
 
@@ -209,7 +210,71 @@ long transcript adds no per-row setup, only the lookup when you jump.
 `useThreadVisibility` reads the same attribute to report which rows are on
 screen, and creates its observers only once something subscribes.
 
+Only the thread's own viewport scrolls, so a thread embedded in a scrolling page
+never moves the page. Where the row lands follows the same CSS as the browser's
+own scroll-into-view: `scroll-padding` on `Thread.Viewport` keeps room at its
+edges (lengths or percentages of its height), and `scroll-margin` on a row adds
+room around that row. To land rows clear of the top fade and the composer, pad
+the viewport by the insets:
+
+```tsx
+<Thread.Viewport className="scroll-pt-(--thread-inset-top) scroll-pb-(--thread-inset-bottom)">
+```
+
 <Demo component={<Jump />} file="primitives/thread/demos/jump.tsx" />
+
+### Timing the scroll
+
+Smooth scrolls are the browser's own until you give them a timing. Set one on
+the root and the thread animates them itself — the landing, `scrollToBottom`,
+`scrollToTop` and `scrollToMessage` — and pins the follow:
+
+```css
+[data-thread-root] {
+  --thread-scroll: 450ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+```
+
+The value reads like `transition`: a duration, then any CSS easing, `linear()`
+included. That makes a Motion spring a one-liner, since `spring()` prints
+exactly that pair:
+
+```tsx
+import { spring } from "motion";
+
+<Thread.Root style={{ "--thread-scroll": String(spring(0.5, 0)) }}>{/* … */}</Thread.Root>
+```
+
+Keep `bounce` at 0: the scroller can't move past its end, so an overshoot at
+the bottom is clipped into a hard stop.
+
+`autoScroll` decides which scrolls happen; the timing only shapes the ones that
+animate. The follow never does: a reply grows a line at a time, so pinning
+reads as smooth already, while an animated follow would keep a frame loop on
+the main thread for the whole stream and trail the newest text.
+
+The timing is one set of values for every scroll, so set it once and leave it.
+Swapping it from a selector does nothing, because the thread reads it before
+any attribute changes, and it would cost a restyle of every message, because
+custom properties inherit.
+
+To pace by distance instead, set `--thread-scroll-speed` in pixels per second;
+a duration set alongside it becomes the cap. `--thread-scroll: none` opts a
+thread back into the native smooth scroll, over any longhand — useful when a
+shared stylesheet sets a timing for every thread.
+
+While an animation runs, the root carries `data-scrolling`, naming why it
+started: `land`, `bottom`, `top` or `message`. Use it for styling, such as
+hiding the scroll button mid-flight.
+
+The destination is re-read every frame, so a reply that starts streaming before
+the landing finishes is carried along by it instead of restarting it. In
+`"jump"` the landing's destination is fixed when it starts: a reply outgrowing
+the reserve mid-flight never turns the landing into a follow. Any wheel, touch,
+scroll key or scrollbar press stops the animation where it is, and under
+`prefers-reduced-motion` every scroll is instant.
+
+<Demo component={<ScrollTiming />} file="primitives/thread/demos/scroll-timing.tsx" />
 
 ## Why the scroll subsystem is cheap
 
@@ -221,6 +286,12 @@ the work it does is event-driven and small, not per token or per frame.
 - **Landing and follow are event-driven** — a MutationObserver for new turns, a
   ResizeObserver for growth, one `scrollTo` per change. No per-token geometry
   reads, no animation-frame polling.
+- **A timed scroll costs one frame loop, only while it runs.** With
+  `--thread-scroll` set, each smooth scroll reads its timing once and then does
+  one `scrollTo` per frame until it ends. Unlike the native smooth scroll, it
+  runs on the main thread, so a frame lost to heavy rendering is a frame the
+  scroll skips. The follow never starts one, because a timed thread pins it.
+  Leave the timing unset to keep the native scroll.
 - **Edge state lives in external stores** (one per edge), so a flip re-renders
   only the components that read it (your scroll button) — never the Thread tree.
 - **Lazy capabilities cost nothing until used**: visibility tracking creates its
@@ -268,12 +339,17 @@ export const rootAttrs = [
   { attribute: "data-thread-root", description: "The root element." },
   { attribute: "data-at-top", description: "Present while the top edge is in view (start of the transcript) — the CSS-only mirror of useThread().isAtTop." },
   { attribute: "data-at-bottom", description: "Present while the bottom edge is in view (at the live end) — the CSS-only mirror of useThread().isAtBottom." },
+  { attribute: "data-scrolling", values: '"land" | "bottom" | "top" | "message"', description: "Present while a timed scroll animates, naming why it started. Never set for native or instant scrolls, so never for the follow, which a timed thread pins." },
   { attribute: "--thread-inset-top", values: "length", description: "Set by you. The space above a turn once it lands at the top. Unset means 0, so the turn lands flush." },
   { attribute: "--thread-composer-gap", values: "length", description: "Set by you. The room between the last line and the composer, folded into --thread-inset-bottom. Unset means 0." },
   { attribute: "--thread-inset-bottom", description: "Written by Thread.Composer. The distance from the root's bottom edge up to the composer's top, plus --thread-composer-gap. Pad Thread.Content's bottom by it. Removed when the composer unmounts, and yours to set when there is none." },
   { attribute: "--thread-composer-height", values: "px", description: "Written by Thread.Composer. The slot's border-box height, rounded to whole pixels. Removed when it unmounts." },
   { attribute: "--thread-composer-width", values: "px", description: "Written by Thread.Composer. The slot's border-box width, rounded to whole pixels. Removed when it unmounts." },
   { attribute: "--thread-turn-min-height", description: "Written by the root. In \"follow\" and \"jump\", the viewport's height (100cqh) minus --thread-inset-top, --thread-inset-bottom and 1px for the thread's bottom marker. In \"bottom\" and \"off\", 0px. Give it to the last turn as min-height." },
+  { attribute: "--thread-scroll", values: "<duration> <easing> | none", description: "Set by you. Times every smooth scroll but the follow, which it pins; the two parts go in either order, like transition. Unset or none keeps the browser's native smooth scroll (none wins over the longhands); 0ms makes them instant. Takes a Motion spring() string as-is." },
+  { attribute: "--thread-scroll-duration", values: "<duration>", description: "Set by you. Longhand; overrides the shorthand. The cap when a speed is set." },
+  { attribute: "--thread-scroll-easing", values: "<easing-function>", description: "Set by you. Longhand; overrides the shorthand. Defaults to ease." },
+  { attribute: "--thread-scroll-speed", values: "<number>", description: "Set by you. Pixels per second; the duration follows the distance." },
 ];
 
 <AttributesTable rows={rootAttrs} />

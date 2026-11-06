@@ -6,10 +6,11 @@
 export const prefersReducedMotion = (): boolean =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// "smooth" downgrades to "auto" under prefers-reduced-motion — deliberate
-// movements still happen, they just don't animate.
+// "smooth" downgrades to "instant" under prefers-reduced-motion — deliberate
+// movements still happen, they just don't animate. Not "auto": that defers to
+// the scroller's CSS scroll-behavior, which may itself be smooth.
 export const resolveScrollBehavior = (behavior: ScrollBehavior): ScrollBehavior =>
-  behavior === "smooth" && prefersReducedMotion() ? "auto" : behavior;
+  behavior === "smooth" && prefersReducedMotion() ? "instant" : behavior;
 
 // Single place that performs the scroll, so callers just choose the behavior:
 // 'instant' for jumps that must not animate, 'smooth' for deliberate movements.

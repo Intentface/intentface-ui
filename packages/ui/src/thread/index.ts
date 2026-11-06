@@ -8,6 +8,7 @@ export type {
   ThreadContentProps,
   ThreadPlaceholderProps,
   ThreadRootProps,
+  ThreadScrollKind,
   ThreadScrollToMessageOptions,
   ThreadViewportProps,
 } from "./thread";

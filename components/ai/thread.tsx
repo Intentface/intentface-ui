@@ -25,10 +25,15 @@ export type { ThreadAutoScrollMode, ThreadVisibilityState };
 
 export type ThreadRootProps = ComponentProps<typeof ThreadPrimitive.Root>;
 
+// Every smooth scroll eases out over 400ms; the thread pins the follow itself.
+// `--thread-scroll: none` opts the whole thread back into the native scroll.
+const SCROLL_TIMING = "[--thread-scroll:400ms_cubic-bezier(0.2,0.8,0.2,1)]";
+
 const ThreadRoot = ({ className, ...props }: ThreadRootProps) => (
   <ThreadPrimitive.Root
     className={cn(
       "relative flex h-full w-full overflow-hidden [--thread-inset-top:4rem] [--thread-composer-gap:2rem]",
+      SCROLL_TIMING,
       className,
     )}
     {...props}
@@ -82,7 +87,10 @@ ThreadOverlay.displayName = "ThreadOverlay";
 export type ThreadViewportProps = ComponentProps<"div">;
 
 const ThreadViewport = ({ children, className, ...props }: ThreadViewportProps) => (
-  <ThreadPrimitive.Viewport className="h-full w-full overflow-y-auto overflow-x-hidden [overflow-anchor:auto] scrollbar-gutter-stable scrollbar-thin [scrollbar-color:var(--color-ink-tertiary)_transparent] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-bg/40">
+  // scroll-padding keeps the overlays' insets clear wherever something is
+  // scrolled into view: scrollToMessage, keyboard paging, focus moves. A row
+  // jumped to lands below the top fade and above the composer, not under them.
+  <ThreadPrimitive.Viewport className="h-full w-full overflow-y-auto overflow-x-hidden [overflow-anchor:auto] scroll-pt-(--thread-inset-top) scroll-pb-(--thread-inset-bottom) scrollbar-gutter-stable scrollbar-thin [scrollbar-color:var(--color-ink-tertiary)_transparent] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-bg/40">
     <div
       data-slot="thread-viewport"
       className={cn(

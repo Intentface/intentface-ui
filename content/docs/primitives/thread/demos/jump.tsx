@@ -56,7 +56,8 @@ const QUESTIONS = TURNS.filter((turn) => turn.role === "user");
 export const Jump = () => (
   <div className="h-80 w-full max-w-xl overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.075),0_1px_2px_rgb(0_0_0/0.06),0_4px_8px_-2px_rgb(0_0_0/0.05)] dark:bg-zinc-900 dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.05),inset_0_0_0_1px_rgb(255_255_255/0.06),0_0_0_1px_rgb(0_0_0/0.16),0_1px_2px_rgb(0_0_0/0.1)]">
     <Thread.Root autoScroll="off" className="relative flex h-full w-full overflow-hidden">
-      <Thread.Viewport className="h-full min-w-0 flex-1 overflow-y-auto outline-none">
+      {/* scroll-padding: a question jumped to lands 24px below the top, not flush against it. */}
+      <Thread.Viewport className="h-full min-w-0 flex-1 overflow-y-auto scroll-pt-6 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0169cc]/60">
         {/* Right padding keeps the text clear of the ladder. */}
         <Thread.Content className="flex w-full flex-col gap-5 py-4 pr-12 pl-4">
           {TURNS.map((turn) => (
