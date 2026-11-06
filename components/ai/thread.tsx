@@ -90,7 +90,7 @@ const ThreadViewport = ({ children, className, ...props }: ThreadViewportProps) 
   // scroll-padding keeps the overlays' insets clear wherever something is
   // scrolled into view: scrollToMessage, keyboard paging, focus moves. A row
   // jumped to lands below the top fade and above the composer, not under them.
-  <ThreadPrimitive.Viewport className="h-full w-full overflow-y-auto overflow-x-hidden [overflow-anchor:auto] scroll-pt-(--thread-overlay-top-height) scroll-pb-(--thread-overlay-bottom-height) scrollbar-gutter-stable scrollbar-thin [scrollbar-color:var(--color-ink-tertiary)_transparent] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-bg/40">
+  <ThreadPrimitive.Viewport className="h-full w-full overflow-y-auto overflow-x-hidden [overflow-anchor:auto] scroll-pt-(--thread-inset-top) scroll-pb-(--thread-inset-bottom) scrollbar-gutter-stable scrollbar-thin [scrollbar-color:var(--color-ink-tertiary)_transparent] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-bg/40">
     <div
       data-slot="thread-viewport"
       className={cn(
