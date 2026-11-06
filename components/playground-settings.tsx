@@ -302,8 +302,6 @@ const ThreadTab = () => {
   const setScrollDuration = useSettingsStore((state) => state.setScrollDuration);
   const scrollSpeed = useSettingsStore((state) => state.scrollSpeed);
   const setScrollSpeed = useSettingsStore((state) => state.setScrollSpeed);
-  const animateFollow = useSettingsStore((state) => state.animateFollow);
-  const setAnimateFollow = useSettingsStore((state) => state.setAnimateFollow);
 
   return (
     <div className="py-1">
@@ -384,15 +382,6 @@ const ThreadTab = () => {
             />
           </LabeledRow>
         </>
-      )}
-      {/* Native has no scripted follow to switch on. */}
-      {scrollTiming !== "native" && (
-        <ToggleRow
-          label="Animate follow"
-          description="Ease along the stream instead of pinning"
-          checked={animateFollow}
-          onCheckedChange={setAnimateFollow}
-        />
       )}
       <ToggleRow
         label="Scroll button"

@@ -34,8 +34,7 @@ const PRESETS = {
     caption: "1200px/s, capped at 700ms: short scrolls are quick.",
   },
   slow: {
-    className:
-      "[--thread-scroll:200ms_ease-out] data-[scrolling=land]:[--thread-scroll:5s_ease-in-out]",
+    className: "[--thread-scroll:5s_ease-in-out]",
     style: {},
     caption: "A 5s land: the reply streams in while it is still landing.",
   },
@@ -51,9 +50,9 @@ const REPLY =
  *
  * With no timing, smooth scrolls are the browser's own. Set `--thread-scroll`
  * (or its longhands, or a speed) on the root and the thread animates them
- * itself. While it does, the root carries `data-scrolling` naming why — so a
- * selector can time the landing differently from the follow, as the slow
- * preset does. Scroll by hand at any point and the animation stops.
+ * itself, and pins the follow. Every preset times the landing; the slow one
+ * shows a reply streaming in while the landing is still under way. Scroll by
+ * hand at any point and the animation stops.
  */
 export const ScrollTiming = () => {
   const [preset, setPreset] = useState<Preset>("spring");

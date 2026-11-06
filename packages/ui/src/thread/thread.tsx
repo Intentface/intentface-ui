@@ -180,7 +180,8 @@ export const useThreadVisibility = (): ThreadVisibilityState => {
 //
 // Smooth scrolls are native unless the styled layer sets a timing through the
 // --thread-scroll* variables; then they run as a scripted animation, stamped
-// as data-scrolling on the root, that any user scroll gesture interrupts.
+// as data-scrolling on the root, that any user scroll gesture interrupts. The
+// follow is the exception: a timed thread pins it.
 // ---------------------------------------------------------------------------
 
 export type ThreadAutoScrollMode = "off" | "bottom" | "jump" | "follow";
@@ -292,10 +293,13 @@ const useThreadScroll = (
   // Every scroll the thread starts goes through here. "smooth" uses the timing
   // the styled layer configured (see scroll-animation.ts) and falls back to
   // the native smooth scroll when there is none; anything else — or reduced
-  // motion — jumps. data-scrolling is stamped before the timing is read, so
-  // per-kind selectors resolve, and stays only while a scripted animation runs.
-  // The destination is computed only once a timing is known: the native path
-  // finds its own.
+  // motion — jumps. A timed thread pins the follow instead of animating it: a
+  // reply grows a line at a time, so pinning reads as smooth already, and it
+  // keeps a frame loop off the main thread for the whole stream. The timing is
+  // one set of values for every scroll, so reading it changes no style;
+  // data-scrolling is stamped only while a scripted animation runs. The
+  // destination is computed only once a timing is known: the native path finds
+  // its own.
   const scrollWith = useCallback(
     (
       kind: ThreadScrollKind,
@@ -317,16 +321,20 @@ const useThreadScroll = (
         return;
       }
 
-      root.setAttribute("data-scrolling", kind);
       const timing = readScrollTiming(getComputedStyle(root));
-      const from = scroller.scrollTop;
-      const top = timing ? target.getTop() : from;
-      const duration = timing ? resolveDuration(timing, top - from) : 0;
-      if (!timing || duration === 0) {
-        root.removeAttribute("data-scrolling");
+      if (!timing || kind === "follow") {
         native(timing ? "instant" : "smooth");
         return;
       }
+      const from = scroller.scrollTop;
+      const top = target.getTop();
+      const duration = resolveDuration(timing, top - from);
+      if (duration === 0) {
+        native("instant");
+        return;
+      }
+
+      root.setAttribute("data-scrolling", kind);
 
       // A scroll toward the end holds the guard for its whole length, however
       // long the consumer made it: the settle timeout would otherwise expire

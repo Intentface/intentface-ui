@@ -23,28 +23,14 @@ export type { ThreadAutoScrollMode, ThreadVisibilityState };
 // Root
 // ---------------------------------------------------------------------------
 
-export type ThreadRootProps = ComponentProps<typeof ThreadPrimitive.Root> & {
-  /**
-   * Animate the follow with the thread's scroll timing instead of pinning it.
-   * Off by default: see SCROLL_TIMING.
-   */
-  animateFollow?: boolean;
-};
+export type ThreadRootProps = ComponentProps<typeof ThreadPrimitive.Root>;
 
-// Scroll timing: every smooth scroll eases out over 400ms, except the follow,
-// which pins instantly. A reply grows a line at a time, so pinning reads as
-// smooth already, and it leaves no animation on the main thread while it is
-// busiest rendering the stream. The follow rule is !important so a timing set
-// inline (`style`) can't animate it by accident; `animateFollow` lifts it, and
+// Every smooth scroll eases out over 400ms; the thread pins the follow itself.
 // `--thread-scroll: none` opts the whole thread back into the native scroll.
-const SCROLL_TIMING = [
-  "[--thread-scroll:400ms_cubic-bezier(0.2,0.8,0.2,1)]",
-  "not-data-animate-follow:data-[scrolling=follow]:[--thread-scroll-duration:0ms]!",
-];
+const SCROLL_TIMING = "[--thread-scroll:400ms_cubic-bezier(0.2,0.8,0.2,1)]";
 
-const ThreadRoot = ({ animateFollow = false, className, ...props }: ThreadRootProps) => (
+const ThreadRoot = ({ className, ...props }: ThreadRootProps) => (
   <ThreadPrimitive.Root
-    data-animate-follow={animateFollow ? "" : undefined}
     className={cn(
       "relative flex h-full w-full overflow-hidden [--thread-inset-top:4rem] [--thread-composer-gap:2rem]",
       SCROLL_TIMING,

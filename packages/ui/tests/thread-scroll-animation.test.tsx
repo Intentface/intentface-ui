@@ -486,18 +486,28 @@ describe("Thread scroll interrupt", () => {
     return { root, scroller };
   };
 
+  const recordScrolls = (scroller: HTMLElement) => {
+    const calls: ScrollToOptions[] = [];
+    scroller.scrollTo = ((options: ScrollToOptions) => calls.push(options)) as never;
+    return calls;
+  };
+
   test("a wheel up releases the follow, so growth is no longer followed", () => {
     const { root, scroller } = renderScrolling();
     fireEvent.wheel(scroller, { deltaY: -40 });
+    const calls = recordScrolls(scroller);
     grow();
+    expect(calls).toHaveLength(0);
     expect(root.hasAttribute("data-scrolling")).toBe(false);
   });
 
-  test("a wheel down keeps the follow, so growth is still followed", () => {
+  test("a wheel down keeps the follow, so growth is still followed, pinned", () => {
     const { root, scroller } = renderScrolling();
     fireEvent.wheel(scroller, { deltaY: 40 });
+    const calls = recordScrolls(scroller);
     grow();
-    expect(root.getAttribute("data-scrolling")).toBe("follow");
+    expect(calls.at(-1)?.behavior).toBe("instant");
+    expect(root.hasAttribute("data-scrolling")).toBe(false);
   });
 
   test("the bottom leaving view mid-scroll is held off, then acted on when a gesture takes over", () => {

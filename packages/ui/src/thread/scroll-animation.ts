@@ -2,8 +2,8 @@
 // through CSS variables on the thread root; the thread owns the motion. When no
 // timing is configured, callers fall back to the browser's native smooth scroll.
 
-// Why a scroll was started. Stamped on the root as data-scrolling *before* the
-// timing is read, so a selector can give each kind its own timing.
+// Why a scroll was started. Stamped on the root as data-scrolling while a timed
+// scroll runs. Never "follow" there: a timed thread pins the follow.
 export type ThreadScrollKind = "land" | "follow" | "bottom" | "top" | "message";
 
 // What the CSS variables configure. The duration itself is resolved per

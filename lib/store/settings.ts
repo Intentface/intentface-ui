@@ -43,9 +43,6 @@ type SettingsStore = {
   /** Pixels per second; 0 leaves the duration fixed. */
   scrollSpeed: number;
   setScrollSpeed: (scrollSpeed: number) => void;
-  /** Animate the follow with the scroll timing instead of pinning it. */
-  animateFollow: boolean;
-  setAnimateFollow: (animateFollow: boolean) => void;
   stickyMessages: boolean;
   setStickyMessages: (stickyMessages: boolean) => void;
   showScrollButton: boolean;
@@ -82,8 +79,6 @@ export const useSettingsStore = create<SettingsStore>()(
       setScrollDuration: (scrollDuration) => set({ scrollDuration }),
       scrollSpeed: 0,
       setScrollSpeed: (scrollSpeed) => set({ scrollSpeed }),
-      animateFollow: false,
-      setAnimateFollow: (animateFollow) => set({ animateFollow }),
       stickyMessages: false,
       setStickyMessages: (stickyMessages) => set({ stickyMessages }),
       showScrollButton: true,

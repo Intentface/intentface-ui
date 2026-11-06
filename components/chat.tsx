@@ -1106,7 +1106,6 @@ const ChatDefaultLayout = memo(() => {
   const scrollTiming = useSettingsStore((s) => s.scrollTiming);
   const scrollDuration = useSettingsStore((s) => s.scrollDuration);
   const scrollSpeed = useSettingsStore((s) => s.scrollSpeed);
-  const animateFollow = useSettingsStore((s) => s.animateFollow);
   const scrollTimingStyle = useMemo(
     () => toScrollTimingStyle(scrollTiming, scrollDuration, scrollSpeed),
     [scrollTiming, scrollDuration, scrollSpeed],
@@ -1119,12 +1118,7 @@ const ChatDefaultLayout = memo(() => {
           following, "follow" lands at the top and follows, "off" disables it. */}
       {/* A row, so the settings card pushes the thread over instead of covering it. */}
       <div className="relative flex h-full min-h-0 w-full">
-        <Thread
-          autoScroll={scrollMode}
-          animateFollow={animateFollow}
-          style={scrollTimingStyle}
-          className="min-w-0 flex-1"
-        >
+        <Thread autoScroll={scrollMode} style={scrollTimingStyle} className="min-w-0 flex-1">
           <Header />
           {showOverlays && <Thread.Overlay direction="top" />}
           <Thread.Viewport>
