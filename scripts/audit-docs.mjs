@@ -1,4 +1,5 @@
-// Fails when the primitive reference pages contradict the package.
+// Fails when the primitive reference pages or the coding-agent skill contradict
+// the package.
 //
 // Docs drift silently: a renamed part or a dropped prop breaks nothing at build
 // time, so pages keep documenting an API that no longer exists. This resolves
@@ -10,8 +11,12 @@
 //
 // Checks per documented part: the part exists, every PropsTable `name` is a real
 // prop, and every AttributesTable `attribute` is one the part can emit.
+//
+// Checks per skill file: every entry point, part, attribute, CSS variable and
+// docs page it names exists, and every prop it passes to a part in JSX is real.
+// CSS variables the skill defines itself are the app's and pass.
 
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -26,9 +31,17 @@ const NAMESPACES = {
   reasoning: "Reasoning",
   chip: "Chip",
   attachments: "Attachments",
+  "ask-user": "AskUser",
+  shell: "Shell",
+  nav: "Nav",
+  tabs: "Tabs",
 };
+// Namespaces with no reference page yet. The skill is still checked against them.
+const UNPAGED = new Set(["ask-user"]);
 const SRC = "packages/ui/src";
-const DOCS = "content/docs/primitives";
+const DOCS = "content/docs";
+const SKILLS = "skills";
+const SITE_PAGE = /https:\/\/ui\.intentface\.com\/([\w/-]+)\.md/g;
 
 // ---------------------------------------------------------------------------
 // Resolve each part's props and state from the type checker
@@ -82,8 +95,16 @@ const resolveParts = (root) => {
   return parts;
 };
 
+// { Composer: { Root: { props, state }, … }, … }
+const partsOf = Object.fromEntries(
+  Object.entries(NAMESPACES).map(([slug, namespace]) => [
+    namespace,
+    resolveParts(path.resolve(SRC, slug, "index.parts.ts")),
+  ]),
+);
+
 // ---------------------------------------------------------------------------
-// Which data-* attributes the package can emit
+// What the package can emit: data-* attributes, CSS variables, entry points
 // ---------------------------------------------------------------------------
 
 const walk = (dir) =>
@@ -94,11 +115,14 @@ const walk = (dir) =>
   });
 
 // Bespoke part attributes appear either as quoted object keys or as JSX props.
+// CSS variables appear only as quoted names.
 const literals = new Set();
+const cssVariables = new Set();
 for (const file of walk(SRC)) {
   const body = readFileSync(file, "utf8");
   for (const [, a] of body.matchAll(/["'`](data-[a-z-]+)["'`]/g)) literals.add(a);
   for (const [, a] of body.matchAll(/(?<![\w"'-])(data-[a-z-]+)\s*[=:]/g)) literals.add(a);
+  for (const [, v] of body.matchAll(/["'`](--[a-z][a-z0-9-]*[a-z0-9])["'`]/g)) cssVariables.add(v);
 }
 
 // Unmapped state keys become data-<key>; open and transitionStatus are mapped.
@@ -113,14 +137,25 @@ const attributesFor = ({ state }) => {
   return attributes;
 };
 
+const anyPartAttributes = new Set(
+  Object.values(partsOf).flatMap((parts) =>
+    Object.values(parts).flatMap((part) => [...attributesFor(part)]),
+  ),
+);
+
+const entryPoints = new Set(
+  Object.keys(JSON.parse(readFileSync("packages/ui/package.json", "utf8")).exports).map(
+    (key) => `@intentface/ui${key.slice(1)}`,
+  ),
+);
+
 // ---------------------------------------------------------------------------
 // Diff the pages
 // ---------------------------------------------------------------------------
 
-let failures = 0;
-for (const [slug, namespace] of Object.entries(NAMESPACES)) {
-  const parts = resolveParts(path.resolve(SRC, slug, "index.parts.ts"));
-  const page = readFileSync(path.join(DOCS, `${slug}.mdx`), "utf8");
+const auditPage = (slug, namespace) => {
+  const parts = partsOf[namespace];
+  const page = readFileSync(path.join(DOCS, "primitives", `${slug}.mdx`), "utf8");
   const findings = [];
 
   for (const block of page.split(/^### /m).slice(1)) {
@@ -158,15 +193,112 @@ for (const [slug, namespace] of Object.entries(NAMESPACES)) {
   );
   for (const part of uncovered) findings.push(`undocumented: ${namespace}.${part}`);
 
-  if (findings.length) {
-    failures += findings.length;
-    console.error(`\n${slug}.mdx`);
-    for (const finding of findings) console.error(`  ✗ ${finding}`);
+  return findings;
+};
+
+// ---------------------------------------------------------------------------
+// Diff the coding-agent skill
+// ---------------------------------------------------------------------------
+
+// Shell blocks hold CLI flags, which read like CSS variables.
+const SHELL_BLOCK = /^```(?:sh|bash|shell|console)\n[\s\S]*?^```/gm;
+const CODE_BLOCK = /^```\w*\n([\s\S]*?)^```/gm;
+const PART = new RegExp(`\\b(${Object.values(NAMESPACES).join("|")})\\.([A-Za-z]\\w*)`, "g");
+
+// Every JSX attribute in a snippet, as [tag, attribute].
+const jsxAttributes = (code) => {
+  const source = ts.createSourceFile(
+    "snippet.tsx",
+    code,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const found = [];
+  const visit = (node) => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName.getText(source);
+      for (const attribute of node.attributes.properties) {
+        if (ts.isJsxAttribute(attribute)) found.push([tag, attribute.name.getText(source)]);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+};
+
+// Fenced code blocks, plus inline code that opens a JSX tag: `<Composer.Submit isGenerating>`.
+const snippetsOf = (text) => [
+  ...[...text.replace(SHELL_BLOCK, "").matchAll(CODE_BLOCK)].map(([, code]) => code),
+  ...[...text.replace(CODE_BLOCK, "").matchAll(/`(<[A-Z][^`]*)`/g)].map(([, code]) => code),
+];
+
+const auditSkillFile = (file) => {
+  const text = readFileSync(file, "utf8");
+  const findings = [];
+
+  for (const [entry] of text.matchAll(/@intentface\/ui\/[\w-]+/g)) {
+    if (!entryPoints.has(entry)) findings.push(`no such entry point: ${entry}`);
   }
+  for (const [name, namespace, part] of text.matchAll(PART)) {
+    if (!partsOf[namespace][part]) findings.push(`part does not exist: ${name}`);
+  }
+  // Props are checked where a part receives them in JSX, because prose can't
+  // say which part a bare prop name belongs to.
+  for (const [tag, name] of snippetsOf(text).flatMap(jsxAttributes)) {
+    const [namespace, part] = tag.split(".");
+    const props = partsOf[namespace]?.[part]?.props;
+    if (!props || name === "key" || name.startsWith("data-")) continue;
+    if (!props.includes(name)) findings.push(`no such prop: ${tag}.${name}`);
+  }
+  // The plain name and Tailwind's arbitrary form: data-highlighted:, data-[role=user]:
+  for (const [, arbitrary, plain] of text.matchAll(/\bdata-(?:\[([a-z-]+)|([a-z][a-z-]*[a-z]))/g)) {
+    const attribute = `data-${arbitrary ?? plain}`;
+    if (!anyPartAttributes.has(attribute)) findings.push(`never emitted: ${attribute}`);
+  }
+  // A variable the skill defines itself, as in [--header-height:3.5rem], is the
+  // app's. A name followed by "(" is a function, such as Tailwind's --spacing().
+  const code = text.replace(SHELL_BLOCK, "");
+  const defined = new Set(
+    [...code.matchAll(/(?:\[|^\s*|;\s*)(--[a-z][a-z0-9-]*[a-z0-9])\s*:/gm)].map(([, v]) => v),
+  );
+  for (const [, variable] of code.matchAll(/(?<![\w-])(--[a-z][a-z0-9-]*[a-z0-9])(?![\w(-])/g)) {
+    if (!cssVariables.has(variable) && !defined.has(variable))
+      findings.push(`never published: ${variable}`);
+  }
+  for (const [url, slug] of text.matchAll(SITE_PAGE)) {
+    if (!existsSync(path.join(DOCS, `${slug}.mdx`))) findings.push(`no such docs page: ${url}`);
+  }
+
+  return [...new Set(findings)];
+};
+
+// ---------------------------------------------------------------------------
+// Report
+// ---------------------------------------------------------------------------
+
+const audits = [
+  ...Object.entries(NAMESPACES)
+    .filter(([slug]) => !UNPAGED.has(slug))
+    .map(([slug, namespace]) => [`${slug}.mdx`, auditPage(slug, namespace)]),
+  ...readdirSync(SKILLS, { recursive: true })
+    .filter((file) => file.endsWith(".md"))
+    .map((file) => [path.join(SKILLS, file), auditSkillFile(path.join(SKILLS, file))]),
+];
+
+let failures = 0;
+for (const [label, findings] of audits) {
+  if (!findings.length) continue;
+  failures += findings.length;
+  console.error(`\n${label}`);
+  for (const finding of findings) console.error(`  ✗ ${finding}`);
 }
 
 if (failures) {
   console.error(`\n${failures} contradiction(s) between the docs and the package.\n`);
   process.exit(1);
 }
-console.log("Docs match the package: every documented part, prop and attribute resolves.");
+console.log(
+  "Docs match the package: every documented part, prop, attribute and CSS variable resolves.",
+);

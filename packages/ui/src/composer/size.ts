@@ -31,19 +31,29 @@ const isSameBox = (a: ComposerBox | null, b: ComposerBox | null) =>
 const isSameSize = (a: ComposerSize | null, b: ComposerSize | null) =>
   a === b || (a !== null && b !== null && isSameBox(a, b) && isSameBox(a.container, b.container));
 
-const writeBox = (element: HTMLElement, prefix: string, box: ComposerBox | null) => {
+type BoxProperties = { width: string; height: string };
+
+// Spelled out rather than built from a prefix: scripts/audit-docs.mjs finds the
+// published variables by their literal names.
+const ROOT_PROPERTIES: BoxProperties = { width: "--composer-width", height: "--composer-height" };
+const CONTAINER_PROPERTIES: BoxProperties = {
+  width: "--composer-container-width",
+  height: "--composer-container-height",
+};
+
+const writeBox = (element: HTMLElement, properties: BoxProperties, box: ComposerBox | null) => {
   if (!box) {
-    element.style.removeProperty(`${prefix}-height`);
-    element.style.removeProperty(`${prefix}-width`);
+    element.style.removeProperty(properties.height);
+    element.style.removeProperty(properties.width);
     return;
   }
-  element.style.setProperty(`${prefix}-height`, `${box.height}px`);
-  element.style.setProperty(`${prefix}-width`, `${box.width}px`);
+  element.style.setProperty(properties.height, `${box.height}px`);
+  element.style.setProperty(properties.width, `${box.width}px`);
 };
 
 const writeSize = (root: HTMLElement, size: ComposerSize | null) => {
-  writeBox(root, "--composer", size);
-  writeBox(root, "--composer-container", size?.container ?? null);
+  writeBox(root, ROOT_PROPERTIES, size);
+  writeBox(root, CONTAINER_PROPERTIES, size?.container ?? null);
 };
 
 export const createSizeTracker = (
