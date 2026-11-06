@@ -48,4 +48,5 @@ export const Chat = () => {
 
 - `onSubmit` is async, so the composer keeps the blob URLs alive until the conversion finishes. A failed read rejects, so `onSubmit` never stays pending.
 - The data URLs travel with the message, because a server can't read a `blob:` URL. An app with file storage uploads the blob and sends its URL instead.
+- While the files convert, a second send can reach `sendMessage` first. Pass `isSubmitting` to `Composer.Root` while they convert, so the composer blocks the next send until this one is sent.
 - A client other than `useChat` sends the same converted files.

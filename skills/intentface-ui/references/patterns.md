@@ -22,8 +22,9 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
   </Thread.Viewport>
   <Thread.Composer className="pointer-events-none absolute inset-x-0 bottom-0 mx-auto w-full max-w-(--chat-column)">
     <Composer.Root onSubmit={handleSubmit} className="pointer-events-auto">
+      <Composer.Attachments maxFiles={0} />
       <Composer.Container>
-        <Composer.Textarea>
+        <Composer.Textarea aria-label="Message">
           <Composer.Placeholder placeholder="Ask anything" />
         </Composer.Textarea>
         <Composer.Actions>
@@ -44,6 +45,8 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
 - `Thread.Content` carries both paddings, and its last turn's minimum height leaves room for a new turn to land at the top. The paddings and the minimum height read the same variables, so the turn lands exactly `--thread-inset-top` below the edge. Any other padding, margin or gap between the viewport and the turns shifts it.
 - `Thread.Viewport` is a size container, so it needs a definite height, here the root's full height. Its `scroll-padding` keeps both insets clear wherever a row scrolls into view, such as through `scrollToMessage`, keyboard paging or a focus move.
 - The composer slot keeps to the column's width, `--chat-column`, so it never covers the viewport's scrollbar. `scrollbar-gutter: stable` keeps the column from shifting when the scrollbar appears. The slot is click-through, and only the composer catches the pointer, so clicks and drags around the composer reach the transcript and its scrollbar.
+- `<Composer.Attachments maxFiles={0} />` turns files off. The composer accepts dropped and pasted files by default, and this skeleton has no strip to show them. `references/attachments.md` builds a chat that takes files.
+- The textarea needs its own `aria-label`. The placeholder sets `aria-placeholder`, which doesn't name the field.
 - The textarea carries the padding and the type, and the placeholder takes only a color. The package lays the placeholder over the editor, so any position or padding on it shifts it away from the caret.
 - `"submitted"` counts as generating, so the button turns to stop the moment the message is sent, before the first token.
 - `48rem` and `1rem` stand for the app's own tokens.
@@ -115,7 +118,7 @@ const ReasoningLabel = () => {
 type RowProps = { message: UIMessage; isLast?: boolean; isError?: boolean };
 
 export const Row = memo(({ message, isLast, isError }: RowProps) => (
-  <Message.Root role={message.role} isLast={isLast} isError={isError}>
+  <Message.Root role={message.role} isLast={isLast} isError={isError} data-message-id={message.id}>
     <span className="sr-only">{message.role === "user" ? "You said" : "The assistant said"}</span>
     {getSegmentedParts(message.parts).map((segment, index) => {
       switch (segment.type) {
@@ -141,6 +144,7 @@ export const Row = memo(({ message, isLast, isError }: RowProps) => (
               {segment.parts.map((part) => (
                 <Steps.Item key={part.toolCallId} status={STEP_STATUS[part.state]}>
                   <Steps.Label>{part.type.slice("tool-".length)}</Steps.Label>
+                  <Steps.Status />
                 </Steps.Item>
               ))}
             </Steps.Root>
@@ -156,7 +160,8 @@ export const Row = memo(({ message, isLast, isError }: RowProps) => (
 - The segments keep the parts' order, so reasoning, tool calls and text interleave the way the model produced them.
 - Each reasoning segment streams on its own parts' `state`, so an earlier block settles while a later one is still thinking. `Reasoning.Root` reflects it as `data-streaming`.
 - The map covers every AI SDK tool state. A state left out gives `undefined`, and `Steps.Item` shows it as complete.
-- The step status is the app's own vocabulary. `Steps.Item` reflects it as `data-status` on the item, its icon and its label, which is where the per-status styles go.
+- The step status is the app's own vocabulary. `Steps.Item` reflects it as `data-status` on the item, its icon and its label, which is where the per-status styles go. `data-status` reaches no screen reader, so `Steps.Status` reads the status out in a visually hidden span. Pass it children to word each status in the app's copy.
+- `data-message-id` on each row is what `scrollToMessage` and `useThreadVisibility` find.
 - The label reads `useReasoning()`, because the trigger ships no copy. The duration is in seconds.
 - The visually hidden prefix names the speaker for screen readers, since `data-role` reaches none.
 - A real row renders the assistant's text through the app's markdown, the tool's label through copy of the app's own, and file segments through the app's preview.
@@ -166,7 +171,7 @@ export const Row = memo(({ message, isLast, isError }: RowProps) => (
 ```tsx
 "use client";
 
-import { useChat } from "@ai-sdk/react";
+import type { UseChatHelpers } from "@ai-sdk/react";
 import { Message } from "@intentface/ui/message";
 import { getSegmentedParts, groupTurns } from "@intentface/ui/message-utils";
 import { Thread } from "@intentface/ui/thread";
@@ -174,8 +179,10 @@ import { Row } from "./row";
 
 const PendingIndicator = () => <span aria-hidden="true">•••</span>;
 
-export const Transcript = () => {
-  const { messages, status, regenerate } = useChat();
+import type { UIMessage } from "ai";
+
+export const Transcript = ({ chat }: { chat: UseChatHelpers<UIMessage> }) => {
+  const { messages, status, regenerate } = chat;
   const turns = groupTurns(messages);
   const last = messages.at(-1);
   const lastId = last?.id;
@@ -220,6 +227,7 @@ export const Transcript = () => {
 };
 ```
 
+- `chat` is the one `useChat()` result the page also hands its composer. A second `useChat()` call creates a separate chat, which the composer's messages never reach.
 - The pending indicator and the error row live inside the last turn, so the thread doesn't treat either one as a new turn to land.
 - `"submitted"` ends at the first stream chunk that changes the message, which can come before any text. The indicator stays until the reply has a segment to show, then the assistant's own message takes over.
 - Only the newest message gets `isError`, and `Message.Root` reflects it as `data-error`. When the request fails before any reply, that's the user's own message.
@@ -272,6 +280,7 @@ const CommandMenu = ({ prefix, empty }: { prefix: string; empty: string }) => (
 
 export const ChatInput = ({ onSubmit }: { onSubmit: (data: ComposerSubmitData) => void }) => (
   <Composer.Root commands={COMMANDS} onSubmit={onSubmit}>
+    <Composer.Attachments maxFiles={0} />
     <Composer.Popover className="data-closed:hidden">
       {(composer) =>
         composer.commands.active && (
@@ -283,7 +292,7 @@ export const ChatInput = ({ onSubmit }: { onSubmit: (data: ComposerSubmitData) =
       }
     </Composer.Popover>
     <Composer.Container>
-      <Composer.Textarea>
+      <Composer.Textarea aria-label="Message">
         <Composer.Placeholder placeholder="Type @ to mention a file" />
       </Composer.Textarea>
       <Composer.Actions>

@@ -4,7 +4,7 @@ What can animate in each primitive, the attribute or variable that drives it, an
 
 ## Rules
 
-- **Animate the part's own element.** A part that unmounts after its exit waits for the transition on its own element, so put the transition there, not on a wrapper or a child. `Nav.List` is the exception: it waits for transitions anywhere in its `Nav.Group`.
+- **Animate the part's own element.** A part that unmounts after its exit waits for the transition on its own element, so put the transition there, not on a wrapper or a child. `Nav.List` is the exception: it waits for every animation anywhere in its `Nav.Group`, keyframes included. Stop an infinite animation, such as a spinner, before the group closes, or the group never finishes closing.
 - **Heights through the variables.** Animate a height only between 0 and the variable the part publishes, never with `max-height` tricks or a measured height of your own.
 - **Time the thread's scroll, never script it.** The thread runs every scroll itself: the follow, the landing, `scrollToBottom`, `scrollToTop` and `scrollToMessage`. Shape its smooth scrolls with the `--thread-scroll` variables below, never with a scroll animation of your own.
 
