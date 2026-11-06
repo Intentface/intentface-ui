@@ -1,8 +1,8 @@
 "use client";
 
 // Component-wiring shared by the composer parts: the internals context
-// (command registry, editor-update reporting) and the small hooks the parts
-// build on. Not consumer API.
+// (command registry, editor-update reporting, container measuring) and the
+// small hooks the parts build on. Not consumer API.
 
 import { createContext, type RefObject, use, useCallback, useEffect, useRef } from "react";
 import { useIsomorphicLayoutEffect } from "../internal/iso-layout-effect";
@@ -37,6 +37,7 @@ export type ComposerInternalsValue = {
   commands: ComposerCommandsMap;
   getRegisteredPrefixes: () => RegisteredPrefix[];
   reportEditorUpdate: () => void;
+  attachContainer: (element: HTMLElement) => () => void;
 };
 
 export const ComposerInternalsContext = createContext<ComposerInternalsValue | null>(null);
