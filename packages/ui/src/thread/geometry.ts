@@ -19,7 +19,7 @@ export const scrollContainerTo = (el: HTMLElement, top: number, behavior: Scroll
 };
 
 // The scroll viewport's own box. Streamed content never changes it; a container
-// animating open, a window resize or a growing dock always does — which is what
+// animating open, a window resize or a growing composer always does — which is what
 // separates the two kinds of resize the growth observer sees.
 export type ViewportBox = { width: number; height: number };
 
@@ -41,34 +41,18 @@ export const wasPrepended = (
   mutations.some((m) => m.addedNodes.length > 0) &&
   mutations.every((m) => m.removedNodes.length === 0);
 
-// Fallback (px) until the composer is measured.
-export const DEFAULT_BOTTOM_OFFSET = 128;
-// Breathing room between the last line of content and the composer dock. The
-// bottom overlay spans it in the styled layer.
-const COMPOSER_GAP = 32;
-// The dock is the Thread.Composer slot — the one element the thread reserves
-// space for. Null until it mounts.
-export const DOCK_SELECTOR = "[data-thread-composer]";
-
-export const queryDock = (root: HTMLElement): HTMLElement | null =>
-  root.querySelector(DOCK_SELECTOR);
-
 /**
- * Height (px) to reserve at the bottom for the dock: its top edge down to the
- * root's bottom, plus the content gap. Measured against the root's bottom
- * rather than the slot's own height, so a dock that floats above the bottom
- * edge still reserves the space beneath it. Parts that must NOT reserve space
- * — the command-list / ask-user panel, the scroll button — are positioned out
- * of the slot's flow. Returns null when the slot isn't mounted yet.
+ * The composer's own box, plus the room it takes at the bottom: its top edge
+ * down to the root's bottom. Measured against the root's bottom rather than the
+ * slot's own height, so a composer that floats above the bottom edge still
+ * reserves the space beneath it. Parts that must NOT reserve space — the
+ * command-list / ask-user panel, the scroll button — sit out of the slot's flow.
  */
-export const measureDockInset = (root: HTMLElement): number | null => {
-  const dock = queryDock(root);
-  if (!dock) return null;
-  const dockTop = dock.getBoundingClientRect().top;
-  return Math.round(root.getBoundingClientRect().bottom - dockTop + COMPOSER_GAP);
+export const measureComposer = (root: HTMLElement, composer: HTMLElement) => {
+  const { top, width, height } = composer.getBoundingClientRect();
+  return {
+    inset: Math.round(root.getBoundingClientRect().bottom - top),
+    width: Math.round(width),
+    height: Math.round(height),
+  };
 };
-
-// Top inset reserved by the top overlay, measured straight off the rendered
-// element (px) — no getComputedStyle / rem→px conversion. 0 if no top overlay.
-export const measureTopInset = (root: HTMLElement): number =>
-  root.querySelector('[data-thread-overlay="top"]')?.getBoundingClientRect().height ?? 0;

@@ -119,13 +119,13 @@ const RAISED =
   "bg-white bg-linear-to-b from-white to-[#fdfdfd] shadow-[inset_0_1px_0_#fff,0_0_0_1px_rgb(0_0_0/0.075),0_1px_2px_rgb(0_0_0/0.07),0_2px_6px_-2px_rgb(0_0_0/0.05)] dark:bg-[#2d2d30] dark:from-[#313134] dark:to-[#2a2a2d] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.1),inset_0_0_0_1px_rgb(255_255_255/0.05),0_0_0_1px_rgb(0_0_0/0.16),0_1px_2px_rgb(0_0_0/0.1)]";
 
 /*
- * The chat itself: a thread in a card, with the composer docked over its
+ * The chat itself: a thread in a card, with the composer floating over its
  * bottom edge. Everything but `chat` goes to Thread.Root, and `className` adds
  * to its own.
  *
- * Each question and its reply share a Message.Turn, so the reserve the primitive
- * publishes lands on the whole turn (it goes on the last child). The docked
- * composer is measured, so the reserve fills exactly the visible area.
+ * Each question and its reply share a Message.Turn, so the reserve lands on the
+ * whole turn, the last child. The floating composer is measured, so the reserve
+ * fills exactly the visible area.
  */
 export const StreamedChat = ({
   chat,
@@ -136,21 +136,20 @@ export const StreamedChat = ({
     <Thread.Root
       {...rootProps}
       className={[
-        "relative flex h-full w-full overflow-hidden [--thread-overlay-top-height:1rem]",
+        "relative flex h-full w-full overflow-hidden [--thread-inset-top:1rem] [--thread-composer-gap:2rem]",
         className,
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      {/* Measured by the primitive: a landed turn sits this far below the top. */}
-      <Thread.Overlay
-        direction="top"
-        className="inset-x-0 top-0 z-1 h-(--thread-overlay-top-height) bg-linear-to-b from-white to-transparent dark:from-zinc-900"
+      {/* A fade over the top inset, the space a landed turn leaves at the top. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-1 h-(--thread-inset-top) bg-linear-to-b from-white to-transparent dark:from-zinc-900"
       />
       <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#0169cc]/60">
-        <div className="relative flex min-h-full w-full flex-col pt-(--thread-overlay-top-height) pb-(--thread-overlay-bottom-height)">
-          {/* The reserve the primitive publishes lands on the last child: the newest turn. */}
-          <Thread.Content className="flex min-h-full w-full flex-col gap-5 px-4 [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+        <div className="relative flex min-h-full w-full flex-col">
+          <Thread.Content className="flex min-h-full w-full flex-col gap-5 px-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
             {chat.exchanges.map((exchange, index) => (
               <Message.Turn key={exchange.id} className="flex flex-col gap-5">
                 {/* biome-ignore lint/a11y/useValidAriaRole: `role` is the message's author, not an ARIA role */}

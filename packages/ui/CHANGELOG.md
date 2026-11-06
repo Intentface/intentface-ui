@@ -1,5 +1,35 @@
 # @intentface/ui
 
+## 0.8.0
+
+### Minor Changes
+
+- [Chip] Fix `parseChipSegments` dropping chips whose label has brackets, and keeping the backslashes `encodeChipMarkdown` adds before brackets, parentheses and backslashes.
+- [Chip] [Breaking] Remove `CHIP_REF_PATTERN`. Read chip tokens with `parseChipSegments`.
+- [Chip] [Breaking] Remove `variant` and `ChipState` from `Chip.Root`. Style a chip with a class or your own `data-variant`, and use that value directly where a `className`, `style` or `render` callback read `state.variant`.
+- [Composer] [Breaking] `Composer.Root` renders a `<div>` instead of a `<form>`. Target `[data-composer-root]` instead of `form`, and pass `render={<form />}` to keep a form.
+- [Composer] [Breaking] `Composer.Submit` and `AskUser.Continue` are `type="button"` and send through the store. Don't rely on them submitting an enclosing form.
+- [Composer] [Breaking] `useComposerSubmit` returns `onClick` in place of `type`. Spread `onClick` onto your button and set `type="button"`.
+- [Composer] New `submit()` on the composer store.
+- [Composer] Fix `Composer.Textarea`'s `required` never blocking the submit of a form it sits in.
+- [Composer] New `--composer-height`, `--composer-width`, `--composer-container-height` and `--composer-container-width` on `Composer.Root`, and the same numbers as `size` on the composer store.
+- [Composer] New `getServerSnapshot()` on the composer store, with `size` null as the server rendered it. `useComposer` and `useComposerStore` hydrate against it.
+- [Composer] [Breaking] `Composer.Panel` and `Composer.Popover` render callbacks receive `Omit<ComposerState, "size">`. Let a separately declared callback infer its argument, or type it with that.
+- [Thread] [Breaking] Remove `Thread.Overlay`, its `ThreadOverlayProps` and `ThreadOverlayState` types, the `data-thread-overlay` attribute and `--thread-overlay-top-height`. Render your own `aria-hidden`, `pointer-events-none` `div` for a fade, and set the space above a landed turn with `--thread-inset-top`.
+- [Thread] [Breaking] Rename `--thread-overlay-bottom-height` to `--thread-inset-bottom`, which now includes `--thread-composer-gap`. Pad `Thread.Content` with `pb-(--thread-inset-bottom)` and set `--thread-composer-gap` on `Thread.Root` for the room above the composer.
+- [Thread] [Breaking] Remove `--thread-turn-area`. Read `--thread-turn-min-height` instead.
+- [Thread] [Breaking] `Thread.Viewport` is a size container, so it needs a definite height. Give it `h-full` inside a sized `Thread.Root` rather than only a `max-height`.
+- [Thread] [Breaking] `--thread-inset-bottom` and `--thread-turn-min-height` assume the composer overlays the viewport. If your composer sat in flow below a `flex-1` viewport, give `Thread.Composer` `absolute inset-x-0 bottom-0`, pad `Thread.Content` with `pb-(--thread-inset-bottom)`, and render `Message.Turn`s or pass `autoScroll="bottom"`.
+- [Thread] Move `--thread-turn-min-height` from `Thread.Content` to `Thread.Root`. It is the viewport's height (`100cqh`) minus the top inset and the bottom inset in `follow` and `jump`, and `0px` in `bottom` and `off`, so `[&>*:last-child]:min-h-(--thread-turn-min-height)` can stay on `Thread.Content` in every mode.
+- [Thread] New `--thread-inset-top` for the space above a landed turn and `--thread-composer-gap` for the room between the last line and the composer. Set both on `Thread.Root`.
+- [Thread] New `--thread-composer-height` and `--thread-composer-width`, the `Thread.Composer` slot's size.
+- [Thread] Fix a `Thread.Composer` that mounts late or remounts going unmeasured. Its variables are removed when it unmounts.
+- [Message] `groupTurns` accepts any records with an `id` and a `role`.
+
+### Patch Changes
+
+- [Composer] Fix sent attachments being released before `onSubmit` could read them, which left their `blob:` URLs dead. They are now released once `onSubmit` settles.
+
 ## 0.7.0
 
 ### Minor Changes

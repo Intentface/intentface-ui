@@ -19,9 +19,11 @@ const MESSAGES = [
 ];
 
 // Stage 2 — the same thread, with each row now a Message that reports its role.
+// autoScroll="bottom" reserves no space for the newest row, so the rows need no Message.Turn
+// wrapper yet. Stage 3 groups them into turns and uses the default `follow`.
 export const MessagesStage = () => (
   <div className="h-[280px] w-full max-w-xl overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.075),0_1px_2px_rgb(0_0_0/0.06),0_4px_8px_-2px_rgb(0_0_0/0.05)] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.05),inset_0_0_0_1px_rgb(255_255_255/0.06),0_0_0_1px_rgb(0_0_0/0.16),0_1px_2px_rgb(0_0_0/0.1)] dark:bg-zinc-900">
-    <Thread.Root className="relative flex h-full w-full overflow-hidden">
+    <Thread.Root autoScroll="bottom" className="relative flex h-full w-full overflow-hidden">
       <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
         <Thread.Content className="mx-auto flex w-full flex-col gap-4 p-4">
           {MESSAGES.map((message, index) => (

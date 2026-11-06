@@ -496,9 +496,9 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
         if (lastItem) remove(lastItem.id);
         return;
       }
-      case "submit-form": {
+      case "submit": {
         event.preventDefault();
-        (event.target as HTMLElement).closest("form")?.requestSubmit();
+        void store.submit();
         return;
       }
       case "soft-break": {

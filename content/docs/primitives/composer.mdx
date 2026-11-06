@@ -21,6 +21,7 @@ import { Store } from './composer/demos/store';
 - **Panel** — hosts command results, live steps, or an ask-user prompt above the field.
 - **Headless** — behavior lives in `@intentface/ui`; the demos below show one way to style it, and every class in them is yours to change.
 - **Isolate it from your stream** — see [Why the composer needs isolating](#why-the-composer-needs-isolating). The editor is the most expensive thing on the page to re-render per token.
+- **Fits inside your form** — `Composer.Root` renders a `<div>`, so it can sit inside your own `<form>`, and `Composer.Textarea`'s `name` puts its text in that form's `FormData`. Pass `render={<form />}` to make the root a form itself.
 - **Get started** — see [Quick start](/quick-start) to add the package.
 
 ## Anatomy
@@ -154,14 +155,13 @@ transitions.
 
 ## Keyboard
 
-`Composer.Root` is a `<form>`, so submission and key handling follow form
-semantics. The editor interprets keys by mode — a command list being open, or
-ask-user being active, takes priority over normal typing.
+The editor interprets keys by mode — a command list being open, or ask-user
+being active, takes priority over normal typing.
 
 **Normal typing**
 
 export const normalKeys = [
-  { keys: "Enter", description: "Submit the form (requestSubmit)." },
+  { keys: "Enter", description: "Send the message." },
   { keys: "Shift + Enter", description: "Insert a soft line break." },
   { keys: "Backspace", description: "When the editor is empty and attachments exist, remove the last attachment." },
 ];
@@ -211,8 +211,22 @@ tables are hand-authored from the package source.
 
 ### Composer
 
-The `<form>` that owns submission, store resolution, drag-and-drop, and the
-prop → store bridges. Renders `data-composer-root`.
+The `<div>` that owns submission, store resolution, drag-and-drop, and the
+prop → store bridges. Renders `data-composer-root`. Pass `render={<form />}` to
+make it a form; a submit event on that form sends too.
+
+The root measures itself and the `Container` in whole px and publishes the result
+twice. Descendants read the four CSS variables below, with a fallback because each
+is absent until measured: `height: var(--composer-height, 0px)`. The container
+pair is absent while no `Container` is mounted. A composer under `display: none`
+measures 0, which is a real size; under a hidden `<Activity>` the variables are
+removed instead. A positioned `Panel` (the default) and the `Popover` are portaled
+out of the root, so they don't inherit the variables; an `anchor={false}` Panel
+renders inside the root and does. Read `useComposer((c) => c.size)` inside the
+tree, portals included, and `useComposerStore(store, (c) => c.size)` from a sibling
+or parent that holds a `Composer.createStore()` handle. `size` is `null` until a
+root mounts and while a hidden `<Activity>` holds it. Don't size the root's own
+content from `--composer-height`, because that feeds back into the measurement.
 
 export const rootProps = [
   { name: "onSubmit", type: "(data: ComposerSubmitData) => void | Promise<void>", description: "Fires on message submit and on ask-user answers. Discriminate on data.kind." },
@@ -228,9 +242,13 @@ export const rootProps = [
 <PropsTable rows={rootProps} />
 
 export const rootAttrs = [
-  { attribute: "data-composer-root", description: "The form element." },
+  { attribute: "data-composer-root", description: "The root element." },
   { attribute: "data-submitting", description: "Present while isSubmitting is true." },
   { attribute: "data-dragging", description: "Present while files are dragged over the drop scope." },
+  { attribute: "--composer-height", values: "whole px", description: "The root's height. Absent until measured." },
+  { attribute: "--composer-width", values: "whole px", description: "The root's width. Absent until measured." },
+  { attribute: "--composer-container-height", values: "whole px", description: "The Container's height. Absent until measured, and while no Container is mounted." },
+  { attribute: "--composer-container-width", values: "whole px", description: "The Container's width. Absent until measured, and while no Container is mounted." },
 ];
 
 <AttributesTable rows={rootAttrs} />
@@ -243,6 +261,10 @@ Returns a `ComposerStore` handle. Pass it to `store`, read it with
 `getText`, `setText`, `serialize`, `ensureFocus`). `focus` takes the same
 options as `HTMLElement.focus()`: pass `{ preventScroll: true }` to focus a
 composer that's already on screen without scrolling the page around it.
+To subscribe without `useComposerStore`, pass `store.subscribe`,
+`store.getSnapshot` and `store.getServerSnapshot` to `useSyncExternalStore`.
+The server snapshot keeps `size` null, as the server rendered it, so a part
+that hydrates after the root has measured still matches the server HTML.
 
 ```tsx
 import { Composer, useComposerStore } from "@intentface/ui/composer";
@@ -359,7 +381,7 @@ Submit button that morphs into a stop control while generating. Renders
 `data-composer-submit`.
 
 export const submitProps = [
-  { name: "isGenerating", type: "boolean", default: "false", description: "Morphs into a stop control: type becomes \"button\" and clicking calls onStop." },
+  { name: "isGenerating", type: "boolean", default: "false", description: "Morphs into a stop control: clicking calls onStop instead of sending." },
   { name: "onStop", type: "() => void", description: "Abort callback — on click while generating, or on Escape inside the composer (see Keyboard)." },
 ];
 
@@ -380,7 +402,7 @@ part attribute of its own.
 
 export const attachmentsProps = [
   { name: "convert", type: "(file: File) => AttachmentItem", default: "blob ingestion", description: "Converts a picked/dropped/pasted File into an item. Override (with destroy) for custom ids, extra fields, or upload-backed items." },
-  { name: "destroy", type: "(item: AttachmentItem) => void", default: "revoke blob URL", description: "Cleanup for a removed item." },
+  { name: "destroy", type: "(item: AttachmentItem) => void", default: "revoke blob URL", description: "Cleanup for a removed item, or a sent one once onSubmit has settled." },
   { name: "accept", type: "string", default: '"" (everything)', description: "Accepted MIME types — the package imposes no policy; pass yours." },
   { name: "maxFiles", type: "number", default: "unlimited", description: "Maximum file count." },
   { name: "maxFileSize", type: "number", default: "unlimited", description: "Maximum size per file." },
@@ -420,7 +442,7 @@ UI-style): `--anchor-width` / `--anchor-height` (the anchor's box, e.g.
 so the content scrolls instead of overflowing).
 
 export const panelProps = [
-  { name: "children", type: "ReactNode | ((composer: ComposerState) => ReactNode)", description: "Panel content, or a callback that reads composer state and returns one branch by priority." },
+  { name: "children", type: 'ReactNode | ((composer: Omit<ComposerState, "size">) => ReactNode)', description: "Panel content, or a callback that reads composer state and returns one branch by priority." },
   { name: "anchor", type: "boolean | Element | RefObject<Element>", description: "Positioned, portaled overlay (default true, anchored to the Container) or an in-flow block (false). A ref/element anchors elsewhere. Match its width with width: var(--anchor-width)." },
   { name: "side", type: '"top" | "bottom" | "left" | "right"', description: "Overlay preferred side; flips to the opposite on collision. Default \"top\"." },
   { name: "align", type: '"start" | "center" | "end"', description: "Overlay alignment along the side. Default \"center\"." },
@@ -456,7 +478,7 @@ written imperatively — the styled layer supplies only box and animation stylin
 not `left`/`top`.
 
 export const popoverProps = [
-  { name: "children", type: "ReactNode | ((composer: ComposerState) => ReactNode)", description: "Same content as Panel — nodes or a state callback." },
+  { name: "children", type: 'ReactNode | ((composer: Omit<ComposerState, "size">) => ReactNode)', description: "Same content as Panel — nodes or a state callback." },
   { name: "pin", type: "boolean", description: "Hold the placement without collision repositioning (drops flip + shift). Default false." },
 ];
 
@@ -562,8 +584,8 @@ namespace in `@intentface/ui/ask-user`, reading the step through
 `askUser.active`.
 
 `AskUser.Dismiss` is a plain button you wire to `askUser.dismissStep`;
-`AskUser.Continue` is `type="submit"`, so the enclosing `Composer.Root` form
-drives it. Neither ships copy — supply the labels as children, and read
+`AskUser.Continue` is a `type="button"` that sends through the composer, like
+Enter. Neither ships copy — supply the labels as children, and read
 `askUser.isLastStep` to switch the continue wording.
 
 ### Hooks
@@ -572,7 +594,7 @@ export const hooks = [
   { name: "useComposer", type: "(selector?) => Selected", description: "Subscribe to a slice of the nearest composer's store. Throws outside <Composer.Root>." },
   { name: "useComposerStore", type: "(store, selector?) => Selected", description: "Same, for an explicit createStore() handle — the outside-the-tree twin." },
   { name: "useComposerController", type: "() => ComposerEditorState", description: "The nearest composer's imperative editor controls (focus, insert, clear, …)." },
-  { name: "useComposerSubmit", type: "(options) => ComposerSubmitState", description: "Computes Submit's type/disabled/generating; auto-disables while empty or submitting; aborts on Escape inside the composer." },
+  { name: "useComposerSubmit", type: "(options) => ComposerSubmitState", description: "Computes Submit's disabled/generating/onClick; auto-disables while empty or submitting; aborts on Escape inside the composer." },
   { name: "useCommandListItems", type: "() => { items, state }", description: "The resolved items and load state inside a Command. Throws outside one." },
 ];
 

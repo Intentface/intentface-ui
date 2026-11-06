@@ -25,8 +25,8 @@ const INITIAL: DemoMessage[] = [
 
 const REPLY = "Good question — the short answer is it depends on what you're optimizing for.";
 
-// Thread measures its docked composer and publishes the reserve as
-// --thread-overlay-bottom-height, so the scroll area never hides behind it.
+// Thread measures its floating composer and publishes the room it takes as
+// --thread-inset-bottom; Content pads by it, so the scroll area never hides behind it.
 // autoScroll="bottom" pins the transcript to the composer: the latest turn sits
 // right above it instead of landing at the top over an empty reserve. Messages
 // and composer share one centred column, narrower than the window.
@@ -46,12 +46,11 @@ export const Basic = () => {
     <div className="h-[440px] w-full max-w-xl overflow-hidden rounded-xl bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.075),0_1px_2px_rgb(0_0_0/0.06),0_4px_8px_-2px_rgb(0_0_0/0.05)] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.05),inset_0_0_0_1px_rgb(255_255_255/0.06),0_0_0_1px_rgb(0_0_0/0.16),0_1px_2px_rgb(0_0_0/0.1)] dark:bg-zinc-900">
       <Thread.Root
         autoScroll="bottom"
-        className="relative flex h-full w-full overflow-hidden [--thread-overlay-top-height:1rem]"
+        className="relative flex h-full w-full overflow-hidden [--thread-inset-top:1rem] [--thread-composer-gap:2rem]"
       >
         <Thread.Viewport className="h-full w-full overflow-x-hidden overflow-y-auto outline-none [overflow-anchor:auto]">
-          <div className="relative flex min-h-full w-full flex-col items-center pt-(--thread-overlay-top-height) pb-(--thread-overlay-bottom-height)">
-            {/* The last child carries the auto-scroll reserve the primitive sets. */}
-            <Thread.Content className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-end gap-5 px-4 [&>*:last-child]:min-h-(--thread-turn-min-height,0px)">
+          <div className="relative flex min-h-full w-full flex-col items-center">
+            <Thread.Content className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-end gap-5 px-4 pt-(--thread-inset-top) pb-(--thread-inset-bottom) [&>*:last-child]:min-h-(--thread-turn-min-height)">
               {messages.map((message, index) => (
                 <Message.Root
                   key={message.id}
