@@ -21,7 +21,7 @@ What each part renders, what the package already sets on it inline, and what the
 | `Composer.Container` | Nothing | The input's surface. |
 | `Composer.Textarea`, `data-composer-textarea` | A relative wrapper around the editor and the placeholder | The padding, the minimum and maximum height, the scrolling, and the font family, size and line height. |
 | The editor, `data-composer-editor` | `white-space: break-spaces` and `overflow-wrap: break-word` | The text color, the caret and the focus style. Never its type or padding alone. |
-| The placeholder overlay, `data-composer-placeholder` | `position: absolute`, `inset: 0` over the editor, `pointer-events: none`, while the editor is empty | Nothing. It already starts where the caret does. |
+| The placeholder overlay, `data-composer-placeholder` | `position: absolute`, `inset: 0` over the editor, `pointer-events: none` and `aria-hidden`, while the editor is empty | The hint's color. Never a position or padding, because it already starts where the caret does. |
 | `Composer.Placeholder`, `data-composer-placeholder-text` | Nothing | A color only. Never a position, padding or type of its own. |
 | `Composer.Actions` | Nothing | The row of buttons. |
 | `Composer.Submit`, `data-composer-submit` | `type="button"`, and `disabled` while there is nothing to send | Everything visual, per `:disabled` and `data-generating`. |

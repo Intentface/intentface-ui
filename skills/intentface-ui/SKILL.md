@@ -143,7 +143,7 @@ An AI SDK message holds a list of parts. Split them into segments in order, and 
 
 | Rule | Summary |
 |------|---------|
-| Segment the parts | `getSegmentedParts(message.parts)` groups neighboring parts of one kind into `text`, `reasoning`, `tool` and `file` segments, in order. It skips kinds it doesn't render, such as sources, and `dynamic-tool` parts, which MCP and other dynamic tools produce. Render those from `message.parts` yourself. |
+| Segment the parts | `getSegmentedParts(message.parts)` groups neighboring parts of one kind into `text`, `reasoning`, `tool` and `file` segments, in order. It skips kinds it doesn't render, such as sources, and `dynamic-tool` parts, which MCP and other dynamic tools produce, and merges the text on either side of a skipped part. A chat with dynamic tools renders `message.parts` in one pass instead, so each tool keeps its place. |
 | Text segments | Render the user's text with `Message.Text`, never a plain markdown renderer. The composer writes chips into the text as `[Label](chip:prefix:value)`, which a markdown renderer shows as links. Render the assistant's text with the app's markdown renderer, through `renderText` when it can hold chips. |
 | Reasoning segments | A reasoning segment becomes a `Reasoning.Root`. Its parts' `state` says whether it is still streaming. |
 | Tool segments | A tool segment becomes `Steps` items, one per tool part, keyed by `toolCallId`. Map each of the AI SDK's tool states to a status of the app's own, including the approval states and `"output-denied"`. A state you don't map gives `undefined`, and `Steps.Item` shows it as complete. The status reaches the DOM as `data-status`. |
@@ -167,11 +167,11 @@ The composer owns the editor, the commands, the chips and the submit button. Wha
 
 | Rule | Summary |
 |------|---------|
-| Required parts | `Composer.Root`, `Composer.Container` and `Composer.Textarea`. The textarea holds `Composer.Placeholder`, and `Composer.Actions` holds `Composer.Submit`. |
+| Required parts | `Composer.Root`, `Composer.Container` and `Composer.Textarea`. `Composer.Actions` holds `Composer.Submit`. |
 | Submit data | `onSubmit` receives a `ComposerSubmitData`. Check `kind`. `"message"` carries the trimmed `text` and the `files`, and `"answers"` carries the ask-user answers. The editor is already cleared when `onSubmit` runs. |
 | Editor styling | The editable element belongs to the editor engine. Style its text color and focus from `Composer.Textarea` with descendant selectors on `data-composer-editor`. Never override its `white-space`. |
 | Box and type on the textarea | Put the padding, minimum and maximum height, scrolling, and the font family, size and line height on `Composer.Textarea`. The editor and the placeholder both inherit them, so their text lines up. Padding or type on the editor alone moves the caret but not the placeholder. |
-| The placeholder is positioned | While the editor is empty, `Composer.Textarea` lays an overlay, `data-composer-placeholder`, over the editor at `inset: 0`, and `Composer.Placeholder` renders inside it. Never position or pad `Composer.Placeholder`, and give it a color only. An `absolute` with `top` and `left` counts the textarea's padding twice. |
+| The placeholder | Pass the hint as `Composer.Textarea`'s `placeholder`, which also sets `aria-placeholder`. While the editor is empty, the textarea draws it in an `aria-hidden` overlay, `data-composer-placeholder`, at `inset: 0` over the editor. A `Composer.Placeholder` inside the textarea replaces the drawn hint with rich content, which screen readers never hear, so keep the `placeholder` prop with it. Give the overlay a color only. An `absolute` with `top` and `left` counts the textarea's padding twice. |
 | Send-to-stop | `<Composer.Submit isGenerating onStop>` turns the button into stop while generating. `<Composer.Root isSubmitting>` only blocks sending. |
 | Never disable Submit for streaming | `disabled` on `Composer.Submit` replaces its automatic disabled state, so the button turns on with an empty field. |
 | Panel opens on children | `Composer.Panel` and `Composer.Popover` open whenever they have children. Gate inside, as in `{(composer) => composer.askUser.active && <Question />}`. A child that returns `null` still opens an empty panel. |

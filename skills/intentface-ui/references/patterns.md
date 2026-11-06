@@ -24,9 +24,7 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
     <Composer.Root onSubmit={handleSubmit} className="pointer-events-auto">
       <Composer.Attachments maxFiles={0} />
       <Composer.Container>
-        <Composer.Textarea aria-label="Message">
-          <Composer.Placeholder placeholder="Ask anything" />
-        </Composer.Textarea>
+        <Composer.Textarea aria-label="Message" placeholder="Ask anything" />
         <Composer.Actions>
           <Composer.Submit
             isGenerating={status === "submitted" || status === "streaming"}
@@ -46,7 +44,7 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
 - `Thread.Viewport` is a size container, so it needs a definite height, here the root's full height. Its `scroll-padding` keeps both insets clear wherever a row scrolls into view, such as through `scrollToMessage`, keyboard paging or a focus move.
 - The composer slot keeps to the column's width, `--chat-column`, so it never covers the viewport's scrollbar. `scrollbar-gutter: stable` keeps the column from shifting when the scrollbar appears. The slot is click-through, and only the composer catches the pointer, so clicks and drags around the composer reach the transcript and its scrollbar.
 - `<Composer.Attachments maxFiles={0} />` turns files off. The composer accepts dropped and pasted files by default, and this skeleton has no strip to show them. `references/attachments.md` builds a chat that takes files.
-- The textarea needs its own `aria-label`. The placeholder sets `aria-placeholder`, which doesn't name the field.
+- The textarea needs its own `aria-label`. Its `placeholder` draws the hint and sets `aria-placeholder`, which describes the field but doesn't name it.
 - The textarea carries the padding and the type, and the placeholder takes only a color. The package lays the placeholder over the editor, so any position or padding on it shifts it away from the caret.
 - `"submitted"` counts as generating, so the button turns to stop the moment the message is sent, before the first token.
 - `48rem` and `1rem` stand for the app's own tokens.
@@ -157,7 +155,7 @@ export const Row = memo(({ message, isLast, isError }: RowProps) => (
 ));
 ```
 
-- The segments keep the parts' order, so reasoning, tool calls and text interleave the way the model produced them.
+- The segments keep the parts' order, so reasoning, tool calls and text interleave the way the model produced them. `getSegmentedParts` drops `dynamic-tool` parts, which MCP tools produce, and merges the text on either side of one, so this row never shows them. A chat with dynamic tools renders `message.parts` in one pass instead.
 - Each reasoning segment streams on its own parts' `state`, so an earlier block settles while a later one is still thinking. `Reasoning.Root` reflects it as `data-streaming`.
 - The map covers every AI SDK tool state. A state left out gives `undefined`, and `Steps.Item` shows it as complete.
 - The step status is the app's own vocabulary. `Steps.Item` reflects it as `data-status` on the item, its icon and its label, which is where the per-status styles go. `data-status` reaches no screen reader, so `Steps.Status` reads the status out in a visually hidden span. Pass it children to word each status in the app's copy.
@@ -175,13 +173,12 @@ import type { UseChatHelpers } from "@ai-sdk/react";
 import { Message } from "@intentface/ui/message";
 import { getSegmentedParts, groupTurns } from "@intentface/ui/message-utils";
 import { Thread } from "@intentface/ui/thread";
+import type { UIMessage } from "ai";
 import { Row } from "./row";
 
 const PendingIndicator = () => <span aria-hidden="true">•••</span>;
 
-import type { UIMessage } from "ai";
-
-export const Transcript = ({ chat }: { chat: UseChatHelpers<UIMessage> }) => {
+export const Transcript = <M extends UIMessage>({ chat }: { chat: UseChatHelpers<M> }) => {
   const { messages, status, regenerate } = chat;
   const turns = groupTurns(messages);
   const last = messages.at(-1);
@@ -227,7 +224,7 @@ export const Transcript = ({ chat }: { chat: UseChatHelpers<UIMessage> }) => {
 };
 ```
 
-- `chat` is the one `useChat()` result the page also hands its composer. A second `useChat()` call creates a separate chat, which the composer's messages never reach.
+- `chat` is the one `useChat()` result the page also hands its composer. A second `useChat()` call creates a separate chat, which the composer's messages never reach. `Transcript` is generic over the message type, so a chat with typed metadata, data parts or tools passes too.
 - The pending indicator and the error row live inside the last turn, so the thread doesn't treat either one as a new turn to land.
 - `"submitted"` ends at the first stream chunk that changes the message, which can come before any text. The indicator stays until the reply has a segment to show, then the assistant's own message takes over.
 - Only the newest message gets `isError`, and `Message.Root` reflects it as `data-error`. When the request fails before any reply, that's the user's own message.
@@ -292,9 +289,7 @@ export const ChatInput = ({ onSubmit }: { onSubmit: (data: ComposerSubmitData) =
       }
     </Composer.Popover>
     <Composer.Container>
-      <Composer.Textarea aria-label="Message">
-        <Composer.Placeholder placeholder="Type @ to mention a file" />
-      </Composer.Textarea>
+      <Composer.Textarea aria-label="Message" placeholder="Type @ to mention a file" />
       <Composer.Actions>
         <Composer.Submit />
       </Composer.Actions>

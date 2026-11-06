@@ -87,9 +87,7 @@ export const AskingChat = () => {
         {(composer) => composer.askUser.active && <Question />}
       </Composer.Panel>
       <Composer.Container>
-        <Composer.Textarea>
-          <Composer.Placeholder placeholder="Or type your own answer" />
-        </Composer.Textarea>
+        <Composer.Textarea aria-label="Message" placeholder="Or type your own answer" />
         <Composer.Actions>
           <Composer.Submit />
         </Composer.Actions>

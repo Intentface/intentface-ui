@@ -40,7 +40,7 @@ A prop in the first column means the app sets the state and the part reflects it
 | `--composer-container-height`, `--composer-container-width` | `Composer.Root` | once measured, while a `Composer.Container` is mounted | The same, for the container. |
 | `data-composer-textarea` | `Composer.Textarea` | always | The padding, the height, the scrolling and the type. The editor and the placeholder inherit them, so their text lines up. |
 | `data-composer-editor` | the editable element inside `Composer.Textarea` | always | The text color, the caret and the focus style. It is the element that takes focus. Font metrics belong on the textarea, or the placeholder won't match. |
-| `data-composer-placeholder` | an overlay over the editor, inside `Composer.Textarea` | while the editor is empty | Nothing. The package positions it at `inset: 0` over the editor, so it already starts where the caret does. |
+| `data-composer-placeholder` | an overlay over the editor, inside `Composer.Textarea` | while the editor is empty | The hint's color. The package positions it at `inset: 0` over the editor, so it already starts where the caret does. |
 | `data-composer-placeholder-text` | `Composer.Placeholder` | while the editor is empty | The placeholder's color. Never position or pad it. |
 | `data-filled` | `Composer.Textarea` | while the editor has content | A filled style, such as showing a clear button. |
 | `data-disabled` | `Composer.Textarea` | while disabled | The disabled style. |
