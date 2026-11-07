@@ -25,6 +25,7 @@ import {
 import { createPortal } from "react-dom";
 import { Chip } from "../chip/index";
 import { type ChipData, parseChipSegments } from "../chip-markdown";
+import { isComposingKey } from "../internal/is-composing-key";
 import { useRefWithInit } from "../internal/render/useRefWithInit";
 import {
   documentToDomSpec,
@@ -425,9 +426,7 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    // An IME owns Enter (conversion confirm) and the arrows (candidate
-    // window) during composition — 229 covers engines that omit isComposing.
-    if (event.isComposing || event.keyCode === 229) return;
+    if (isComposingKey(event)) return;
 
     const { store, options } = getDependencies();
     const action = interpretEditorKey(
@@ -773,7 +772,10 @@ export const useComposerEditor = (options: UseComposerEditorOptions): UseCompose
     },
     onKeyDown: (event) => {
       dependenciesRef.current.options.onKeyDown?.(event);
-      if (!event.defaultPrevented) engine.handleKeyDown(event.nativeEvent);
+      if (event.defaultPrevented) return;
+      engine.handleKeyDown(event.nativeEvent);
+      const isHandledByEngine = event.nativeEvent.defaultPrevented;
+      if (isHandledByEngine) event.preventDefault();
     },
     onKeyUp: (event) => {
       dependenciesRef.current.options.onKeyUp?.(event);

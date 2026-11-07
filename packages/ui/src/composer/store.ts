@@ -22,6 +22,7 @@ import {
   revokeAttachmentUrl,
   toAttachmentItem,
 } from "../attachments";
+import { isComposingKey } from "../internal/is-composing-key";
 import {
   type AnswerEntry,
   type AskUserAction,
@@ -256,6 +257,7 @@ type AskUserKeydownDeps = {
 const createAskUserKeydownHandler =
   ({ controller, optionsRef, editorRef, dispatch }: AskUserKeydownDeps) =>
   (event: KeyboardEvent) => {
+    if (isComposingKey(event)) return;
     const scopedOptionsElement = optionsRef.current?.getElement() ?? null;
     if (
       !isEventForComposer(

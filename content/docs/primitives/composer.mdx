@@ -195,8 +195,10 @@ While `isGenerating`, `Escape` inside the composer calls `Submit`'s `onStop` (vi
 `useComposerSubmit`): from the editor, a button, or a part a positioned `Panel`
 renders elsewhere on the page. An Escape outside the composer is left alone, as is
 one something already handled, such as the command list closing. The composer
-marks the Escape it uses with `preventDefault()`, so the same press does not also
-close a surface around it, such as a floating `Tabs.Popup`.
+marks the Escape it uses with `preventDefault()` and stops its propagation, so the
+same press does not also close a surface around it. That covers a floating
+`Tabs.Popup` and portaled popups from other libraries, such as a Base UI
+`Popover` or `Dialog`, which close on any Escape that reaches them.
 
 To keep Escape for something else, call `event.preventPrimitiveHandler()` in
 `Composer.Root`'s `onKeyDown`. To stop from anywhere in the chat, handle Escape on
