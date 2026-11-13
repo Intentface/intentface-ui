@@ -15,7 +15,7 @@ The package owns behavior: state, keyboard handling, focus, ARIA wiring and meas
 |------|---------|
 | Headless | The parts render semantic DOM with `data-*` attributes and no classes. There is no styled package, stylesheet or theme. Style the parts, and use the app's own components through `render`. Never replace the parts with another library's chat components. |
 | Explicit roots | Render `<Composer.Root>`, never `<Composer>`. Import each entry point, such as `@intentface/ui/composer`. There is no bare `@intentface/ui` import. |
-| Client parts | A server component can render the parts. Event handlers, render functions and React hooks need a `"use client"` module. `@intentface/ui/types`, `@intentface/ui/message-utils` and `@intentface/ui/chip-markdown` import anywhere. |
+| Client parts | A server component can render the parts. Event handlers, render functions and React hooks need a `"use client"` module. `@intentface/ui/types` and `@intentface/ui/chip-markdown` import anywhere. |
 | No transport | The package never makes a request. The app owns the client, the routes, the message list and persistence. A Vercel AI SDK `UIMessage` fits the message types with no adapter. |
 
 ## Entry points
@@ -36,7 +36,6 @@ Each entry point is its own import and has its own docs page.
 | `@intentface/ui/nav` | A nav tree with roving focus, typeahead and collapsible groups. https://ui.intentface.com/primitives/nav.md |
 | `@intentface/ui/tabs` | Closable tabs whose panel renders in the layout or anchored to its tab. https://ui.intentface.com/primitives/tabs.md |
 | `@intentface/ui/types` | The message types and part type guards, such as `isToolPart`. No page, so read the exported types and their JSDoc. |
-| `@intentface/ui/message-utils` | Pure helpers over messages: `groupTurns`, `getSegmentedParts`, `getTextInfo` and `getFileParts`. No page, so read the exported types and their JSDoc. |
 | `@intentface/ui/chip-markdown` | The chip wire format in message text: `encodeChipMarkdown` and `parseChipSegments`. No page, so read the exported types and their JSDoc. |
 | `@intentface/ui/generative` | Experimental. Checks and reads a model's UI tool call against a catalog of the app's components. https://ui.intentface.com/generative/catalog.md |
 
@@ -116,7 +115,7 @@ The thread owns scrolling. It follows the stream while the user is at the bottom
 | Build order | `Thread.Root` holds `Thread.Viewport`, which holds `Thread.Content`, and the turns are the direct children of `Thread.Content`. `Thread.Composer` comes after the viewport and holds `Composer.Root`. |
 | Content from the start | Render `Thread.Content` together with `Thread.Root`, even with no messages. A `Thread.Content` mounted later, as in `{messages.length > 0 && <Thread.Content>}`, never lands or follows. |
 | Turns in Content | Never render turns straight into `Thread.Viewport`. The thread watches only the direct children of `Thread.Content`, so auto-follow and landing stop working. |
-| One turn per exchange | Group messages with `groupTurns`, and wrap each question and its replies in one `Message.Turn`. Otherwise the newest reply lands at the top and pushes its question out of view. A flat transcript with one row per message needs `autoScroll="bottom"`. |
+| One turn per exchange | Group messages into turns with a `groupTurns` of the app's own (`references/patterns.md` has one), and wrap each question and its replies in one `Message.Turn`. Otherwise the newest reply lands at the top and pushes its question out of view. A flat transcript with one row per message needs `autoScroll="bottom"`. |
 | Definite height | `Thread.Root` needs a height from the app's layout. `Thread.Viewport` is a size container, so it needs a definite height too, such as `h-full`. A viewport sized only by `max-height` collapses. |
 | Set the insets | Set `--thread-inset-top` on `Thread.Root` for the space a landed turn keeps below the thread's top edge, and `--thread-composer-gap` for the room between the last line and the composer. Both default to 0. Make the top inset the height of anything that floats over the thread, plus a spacing token. A header in flow above `Thread.Root` adds nothing. `references/patterns.md` has both cases. |
 | Pad the content | Pad `Thread.Content`'s top with `--thread-inset-top` and its bottom with `--thread-inset-bottom`, and give its last child a minimum height of `--thread-turn-min-height`. A turn lands exactly at the top inset only while these three agree, so add no other padding, margin or gap between the viewport and the turns. The minimum height is `0px` in `"bottom"` and `"off"`, so the rule stays in every mode. |
@@ -143,11 +142,11 @@ An AI SDK message holds a list of parts. Split them into segments in order, and 
 
 | Rule | Summary |
 |------|---------|
-| Segment the parts | `getSegmentedParts(message.parts)` groups neighboring parts of one kind into `text`, `reasoning`, `tool` and `file` segments, in order. It skips kinds it doesn't render, such as sources, and `dynamic-tool` parts, which MCP and other dynamic tools produce, and merges the text on either side of a skipped part. A chat with dynamic tools renders `message.parts` in one pass instead, so each tool keeps its place. |
+| Segment the parts | Group neighboring parts of one kind into `text`, `reasoning`, `tool` and `file` segments, in order, with a `getSegmentedParts` of the app's own (`references/patterns.md` has one). It skips kinds it doesn't render, such as sources, and `dynamic-tool` parts, which MCP and other dynamic tools produce, and merges the text on either side of a skipped part. A chat with dynamic tools renders `message.parts` in one pass instead, so each tool keeps its place. |
 | Text segments | Render the user's text with `Message.Text`, never a plain markdown renderer. The composer writes chips into the text as `[Label](chip:prefix:value)`, which a markdown renderer shows as links. Render the assistant's text with the app's markdown renderer, through `renderText` when it can hold chips. |
 | Reasoning segments | A reasoning segment becomes a `Reasoning.Root`. Its parts' `state` says whether it is still streaming. |
 | Tool segments | A tool segment becomes `Steps` items, one per tool part, keyed by `toolCallId`. Map each of the AI SDK's tool states to a status of the app's own, including the approval states and `"output-denied"`. A state you don't map gives `undefined`, and `Steps.Item` shows it as complete. The status reaches the DOM as `data-status`. |
-| File segments | `getFileParts(segments)` returns the file parts, which render with the app's own preview. |
+| File segments | A file segment's parts render with the app's own preview. |
 
 ## Chat lifecycle
 

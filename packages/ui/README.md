@@ -12,8 +12,8 @@ Tailwind, meant to be copied and restyled.
 "use client";
 import { Composer } from "@intentface/ui/composer";
 import { Message } from "@intentface/ui/message";
-import { groupTurns } from "@intentface/ui/message-utils";
 import { Thread } from "@intentface/ui/thread";
+import { groupTurns } from "./group-turns";
 
 export const Chat = ({ messages, send }: ChatProps) => (
   <Thread.Root
@@ -55,6 +55,8 @@ position the composer, give the viewport a height, pad the content by those
 variables and give the last turn its `min-height`, so the newest question and
 its reply land together at the top. That is why each child of `Thread.Content` is a
 `Message.Turn`. For a flat list of messages, use `autoScroll="bottom"` instead.
+`groupTurns` is your own. It starts a turn at each user message, and the
+[quick start](https://ui.intentface.com/quick-start) has one to copy.
 
 ## Status
 
@@ -93,20 +95,22 @@ tabs are app-shell parts rather than chat parts, and are useful on their own:
 | `@intentface/ui/chip`, `/attachments`, `/ask-user` | The remaining building blocks. |
 | `@intentface/ui/generative` | Experimental. Typed helpers that check a model's UI tool call against a catalog, read it while it streams, resolve its data bindings, and write it as Markdown. |
 | `@intentface/ui/types` | The structural message contract + part type guards. |
-| `@intentface/ui/message-utils` | Part segmentation, turn grouping, reasoning/source derivation. |
 | `@intentface/ui/chip-markdown` | The self-describing chip wire format. |
 
 ## AI SDK, structurally
 
 The types are framework-agnostic. A Vercel AI SDK `UIMessage` satisfies
 `ChatMessage` structurally, so there's no adapter — pass SDK messages straight
-into the utilities and components:
+into the type guards and components:
 
 ```tsx
-import { groupTurns } from "@intentface/ui/message-utils";
+import { isToolPart } from "@intentface/ui/types";
 import type { UIMessage } from "ai";
 
-const turns = groupTurns(messages); // messages: UIMessage[]
+// message: UIMessage
+for (const part of message.parts) {
+  if (isToolPart(part)) track(part.toolCallId, part.state);
+}
 ```
 
 ## React Server Components
@@ -148,8 +152,8 @@ export const Chat = () => (
 ```
 
 Hooks (`useComposer`, `useThread`, `useReasoning`, …) are client-only, as usual.
-The pure modules — `/types`, `/message-utils`, `/chip-markdown` — carry no
-directive and import fine anywhere.
+The pure modules — `/types` and `/chip-markdown` — carry no directive and
+import fine anywhere.
 
 ## Docs
 

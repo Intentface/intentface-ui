@@ -49,7 +49,7 @@ Chat.onFinish → useChatStore.setMessages(chatId, …)  [localStorage]
 | `source-url`  | Citations (`sendSources: true`), deduped by hostname                      |
 | `file`        | User-uploaded attachments                                                 |
 
-Helpers in `lib/message-utils.ts` group consecutive parts into segments and expose derived flags so renderers don't reach into part shapes directly.
+Helpers in `lib/ai/message-info.ts` group consecutive parts into segments and expose derived flags so renderers don't reach into part shapes directly.
 
 ---
 
@@ -432,7 +432,7 @@ export const Steps = Object.assign(StepsRoot, {
 
 `Steps` is a `Collapsible` that renders a chronological list of in-flight or completed work items. `Steps.Step` takes a `label` + `status` (`"complete" | "active" | "pending"`) and is a static row when it has no children, a nested collapsible when it does.
 
-The active-vs-complete label is resolved in `Steps.ToolCall`, not `Steps.Step`: it reads the `toolLabels` map from context (default `DEFAULT_TOOL_LABELS` in `lib/message-utils.ts`) and calls `labelConfig.active(input)` while a tool runs / `labelConfig.complete(input)` once it finishes (fallback `Running ${name}` / `Ran ${name}`). `Steps.AskUser` renders an answered ask-user exchange.
+The active-vs-complete label is resolved in `Steps.ToolCall`, not `Steps.Step`: it reads the `toolLabels` map from context (default `DEFAULT_TOOL_LABELS` in `lib/ai/tool-labels.ts`) and calls `labelConfig.active(input)` while a tool runs / `labelConfig.complete(input)` once it finishes (fallback `Running ${name}` / `Ran ${name}`). `Steps.AskUser` renders an answered ask-user exchange.
 
 `InterleavedSteps` (in `chat.tsx`) drives the historical/inline case where reasoning and tool calls are mixed in one assistant turn. The **live** in-flight version is `StepQueue`, rendered above the composer inside `Composer.PanelItem value="active"`.
 
@@ -506,7 +506,7 @@ Keeping message bodies out of the Zustand `persist` state (a thin localStorage f
 
 ---
 
-## Helpers — `lib/message-utils.ts`
+## Helpers — `lib/ai/`
 
 | Helper                          | What it does                                                              |
 | ------------------------------- | ------------------------------------------------------------------------- |
