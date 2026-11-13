@@ -6,7 +6,8 @@ import { useState } from "react";
 import { Controls, Prompt } from "./ask-user";
 
 // Setting `questions` arms the flow and flips askUser.active. Answering or
-// skipping the last one fires onSubmit with { kind: "answers" }.
+// skipping the last one fires onSubmit with { kind: "answers" } and turns
+// askUser.active off, even while `questions` stays set.
 const QUESTIONS: AskUserQuestion[] = [
   {
     question: "Which framework are you deploying to?",

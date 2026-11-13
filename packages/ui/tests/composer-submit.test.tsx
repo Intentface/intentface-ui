@@ -276,11 +276,11 @@ describe("render={<form />}", () => {
   });
 });
 
-describe("AskUser.Continue", () => {
-  const QUESTIONS: AskUserQuestion[] = [
-    { question: "Which database?", options: [{ label: "PostgreSQL" }, { label: "SQLite" }] },
-  ];
+const QUESTIONS: AskUserQuestion[] = [
+  { question: "Which database?", options: [{ label: "PostgreSQL" }, { label: "SQLite" }] },
+];
 
+describe("AskUser.Continue", () => {
   const Questions = () => {
     const askUser = useComposer((composer) => composer.askUser);
     const question = askUser.questions?.[askUser.step];
@@ -319,6 +319,51 @@ describe("AskUser.Continue", () => {
       kind: "answers",
       answers: [{ question: "Which database?", option: "SQLite" }],
     });
+  });
+});
+
+// The consumer keeps `questions` set after the answers arrive, as a real chat
+// does until its next turn renders.
+describe("after the last question step", () => {
+  const renderAnswered = () => {
+    const submitted: ComposerSubmitData[] = [];
+    const store = createComposerStore();
+    render(
+      <Composer.Root
+        store={store}
+        questions={QUESTIONS}
+        onSubmit={(data) => void submitted.push(data)}
+      >
+        <Composer.Textarea aria-label="Message" />
+        {/* Stays mounted, as in a panel animating out. */}
+        <AskUser.Continue>Continue</AskUser.Continue>
+      </Composer.Root>,
+    );
+    act(() => void fireEvent.keyDown(editor(), { key: "Escape" }));
+    return { submitted, store };
+  };
+
+  test("an Enter does not send the answers again", () => {
+    const { submitted } = renderAnswered();
+
+    pressEnter();
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
+  });
+
+  test("a typed follow-up is sent as a message", () => {
+    const { submitted, store } = renderAnswered();
+
+    act(() => store.controller.setText("Thanks"));
+    pressEnter();
+    expect(submitted.at(-1)).toMatchObject({ kind: "message", text: "Thanks" });
+  });
+
+  test("AskUser.Continue sends nothing", () => {
+    const { submitted, store } = renderAnswered();
+
+    act(() => store.controller.setText("Thanks"));
+    act(() => void fireEvent.click(screen.getByRole("button", { name: "Continue" })));
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
   });
 });
 

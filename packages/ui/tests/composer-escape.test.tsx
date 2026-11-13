@@ -25,8 +25,14 @@ const ChatComposer = ({
   </Composer.Root>
 );
 
-const pressEscape = (target: Element | Document, init: KeyboardEventInit = {}) =>
-  act(() => void fireEvent.keyDown(target, { key: "Escape", ...init }));
+// Returns whether the key went unused (not default-prevented).
+const pressEscape = (target: Element | Document, init: KeyboardEventInit = {}) => {
+  let notPrevented = true;
+  act(() => {
+    notPrevented = fireEvent.keyDown(target, { key: "Escape", ...init });
+  });
+  return notPrevented;
+};
 
 const QUESTIONS: AskUserQuestion[] = [
   { question: "Which database?", options: [{ label: "PostgreSQL" }, { label: "SQLite" }] },
@@ -51,7 +57,23 @@ const AskUserOptions = () => {
   );
 };
 
-// activateAskUser moves focus into the options one frame past the commit.
+// The consumer keeps `questions` set after the answers arrive, as a real chat
+// does until its next turn renders.
+const AskingComposer = ({
+  onSubmit,
+  children,
+}: {
+  onSubmit: (data: ComposerSubmitData) => void;
+  children?: React.ReactNode;
+}) => (
+  <Composer.Root questions={QUESTIONS} onSubmit={onSubmit}>
+    <Composer.Textarea aria-label="Message" />
+    <AskUserOptions />
+    {children}
+  </Composer.Root>
+);
+
+// A new question moves focus into its options one frame past the commit.
 const flushFrames = () =>
   act(
     () =>
@@ -148,6 +170,55 @@ describe("Escape stops generation", () => {
 
     pressEscape(screen.getByRole("textbox", { name: "Message" }));
     expect(onStop).not.toHaveBeenCalled();
+  });
+
+  test("not from another field inside the composer", () => {
+    const onStop = mock();
+    render(
+      <Composer.Root onSubmit={() => {}}>
+        <Composer.Textarea aria-label="Message" />
+        <input aria-label="Note" />
+        <Composer.Submit isGenerating onStop={onStop} />
+      </Composer.Root>,
+    );
+
+    pressEscape(screen.getByRole("textbox", { name: "Note" }));
+    expect(onStop).not.toHaveBeenCalled();
+  });
+});
+
+describe("with a question open", () => {
+  test("an Escape on the page dismisses the step", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    render(<AskingComposer onSubmit={(data) => void submitted.push(data)} />);
+    await flushFrames();
+
+    expect(pressEscape(document.body)).toBe(false);
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
+  });
+
+  test("an Escape on a button elsewhere on the page is left alone", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    render(
+      <>
+        <AskingComposer onSubmit={(data) => void submitted.push(data)} />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    await flushFrames();
+
+    expect(pressEscape(screen.getByRole("button", { name: "Elsewhere" }))).toBe(true);
+    expect(submitted).toEqual([]);
+  });
+
+  test("after the last step, an Escape on the page is left alone", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    render(<AskingComposer onSubmit={(data) => void submitted.push(data)} />);
+    await flushFrames();
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }));
+    expect(pressEscape(document.body)).toBe(true);
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
   });
 });
 
@@ -300,6 +371,32 @@ describe("inside a popup or dialog from another library", () => {
     pressEscape(screen.getByRole("textbox", { name: "Message" }));
     expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
     expect(view.layer).not.toHaveBeenCalled();
+  });
+
+  test("an Escape after the last step reaches it and does not send the answers again", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    using view = renderInLayer(<AskingComposer onSubmit={(data) => void submitted.push(data)} />);
+    await flushFrames();
+    const message = screen.getByRole("textbox", { name: "Message" });
+
+    pressEscape(message);
+    pressEscape(message);
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
+    expect(view.layer.mock.calls).toEqual([["popup"], ["document"]]);
+  });
+
+  test("an Escape typed into another field inside the composer reaches it and leaves the step open", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    using view = renderInLayer(
+      <AskingComposer onSubmit={(data) => void submitted.push(data)}>
+        <input aria-label="Note" />
+      </AskingComposer>,
+    );
+    await flushFrames();
+
+    pressEscape(screen.getByRole("textbox", { name: "Note" }));
+    expect(submitted).toEqual([]);
+    expect(view.layer.mock.calls).toEqual([["popup"], ["document"]]);
   });
 
   // Next.js hydrates the whole document, so React's listener and a popup's document

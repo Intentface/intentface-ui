@@ -22,14 +22,15 @@ import {
   revokeAttachmentUrl,
   toAttachmentItem,
 } from "../attachments";
-import { isComposingKey } from "../internal/is-composing-key";
 import {
-  type AnswerEntry,
-  type AskUserAction,
   type AskUserEffect,
-  INITIAL_ASK_USER_STATE,
-  isLastStep,
-  transitionAskUser,
+  type AskUserEvent,
+  type AskUserFlow,
+  type AskUserView,
+  IDLE_FLOW,
+  parseQuestions,
+  reduceAskUser,
+  viewAskUser,
 } from "./ask-user-machine";
 import {
   type AttachmentStoreAction,
@@ -37,7 +38,14 @@ import {
   attachmentReducer,
   INITIAL_ATTACHMENT_STATE,
 } from "./attachments-machine";
-import { interpretAskUserKey } from "./keyboard";
+import {
+  type ComposerKeyAction,
+  type ComposerKeyState,
+  classifyTreeKey,
+  decideComposerKey,
+  isPageTarget,
+  toKeyPress,
+} from "./keyboard";
 import type {
   AskUserQuestion,
   ComposerEditorHandle,
@@ -91,20 +99,17 @@ export type ComposerAttachmentsState = {
   globalDropRef: RefObject<boolean>;
 };
 
-export type ComposerAskUserState = ComposerPanelSlice & {
-  questions: AskUserQuestion[] | null;
-  step: number;
-  answers: Map<number, AnswerEntry>;
-  toggleOption: (label: string) => void;
-  continueStep: (freeText?: string) => void;
-  dismissStep: () => void;
-  isLastStep: boolean;
-  isSingle: boolean;
-  clearSelections: () => void;
-  goBack: () => void;
-  goNext: () => void;
-  optionsRef: RefObject<AskUserOptionsHandle | null>;
-};
+// The flow's actions do nothing unless a question is being asked.
+export type ComposerAskUserState = ComposerPanelSlice &
+  AskUserView & {
+    toggleOption: (label: string) => void;
+    continueStep: (freeText?: string) => void;
+    dismissStep: () => void;
+    clearSelections: () => void;
+    goBack: () => void;
+    goNext: () => void;
+    optionsRef: RefObject<AskUserOptionsHandle | null>;
+  };
 
 // The shared skeleton every native panel slice (commands, ask-user, and later
 // tool-approval) is built on: `active` is the logical open flag a consumer gates
@@ -177,15 +182,17 @@ export type ComposerStore = {
   setQuestions: (questions: AskUserQuestion[] | null) => void;
   setDragging: (active: boolean) => void;
   resetAttachments: () => void;
-  activateAskUser: () => () => void;
+  /** Composer.Root's keydown: the question's and generation's keys for anything in its tree. True when it used the key; the caller marks it used. */
+  handleKeyDown: (event: KeyboardEvent) => boolean;
+  /** The question's keys when focus fell onto the page itself. Mounted by Composer.Root; returns the cleanup. */
+  listenForStrayKeys: (ownerDocument: Document) => () => void;
   // Clears `present` on native panel slices whose `active` is false — the Panel calls
   // this once its close animation finishes, so closing content stays mounted until then.
   finalizePanelClose: () => void;
   /**
-   * Sends the composer: advances the question step while questions are open,
+   * Sends the composer: continues the step while a question is being asked,
    * otherwise delivers the message through the mounted Root's onSubmit and
-   * clears the editor and attachments. Enter, Composer.Submit, and
-   * AskUser.Continue all send through it.
+   * clears the editor and attachments. Enter and Composer.Submit send through it.
    */
   submit: () => Promise<void>;
   reset: () => void;
@@ -205,7 +212,7 @@ export type ComposerStore = {
   // Co-located refs the mounted Composer wires up at runtime.
   attachmentConfigRef: RefObject<AttachmentStoreConfig>;
   onSubmitRef: RefObject<((data: ComposerSubmitData) => void | Promise<void>) | null>;
-  // The mounted Submit's stop while generating; Composer.Root calls it on Escape.
+  // The mounted Submit's stop while generating; an Escape in Composer.Root calls it.
   stopGeneratingRef: RefObject<(() => void) | null>;
   // Invokes the active list's current selection. Registered by the mounted
   // CommandList via a callback ref (commit-time), not an effect.
@@ -218,98 +225,18 @@ export type ComposerStore = {
 const isRootValid = (root: HTMLElement | null) =>
   !(root instanceof HTMLFormElement) || root.noValidate || root.reportValidity();
 
-// ---------------------------------------------------------------------------
-// Ask-user keydown — the document-level handler for question mode, kept out of
-// the store factory so activateAskUser reads as just "blur, listen, unlisten".
-// ---------------------------------------------------------------------------
-
-// Focus moves the ask-user flow makes itself — back to the input, or in from
-// an option. The composer is on screen already, and the browser's
-// focus-scroll would also move the page around an embedded composer.
+// Focus moves the composer makes itself — back to the input, or in from an
+// option. The composer is on screen already, and the browser's focus-scroll
+// would also move the page around an embedded composer.
 const FOCUS_IN_PLACE: FocusOptions = { preventScroll: true };
 
-// Scope a document-level listener to this composer: keystrokes aimed at
-// another editable or inside another composer's options are theirs; our own
-// options/editor and unclaimed targets (body — e.g. after a click on panel
-// chrome dropped focus) are ours, so arrows and "type to answer" keep working.
-const isEventForComposer = (
-  event: KeyboardEvent,
-  editorDom: HTMLElement | undefined,
-  optionsElement: HTMLElement | null,
+const deferBy = (
+  after: Extract<AskUserEffect, { type: "focus-options" }>["after"],
+  run: () => void,
 ) => {
-  const target = event.target as HTMLElement | null;
-  const editableHost = target?.closest<HTMLElement>('input, textarea, [contenteditable="true"]');
-  if (editableHost) return editableHost === editorDom;
-  const optionsHost = target?.closest<HTMLElement>("[data-ask-user-options]");
-  if (optionsHost) return optionsHost === optionsElement;
-  return true;
+  if (after === "frame") requestAnimationFrame(run);
+  else queueMicrotask(run);
 };
-
-type AskUserKeydownDeps = {
-  controller: ComposerEditorState;
-  optionsRef: RefObject<AskUserOptionsHandle | null>;
-  editorRef: RefObject<RegisteredEditor | null>;
-  dispatch: (action: AskUserAction) => void;
-};
-
-// Interpret a key (pure) and drive the machine + editor controller. Mirrors the
-// action union from interpretAskUserKey one-to-one.
-const createAskUserKeydownHandler =
-  ({ controller, optionsRef, editorRef, dispatch }: AskUserKeydownDeps) =>
-  (event: KeyboardEvent) => {
-    if (isComposingKey(event)) return;
-    const scopedOptionsElement = optionsRef.current?.getElement() ?? null;
-    if (
-      !isEventForComposer(
-        event,
-        editorRef.current?.getRootElement() ?? undefined,
-        scopedOptionsElement,
-      )
-    ) {
-      return;
-    }
-
-    const optionsHandle = optionsRef.current;
-    const action = interpretAskUserKey(
-      {
-        key: event.key,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        altKey: event.altKey,
-        defaultPrevented: event.defaultPrevented,
-      },
-      { hasHighlight: optionsHandle?.highlightedValue != null },
-    );
-    if (!action) return;
-    event.preventDefault();
-
-    switch (action.type) {
-      case "dismiss-step":
-        dispatch({ type: "dismiss-step" });
-        return;
-      case "navigate-options": {
-        const newValue = optionsHandle?.navigate(action.direction);
-        if (newValue === null) controller.focus(FOCUS_IN_PLACE);
-        return;
-      }
-      case "select-option": {
-        const item = optionsHandle?.select();
-        if (item) dispatch({ type: "select-option", label: item.value });
-        return;
-      }
-      case "go-back":
-        dispatch({ type: "step-back", currentText: controller.getText() });
-        return;
-      case "go-next":
-        dispatch({ type: "step-forward", currentText: controller.getText() });
-        return;
-      case "insert-character":
-        optionsHandle?.clearHighlight();
-        controller.focus(FOCUS_IN_PLACE);
-        controller.insertText(action.character);
-        return;
-    }
-  };
 
 // ---------------------------------------------------------------------------
 // Store factory
@@ -360,7 +287,7 @@ export const createComposerStore = (): ComposerStore => {
 
   // Canonical machine states; the snapshot mirrors them on every update.
   let attachmentState = INITIAL_ATTACHMENT_STATE;
-  let askUserMachine = INITIAL_ASK_USER_STATE;
+  let flow: AskUserFlow = IDLE_FLOW;
   let snapshot: Omit<ComposerState, "size">;
   // Owned by the size tracker, so reset() leaves it alone: nulling it under a
   // mounted Root would leave the tracker's last value blocking the next publish.
@@ -468,7 +395,7 @@ export const createComposerStore = (): ComposerStore => {
   // against the editor controller, the options handle, and the submit
   // callback. Input-content state is the editor engine's own job — engines
   // report programmatic setText/clear through their update path.
-  const executeAskUserEffects = (effects: AskUserEffect[]) => {
+  const runAskUserEffects = (effects: AskUserEffect[]) => {
     for (const effect of effects) {
       switch (effect.type) {
         case "clear-input":
@@ -481,11 +408,12 @@ export const createComposerStore = (): ComposerStore => {
           controller.focus(FOCUS_IN_PLACE);
           break;
         case "focus-options":
-          // Step advance / navigation: focus lands on the new step's
-          // highlighted option (roving tabindex), never on <body>. Deferred a
-          // microtask so the incoming step's options have registered
-          // (reset-highlight runs first; auto-highlight re-seats on mount).
-          queueMicrotask(() => optionsRef.current?.focusHighlighted());
+          // Focus lands on the step's highlighted option (roving tabindex),
+          // never on <body>, once its options have registered. The flow may
+          // have left asking by then.
+          deferBy(effect.after, () => {
+            if (flow.phase === "asking") optionsRef.current?.focusHighlighted();
+          });
           break;
         case "reset-highlight":
           optionsRef.current?.resetHighlight();
@@ -497,70 +425,97 @@ export const createComposerStore = (): ComposerStore => {
     }
   };
 
-  const dispatchAskUser = (action: AskUserAction) => {
-    const questions = snapshot.askUser.questions;
-    if (!questions || questions.length === 0) return;
-    const { next, effects } = transitionAskUser(askUserMachine, questions, action);
-    if (next !== askUserMachine) {
-      askUserMachine = next;
+  const dispatchAskUser = (event: AskUserEvent) => {
+    const { flow: next, effects } = reduceAskUser(flow, event);
+    if (next !== flow) {
+      flow = next;
+      const view = viewAskUser(next);
       snapshot = {
         ...snapshot,
         askUser: {
           ...snapshot.askUser,
-          step: next.step,
-          answers: next.answers,
-          isLastStep: isLastStep(next, questions),
+          ...view,
+          // Sticky, same as commands: cleared by finalizePanelClose() after the exit.
+          present: view.active || snapshot.askUser.present,
         },
       };
       notify();
     }
-    executeAskUserEffects(effects);
+    runAskUserEffects(effects);
   };
 
   const setQuestions = (questions: AskUserQuestion[] | null) => {
-    if (snapshot.askUser.questions === questions) return;
-    askUserMachine = INITIAL_ASK_USER_STATE;
-    snapshot = {
-      ...snapshot,
-      askUser: {
-        ...snapshot.askUser,
-        active: questions != null,
-        // Sticky, same as commands: cleared by finalizePanelClose() after the exit.
-        present: questions != null || snapshot.askUser.present,
-        questions,
-        step: askUserMachine.step,
-        answers: askUserMachine.answers,
-        isLastStep: questions ? isLastStep(askUserMachine, questions) : false,
-        isSingle: questions ? questions.length === 1 : false,
-      },
-    };
-    notify();
+    dispatchAskUser({ type: "questions-changed", questions: parseQuestions(questions) });
   };
 
-  // Ask-user mode: while questions are active the options own the keyboard.
-  // Entering moves DOM focus onto the highlighted option (roving tabindex),
-  // and the keydown listener sits at the document, scoped by containment
-  // (isEventForComposer) — so keys keep flowing after a chrome click drops
-  // focus to <body>, while a second composer's editor/options never hear them.
-  const activateAskUser = () => {
-    const handleKeyDown = createAskUserKeydownHandler({
-      controller,
-      optionsRef,
-      editorRef,
-      dispatch: dispatchAskUser,
-    });
-    document.addEventListener("keydown", handleKeyDown);
+  // --- Keys
+  // The composer's layers, the question then generation. Root runs them for
+  // keys in its tree; the page listener for keys on the page itself, so a
+  // chrome click that drops focus to <body> doesn't strand the question.
+  const readKeyState = (): ComposerKeyState => ({
+    question:
+      flow.phase === "asking"
+        ? { phase: "asking", highlighted: optionsRef.current?.highlightedValue != null }
+        : { phase: "none" },
+    canStopGenerating: stopGeneratingRef.current !== null,
+  });
 
-    // The Options part renders in reaction to setQuestions' notify — one
-    // commit after this call — so the entry focus defers a frame.
-    const frame = requestAnimationFrame(() => {
-      optionsRef.current?.focusHighlighted();
-    });
+  const runComposerKey = (action: ComposerKeyAction) => {
+    const options = optionsRef.current;
+    switch (action.type) {
+      case "dismiss-step":
+        dispatchAskUser({ type: "dismiss-step" });
+        return;
+      case "stop-generating":
+        stopGeneratingRef.current?.();
+        return;
+      case "navigate-options":
+        // Past either end of the list, focus returns to the input.
+        if (options?.navigate(action.direction) === null) controller.focus(FOCUS_IN_PLACE);
+        return;
+      case "select-option": {
+        const item = options?.select();
+        if (item) dispatchAskUser({ type: "select-option", label: item.value });
+        return;
+      }
+      case "change-step":
+        dispatchAskUser({
+          type: action.direction < 0 ? "step-back" : "step-forward",
+          currentText: controller.getText(),
+        });
+        return;
+      case "type-answer":
+        options?.clearHighlight();
+        controller.focus(FOCUS_IN_PLACE);
+        controller.insertText(action.character);
+        return;
+    }
+  };
 
-    return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener("keydown", handleKeyDown);
+  const handleKeyDown = (event: KeyboardEvent) => {
+    const origin = classifyTreeKey(event.target, {
+      root: rootRef.current,
+      editor: editorRef.current?.getRootElement() ?? null,
+      options: optionsRef.current?.getElement() ?? null,
+    });
+    const action = decideComposerKey(toKeyPress(event), readKeyState(), origin);
+    if (!action) return false;
+    runComposerKey(action);
+    return true;
+  };
+
+  // Every other target has a closer owner: Root for its tree, the field or
+  // control itself otherwise.
+  const listenForStrayKeys = (ownerDocument: Document) => {
+    const handleStrayKey = (event: KeyboardEvent) => {
+      if (!isPageTarget(event.target, ownerDocument)) return;
+      const action = decideComposerKey(toKeyPress(event), readKeyState(), "nowhere");
+      if (!action) return;
+      event.preventDefault();
+      runComposerKey(action);
     };
+    ownerDocument.addEventListener("keydown", handleStrayKey);
+    return () => ownerDocument.removeEventListener("keydown", handleStrayKey);
   };
 
   // --- Initial snapshot
@@ -586,13 +541,8 @@ export const createComposerStore = (): ComposerStore => {
       globalDropRef,
     },
     askUser: {
-      active: false,
+      ...viewAskUser(flow),
       present: false,
-      questions: null,
-      step: askUserMachine.step,
-      answers: askUserMachine.answers,
-      isLastStep: false,
-      isSingle: false,
       toggleOption: (label) => dispatchAskUser({ type: "toggle-option", label }),
       continueStep: (freeText) =>
         dispatchAskUser({ type: "continue-step", freeText: freeText ?? "" }),
@@ -605,12 +555,12 @@ export const createComposerStore = (): ComposerStore => {
   };
 
   const submit = async () => {
-    const { askUser, attachments, isSubmitting } = snapshot;
-
-    if (askUser.questions?.length) {
-      askUser.continueStep(controller.getText());
+    if (flow.phase === "asking") {
+      dispatchAskUser({ type: "continue-step", freeText: controller.getText() });
       return;
     }
+
+    const { attachments, isSubmitting } = snapshot;
 
     if (isSubmitting || !isRootValid(rootRef.current)) return;
 
@@ -665,7 +615,7 @@ export const createComposerStore = (): ComposerStore => {
   // revoke attachment object URLs, then restore the pristine snapshot.
   const reset = () => {
     dispatchAttachments({ type: "reset" });
-    askUserMachine = INITIAL_ASK_USER_STATE;
+    flow = IDLE_FLOW;
     commandSelectRef.current = null;
     snapshot = initialSnapshot;
     notify();
@@ -698,7 +648,8 @@ export const createComposerStore = (): ComposerStore => {
     setQuestions,
     setDragging,
     resetAttachments: () => dispatchAttachments({ type: "reset" }),
-    activateAskUser,
+    handleKeyDown,
+    listenForStrayKeys,
     finalizePanelClose,
     submit,
     reset,
