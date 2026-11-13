@@ -16,7 +16,7 @@ import { Guides } from './nav/demos/guides';
 
 - **Recursive by construction** — a group's list may hold further groups, to any depth, with no second set of parts for the nesting.
 - **One tab stop** — the whole tree is a single tab stop; arrow keys move focus between rows, and typing seeks a row by its label.
-- **Rows hold actions** — `Nav.Item` is a `div` with `role="button"` rather than an anchor, so a menu affordance can sit inside it. Swap in a real link with `render`.
+- **Rows hold actions** — `Nav.Item` is a `div` with `role="button"` rather than an anchor, so a menu affordance can sit inside it. An element passed to `render` drops the role, so a real link announces as a link; give anything else that is not a button `role="button"` yourself.
 - **Depth is a variable** — each list publishes its own `--nav-depth`, so one indent rule covers every level.
 - **The guide is cumulative** — `rail` implies `indent`, and `branches` implies both. See [Why the guide is a ladder](#why-the-guide-is-a-ladder).
 - **Persists nothing itself** — the open set goes out through `onExpandedChange` and comes back as `defaultExpanded`, so where it is kept is yours.

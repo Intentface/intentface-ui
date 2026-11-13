@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "@testing-library/react";
 import axe from "axe-core";
+import type { ComponentProps } from "react";
+import { renderToString } from "react-dom/server";
 import { Nav } from "../../src/nav";
 
 /** Noise from auditing a fragment rather than a document. Nothing is excused here. */
@@ -185,5 +187,103 @@ describe("Nav accessibility", () => {
     const row = getByRole("button", { name: "Inbox" });
     expect(row.getAttribute("aria-disabled")).toBe("true");
     expect(row.getAttribute("tabindex")).toBe("-1");
+  });
+});
+
+const Link = (props: ComponentProps<"a">) => <a {...props} />;
+const ToLink = ({ to, ...props }: ComponentProps<"a"> & { to: string }) => (
+  <a href={to} {...props} />
+);
+
+describe("rows rendered as links", () => {
+  test("are announced as links, whichever way render gives the anchor", () => {
+    const { getByRole } = render(
+      <Nav.Root aria-label="Main" defaultExpanded={["guides"]} render={<nav />}>
+        <Nav.List>
+          <Nav.Item value="home" active render={<Link href="/" />}>
+            <Nav.Label>Home</Nav.Label>
+          </Nav.Item>
+          <Nav.Item value="inbox" render={(props) => <a href="/inbox" {...props} />}>
+            <Nav.Label>Inbox</Nav.Label>
+          </Nav.Item>
+          <Nav.Item value="settings" render={<ToLink to="/settings" />}>
+            <Nav.Label>Settings</Nav.Label>
+          </Nav.Item>
+          <Nav.Group value="guides">
+            <Nav.Trigger render={<Link href="/guides" />}>
+              <Nav.Toggle aria-label="More Guides pages" />
+              <Nav.Label>Guides</Nav.Label>
+            </Nav.Trigger>
+            <Nav.List>
+              <Nav.Item value="install">
+                <Nav.Label>Install</Nav.Label>
+              </Nav.Item>
+            </Nav.List>
+          </Nav.Group>
+        </Nav.List>
+      </Nav.Root>,
+    );
+
+    expect(getByRole("link", { name: "Home", current: "page" })).toBeTruthy();
+    expect(getByRole("link", { name: "Inbox" })).toBeTruthy();
+    expect(getByRole("link", { name: "Settings" })).toBeTruthy();
+    expect(getByRole("link", { name: /Guides$/ })).toBeTruthy();
+    expect(getByRole("button", { name: "Install" })).toBeTruthy();
+  });
+
+  test("an action rendered as a link is a link too", () => {
+    const { getByRole } = render(
+      <Nav.Root>
+        <Nav.List>
+          <Nav.Item value="report">
+            <Nav.Label>Report</Nav.Label>
+            <Nav.Action aria-label="Open Report in a new tab" render={<Link href="/report" />} />
+          </Nav.Item>
+        </Nav.List>
+      </Nav.Root>,
+    );
+    expect(getByRole("link", { name: "Open Report in a new tab" })).toBeTruthy();
+  });
+
+  test("the server render is already a link, before any script runs", () => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(
+      <Nav.Root>
+        <Nav.List>
+          <Nav.Item value="home" active render={<Link href="/" />}>
+            <Nav.Label>Home</Nav.Label>
+          </Nav.Item>
+          <Nav.Item value="inbox" render={(props) => <a href="/inbox" {...props} />}>
+            <Nav.Label>Inbox</Nav.Label>
+          </Nav.Item>
+          <Nav.Item value="settings" render={<ToLink to="/settings" />}>
+            <Nav.Label>Settings</Nav.Label>
+          </Nav.Item>
+          <Nav.Item value="install">
+            <Nav.Label>Install</Nav.Label>
+          </Nav.Item>
+        </Nav.List>
+      </Nav.Root>,
+    );
+
+    for (const value of ["home", "inbox", "settings"]) {
+      const row = host.querySelector(`[data-nav-item="${value}"]`);
+      expect(row?.tagName).toBe("A");
+      expect(row?.hasAttribute("role")).toBe(false);
+    }
+    expect(host.querySelector('[data-nav-item="install"]')?.getAttribute("role")).toBe("button");
+  });
+
+  test("a row given some other element takes its role from you", () => {
+    const { getByRole } = render(
+      <Nav.Root>
+        <Nav.List>
+          <Nav.Item value="inbox" role="button" render={<span />}>
+            <Nav.Label>Inbox</Nav.Label>
+          </Nav.Item>
+        </Nav.List>
+      </Nav.Root>,
+    );
+    expect(getByRole("button", { name: "Inbox" }).tagName).toBe("SPAN");
   });
 });
