@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
-  type AskUserState,
+  type Answers,
+  type AskUserEvent,
+  type AskUserFlow,
   compileAnswers,
-  INITIAL_ASK_USER_STATE,
-  isLastStep,
-  transitionAskUser,
+  IDLE_FLOW,
+  parseQuestions,
+  type Questions,
+  reduceAskUser,
+  viewAskUser,
 } from "../src/composer/ask-user-machine";
-import type { AskUserQuestion } from "../src/composer/types";
 
-const questions: AskUserQuestion[] = [
+const questions: Questions = [
   { question: "Q1?", options: [{ label: "A", description: "a" }] },
   {
     question: "Q2?",
@@ -20,114 +23,199 @@ const questions: AskUserQuestion[] = [
   },
 ];
 
-describe("transitionAskUser", () => {
-  test("select-option on single-select advances a step and clears input", () => {
-    const { next, effects } = transitionAskUser(INITIAL_ASK_USER_STATE, questions, {
-      type: "select-option",
-      label: "A",
-    });
+const asking = (step: number, answers: Answers = new Map()): AskUserFlow => ({
+  phase: "asking",
+  questions,
+  step,
+  answers,
+});
 
-    expect(next.step).toBe(1);
-    expect(next.answers.get(0)?.selected.has("A")).toBe(true);
-    expect(effects.map((e) => e.type)).toEqual(["clear-input", "reset-highlight", "focus-options"]);
+const answered = (): AskUserFlow => ({ phase: "answered", questions, answers: new Map() });
+
+const ANSWER_EVENTS = [
+  ["toggle-option", { type: "toggle-option", label: "A" }],
+  ["select-option", { type: "select-option", label: "A" }],
+  ["clear-selections", { type: "clear-selections" }],
+  ["continue-step", { type: "continue-step", freeText: "more" }],
+  ["dismiss-step", { type: "dismiss-step" }],
+  ["step-back", { type: "step-back", currentText: "" }],
+  ["step-forward", { type: "step-forward", currentText: "" }],
+] satisfies [string, AskUserEvent][];
+
+describe("reduceAskUser: questions-changed", () => {
+  test("a new array asks from the first step and focuses its options after a frame", () => {
+    const { flow, effects } = reduceAskUser(IDLE_FLOW, { type: "questions-changed", questions });
+
+    expect(flow).toEqual({ phase: "asking", questions, step: 0, answers: new Map() });
+    expect(effects).toEqual([{ type: "focus-options", after: "frame" }]);
   });
 
-  test("select-option on the last step compiles and submits", () => {
-    const onLast: AskUserState = { step: 1, answers: new Map() };
-    const { next, effects } = transitionAskUser(onLast, questions, {
-      type: "select-option",
-      label: "B",
+  test("the same array again changes nothing, while asking or once answered", () => {
+    for (const flow of [asking(1), answered()]) {
+      const transition = reduceAskUser(flow, { type: "questions-changed", questions });
+      expect(transition.flow).toBe(flow);
+      expect(transition.effects).toEqual([]);
+    }
+  });
+
+  test("another array asks again, even once answered", () => {
+    const again: Questions = [...questions];
+
+    const { flow } = reduceAskUser(answered(), { type: "questions-changed", questions: again });
+    expect(flow).toEqual({ phase: "asking", questions: again, step: 0, answers: new Map() });
+  });
+
+  test("no questions returns to idle", () => {
+    const { flow, effects } = reduceAskUser(asking(1), {
+      type: "questions-changed",
+      questions: null,
     });
 
-    // Multi-select never auto-advances on select — it toggles.
-    expect(next.step).toBe(1);
+    expect(flow).toBe(IDLE_FLOW);
     expect(effects).toEqual([]);
-    expect(next.answers.get(1)?.selected.has("B")).toBe(true);
+  });
+});
+
+describe("reduceAskUser: answering", () => {
+  test("select-option on single-select advances a step and clears input", () => {
+    const { flow, effects } = reduceAskUser(asking(0), { type: "select-option", label: "A" });
+
+    expect(flow).toMatchObject({ phase: "asking", step: 1 });
+    expect(viewAskUser(flow).answers.get(0)?.selected.has("A")).toBe(true);
+    expect(effects).toEqual([
+      { type: "clear-input" },
+      { type: "reset-highlight" },
+      { type: "focus-options", after: "microtask" },
+    ]);
   });
 
-  test("continue-step on the last step emits submit-answers with compiled payload", () => {
-    const state: AskUserState = {
-      step: 1,
-      answers: new Map([[0, { selected: new Set(["A"]), freeText: "" }]]),
-    };
-    const withToggle = transitionAskUser(state, questions, { type: "toggle-option", label: "B" });
-    const { effects } = transitionAskUser(withToggle.next, questions, {
+  test("select-option on a multi-select step toggles without advancing", () => {
+    const { flow, effects } = reduceAskUser(asking(1), { type: "select-option", label: "B" });
+
+    expect(flow).toMatchObject({ phase: "asking", step: 1 });
+    expect(effects).toEqual([]);
+    expect(viewAskUser(flow).answers.get(1)?.selected.has("B")).toBe(true);
+  });
+
+  test("continue-step on the last step ends the flow and submits the compiled answers", () => {
+    const start = asking(1, new Map([[0, { selected: new Set(["A"]), freeText: "" }]]));
+    const toggled = reduceAskUser(start, { type: "toggle-option", label: "B" });
+    const { flow, effects } = reduceAskUser(toggled.flow, {
       type: "continue-step",
       freeText: "extra context",
     });
 
-    const submit = effects.find((e) => e.type === "submit-answers");
-    expect(submit).toBeDefined();
-    if (submit?.type !== "submit-answers") throw new Error("unreachable");
-    expect(submit.answers).toEqual([
-      { question: "Q1?", option: "A" },
-      { question: "Q2?", options: ["B"], text: "extra context" },
+    expect(flow.phase).toBe("answered");
+    expect(effects).toEqual([
+      { type: "clear-input" },
+      {
+        type: "submit-answers",
+        answers: [
+          { question: "Q1?", option: "A" },
+          { question: "Q2?", options: ["B"], text: "extra context" },
+        ],
+      },
+      { type: "focus-input" },
     ]);
-    expect(effects.at(-1)).toEqual({ type: "focus-input" });
   });
 
-  test("multiSelect toggle flips membership and keeps free text", () => {
-    const first = transitionAskUser({ step: 1, answers: new Map() }, questions, {
-      type: "toggle-option",
-      label: "B",
-    });
-    const second = transitionAskUser(first.next, questions, { type: "toggle-option", label: "B" });
-    expect(second.next.answers.get(1)?.selected.size).toBe(0);
+  test("a multi-select toggle flips membership and keeps free text", () => {
+    const start = asking(1, new Map([[1, { selected: new Set<string>(), freeText: "note" }]]));
+    const first = reduceAskUser(start, { type: "toggle-option", label: "B" });
+    const second = reduceAskUser(first.flow, { type: "toggle-option", label: "B" });
+
+    const entry = viewAskUser(second.flow).answers.get(1);
+    expect(entry?.selected.size).toBe(0);
+    expect(entry?.freeText).toBe("note");
   });
 
   test("dismiss-step skips the answer entirely", () => {
-    const { next } = transitionAskUser(INITIAL_ASK_USER_STATE, questions, {
-      type: "dismiss-step",
-    });
-    expect(next.step).toBe(1);
-    expect(next.answers.has(0)).toBe(false);
+    const start = asking(0, new Map([[0, { selected: new Set(["A"]), freeText: "" }]]));
+    const { flow } = reduceAskUser(start, { type: "dismiss-step" });
+
+    expect(flow).toMatchObject({ phase: "asking", step: 1 });
+    expect(viewAskUser(flow).answers.has(0)).toBe(false);
   });
 
   test("step-back preserves in-progress free text and restores the target's", () => {
-    const state: AskUserState = {
-      step: 1,
-      answers: new Map([[0, { selected: new Set(), freeText: "saved" }]]),
-    };
-    const { next, effects } = transitionAskUser(state, questions, {
+    const start = asking(1, new Map([[0, { selected: new Set<string>(), freeText: "saved" }]]));
+    const { flow, effects } = reduceAskUser(start, {
       type: "step-back",
       currentText: "typing on q2",
     });
 
-    expect(next.step).toBe(0);
-    expect(next.answers.get(1)?.freeText).toBe("typing on q2");
+    expect(flow).toMatchObject({ phase: "asking", step: 0 });
+    expect(viewAskUser(flow).answers.get(1)?.freeText).toBe("typing on q2");
     expect(effects[0]).toEqual({ type: "set-input-text", text: "saved" });
   });
 
   test("step navigation clamps at the ends", () => {
-    const atStart = transitionAskUser(INITIAL_ASK_USER_STATE, questions, {
-      type: "step-back",
-      currentText: "",
-    });
-    expect(atStart.next).toBe(INITIAL_ASK_USER_STATE);
+    const first = asking(0);
+    const atStart = reduceAskUser(first, { type: "step-back", currentText: "" });
+    expect(atStart.flow).toBe(first);
     expect(atStart.effects).toEqual([]);
+
+    const last = asking(1);
+    const atEnd = reduceAskUser(last, { type: "step-forward", currentText: "" });
+    expect(atEnd.flow).toBe(last);
+    expect(atEnd.effects).toEqual([]);
+  });
+
+  test.each(ANSWER_EVENTS)(
+    "%s once answered changes nothing and submits nothing",
+    (_type, event) => {
+      const flow = answered();
+      const transition = reduceAskUser(flow, event);
+      expect(transition.flow).toBe(flow);
+      expect(transition.effects).toEqual([]);
+    },
+  );
+
+  test.each(ANSWER_EVENTS)("%s while idle changes nothing", (_type, event) => {
+    const transition = reduceAskUser(IDLE_FLOW, event);
+    expect(transition.flow).toBe(IDLE_FLOW);
+    expect(transition.effects).toEqual([]);
+  });
+});
+
+describe("parseQuestions", () => {
+  test("keeps the consumer's array", () => {
+    expect(parseQuestions(questions)).toBe(questions);
+  });
+
+  test("an empty array or none is no questions", () => {
+    expect(parseQuestions([])).toBeNull();
+    expect(parseQuestions(undefined)).toBeNull();
+    expect(parseQuestions(null)).toBeNull();
+  });
+});
+
+describe("viewAskUser", () => {
+  test("is active only while asking, and reports the last step", () => {
+    expect(viewAskUser(asking(0))).toMatchObject({ active: true, isLastStep: false });
+    expect(viewAskUser(asking(1))).toMatchObject({ active: true, isLastStep: true });
+    expect(viewAskUser(IDLE_FLOW)).toMatchObject({ active: false, questions: null, step: 0 });
+  });
+
+  test("once answered, keeps the questions and reads no current question", () => {
+    const view = viewAskUser(answered());
+
+    expect(view.active).toBe(false);
+    expect(view.questions).toBe(questions);
+    expect(view.questions?.[view.step]).toBeUndefined();
   });
 });
 
 describe("compileAnswers", () => {
   test("unanswered questions compile to bare entries", () => {
-    expect(compileAnswers(INITIAL_ASK_USER_STATE, questions)).toEqual([
+    expect(compileAnswers(questions, new Map())).toEqual([
       { question: "Q1?" },
       { question: "Q2?" },
     ]);
   });
 
   test("free text on single-select compiles to text entry", () => {
-    const state: AskUserState = {
-      step: 0,
-      answers: new Map([[0, { selected: new Set(), freeText: " custom " }]]),
-    };
-    expect(compileAnswers(state, questions)[0]).toEqual({ question: "Q1?", text: "custom" });
-  });
-});
-
-describe("isLastStep", () => {
-  test("reports the final question", () => {
-    expect(isLastStep({ step: 0, answers: new Map() }, questions)).toBe(false);
-    expect(isLastStep({ step: 1, answers: new Map() }, questions)).toBe(true);
+    const answers: Answers = new Map([[0, { selected: new Set<string>(), freeText: " custom " }]]);
+    expect(compileAnswers(questions, answers)[0]).toEqual({ question: "Q1?", text: "custom" });
   });
 });

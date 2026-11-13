@@ -25,8 +25,14 @@ const ChatComposer = ({
   </Composer.Root>
 );
 
-const pressEscape = (target: Element | Document) =>
-  act(() => void fireEvent.keyDown(target, { key: "Escape" }));
+// Returns whether the key went unused (not default-prevented).
+const pressEscape = (target: Element | Document, init: KeyboardEventInit = {}) => {
+  let notPrevented = true;
+  act(() => {
+    notPrevented = fireEvent.keyDown(target, { key: "Escape", ...init });
+  });
+  return notPrevented;
+};
 
 const QUESTIONS: AskUserQuestion[] = [
   { question: "Which database?", options: [{ label: "PostgreSQL" }, { label: "SQLite" }] },
@@ -51,7 +57,23 @@ const AskUserOptions = () => {
   );
 };
 
-// activateAskUser moves focus into the options one frame past the commit.
+// The consumer keeps `questions` set after the answers arrive, as a real chat
+// does until its next turn renders.
+const AskingComposer = ({
+  onSubmit,
+  children,
+}: {
+  onSubmit: (data: ComposerSubmitData) => void;
+  children?: React.ReactNode;
+}) => (
+  <Composer.Root questions={QUESTIONS} onSubmit={onSubmit}>
+    <Composer.Textarea aria-label="Message" />
+    <AskUserOptions />
+    {children}
+  </Composer.Root>
+);
+
+// A new question moves focus into its options one frame past the commit.
 const flushFrames = () =>
   act(
     () =>
@@ -149,6 +171,55 @@ describe("Escape stops generation", () => {
     pressEscape(screen.getByRole("textbox", { name: "Message" }));
     expect(onStop).not.toHaveBeenCalled();
   });
+
+  test("not from another field inside the composer", () => {
+    const onStop = mock();
+    render(
+      <Composer.Root onSubmit={() => {}}>
+        <Composer.Textarea aria-label="Message" />
+        <input aria-label="Note" />
+        <Composer.Submit isGenerating onStop={onStop} />
+      </Composer.Root>,
+    );
+
+    pressEscape(screen.getByRole("textbox", { name: "Note" }));
+    expect(onStop).not.toHaveBeenCalled();
+  });
+});
+
+describe("with a question open", () => {
+  test("an Escape on the page dismisses the step", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    render(<AskingComposer onSubmit={(data) => void submitted.push(data)} />);
+    await flushFrames();
+
+    expect(pressEscape(document.body)).toBe(false);
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
+  });
+
+  test("an Escape on a button elsewhere on the page is left alone", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    render(
+      <>
+        <AskingComposer onSubmit={(data) => void submitted.push(data)} />
+        <button type="button">Elsewhere</button>
+      </>,
+    );
+    await flushFrames();
+
+    expect(pressEscape(screen.getByRole("button", { name: "Elsewhere" }))).toBe(true);
+    expect(submitted).toEqual([]);
+  });
+
+  test("after the last step, an Escape on the page is left alone", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    render(<AskingComposer onSubmit={(data) => void submitted.push(data)} />);
+    await flushFrames();
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }));
+    expect(pressEscape(document.body)).toBe(true);
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
+  });
 });
 
 describe("with more than one composer on the page", () => {
@@ -200,6 +271,178 @@ describe("next to elements that are not composers", () => {
   });
 });
 
+// An IME takes Escape to cancel a conversion. 229 stands in for engines that omit isComposing.
+const COMPOSING = [
+  ["isComposing", { isComposing: true }],
+  ["keyCode 229", { keyCode: 229 }],
+] as const;
+
+describe("during IME composition", () => {
+  test.each(COMPOSING)("an Escape (%s) does not stop generating", (_name, init) => {
+    const onStop = mock();
+    render(<ChatComposer name="Message" generating onStop={onStop} />);
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }), init);
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  test.each(COMPOSING)("an Escape (%s) does not dismiss a question's step", async (_name, init) => {
+    const submitted: ComposerSubmitData[] = [];
+    render(
+      <Composer.Root questions={QUESTIONS} onSubmit={(data) => void submitted.push(data)}>
+        <Composer.Textarea aria-label="Message" />
+        <input aria-label="Note" />
+        <AskUserOptions />
+      </Composer.Root>,
+    );
+    await flushFrames();
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }), init);
+    pressEscape(screen.getByRole("textbox", { name: "Note" }), init);
+    expect(submitted).toEqual([]);
+  });
+});
+
+describe("inside a popup or dialog from another library", () => {
+  // Base UI's Popover and Dialog close on any Escape that reaches them, through
+  // the popup's onKeyDown or a document listener, whether or not it was handled.
+  const renderInLayer = (composer: React.ReactNode) => {
+    const layer = mock();
+    const onDocumentKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") layer("document");
+    };
+    document.addEventListener("keydown", onDocumentKeyDown);
+    render(
+      <div
+        role="dialog"
+        tabIndex={-1}
+        onKeyDown={(event) => event.key === "Escape" && layer("popup")}
+      >
+        {composer}
+      </div>,
+    );
+    return {
+      layer,
+      [Symbol.dispose]: () => document.removeEventListener("keydown", onDocumentKeyDown),
+    };
+  };
+
+  test("an Escape that stops generating does not reach it", () => {
+    const onStop = mock();
+    using view = renderInLayer(<ChatComposer name="Message" generating onStop={onStop} />);
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }));
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(view.layer).not.toHaveBeenCalled();
+  });
+
+  test("an Escape something inside already handled does not reach it", () => {
+    using view = renderInLayer(<ChatComposer name="Message" />);
+    const textbox = screen.getByRole("textbox", { name: "Message" });
+    const claim = (event: Event) => event.preventDefault();
+    textbox.addEventListener("keydown", claim);
+
+    pressEscape(textbox);
+    textbox.removeEventListener("keydown", claim);
+    expect(view.layer).not.toHaveBeenCalled();
+  });
+
+  test("an Escape that dismisses a question's step does not reach it", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    using view = renderInLayer(
+      <Composer.Root questions={QUESTIONS} onSubmit={(data) => void submitted.push(data)}>
+        <Composer.Textarea aria-label="Message" />
+        <AskUserOptions />
+      </Composer.Root>,
+    );
+    await flushFrames();
+
+    pressEscape(screen.getByRole("radio", { name: "PostgreSQL" }));
+    expect(submitted.at(-1)?.kind).toBe("answers");
+    expect(view.layer).not.toHaveBeenCalled();
+  });
+
+  test("an Escape the editor used dismisses the step once and does not reach it", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    using view = renderInLayer(
+      <Composer.Root questions={QUESTIONS} onSubmit={(data) => void submitted.push(data)}>
+        <Composer.Textarea aria-label="Message" />
+        <AskUserOptions />
+      </Composer.Root>,
+    );
+    await flushFrames();
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }));
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
+    expect(view.layer).not.toHaveBeenCalled();
+  });
+
+  test("an Escape after the last step reaches it and does not send the answers again", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    using view = renderInLayer(<AskingComposer onSubmit={(data) => void submitted.push(data)} />);
+    await flushFrames();
+    const message = screen.getByRole("textbox", { name: "Message" });
+
+    pressEscape(message);
+    pressEscape(message);
+    expect(submitted.map((data) => data.kind)).toEqual(["answers"]);
+    expect(view.layer.mock.calls).toEqual([["popup"], ["document"]]);
+  });
+
+  test("an Escape typed into another field inside the composer reaches it and leaves the step open", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    using view = renderInLayer(
+      <AskingComposer onSubmit={(data) => void submitted.push(data)}>
+        <input aria-label="Note" />
+      </AskingComposer>,
+    );
+    await flushFrames();
+
+    pressEscape(screen.getByRole("textbox", { name: "Note" }));
+    expect(submitted).toEqual([]);
+    expect(view.layer.mock.calls).toEqual([["popup"], ["document"]]);
+  });
+
+  // A click on the composer's chrome moves focus to the popup, which Base UI makes focusable.
+  test("an Escape on the popup itself reaches it and leaves the step open", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    using view = renderInLayer(<AskingComposer onSubmit={(data) => void submitted.push(data)} />);
+    await flushFrames();
+
+    pressEscape(screen.getByRole("dialog"));
+    expect(submitted).toEqual([]);
+    expect(view.layer.mock.calls).toEqual([["popup"], ["document"]]);
+  });
+
+  // Next.js hydrates the whole document, so React's listener and a popup's document
+  // listener sit on one target, where stopPropagation can't keep them apart.
+  test("an Escape the composer used does not reach a listener beside React's", () => {
+    const onStop = mock();
+    const heard = mock();
+    const { container, rerender } = render(
+      <ChatComposer name="Message" generating onStop={onStop} />,
+    );
+    container.addEventListener("keydown", heard);
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }));
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(heard).not.toHaveBeenCalled();
+
+    rerender(<ChatComposer name="Message" />);
+    pressEscape(screen.getByRole("textbox", { name: "Message" }));
+    container.removeEventListener("keydown", heard);
+    expect(heard).toHaveBeenCalledTimes(1);
+  });
+
+  test("an Escape the composer has no use for reaches it", () => {
+    using view = renderInLayer(<ChatComposer name="Message" />);
+
+    pressEscape(screen.getByRole("textbox", { name: "Message" }));
+    expect(view.layer).toHaveBeenCalledWith("popup");
+    expect(view.layer).toHaveBeenCalledWith("document");
+  });
+});
+
 describe("inside a floating Tabs.Popup", () => {
   // Stopping ends the generation, as a real chat's status would.
   const Dock = ({ onStop }: { onStop: () => void }) => {
@@ -243,5 +486,15 @@ describe("inside a floating Tabs.Popup", () => {
     pressEscape(reply);
     expect(onStop).toHaveBeenCalledTimes(1);
     expect(getByTestId("tab-chat").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  test.each(COMPOSING)("an Escape (%s) during composition leaves it open", async (_name, init) => {
+    const onStop = mock();
+    const { getByTestId } = render(<Dock onStop={onStop} />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    pressEscape(screen.getByRole("textbox", { name: "Reply" }), init);
+    expect(onStop).not.toHaveBeenCalled();
+    expect(getByTestId("tab-chat").getAttribute("aria-expanded")).toBe("true");
   });
 });

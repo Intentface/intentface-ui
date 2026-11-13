@@ -10,10 +10,9 @@
 //    operations (chips, paste, setText, intercepted deletes) are the only
 //    imperative DOM writes, always a full render + caret restore.
 // 2. Engine state lives outside React — createEditorEngine below is a plain
-//    closure factory (the createAskUserKeydownHandler pattern). Renders are
-//    driven by a version counter through useSyncExternalStore; chip visuals
-//    mount through portals into engine-owned spans, so React never
-//    reconciles the editable's children.
+//    closure factory. Renders are driven by a version counter through
+//    useSyncExternalStore; chip visuals mount through portals into
+//    engine-owned spans, so React never reconciles the editable's children.
 
 import {
   type ClipboardEventHandler,
@@ -38,7 +37,7 @@ import {
   writeCaretToDom,
 } from "./editor-dom";
 import { useAsRef, useComposerInternals, useIsomorphicLayoutEffect } from "./internals";
-import { type ComposerSubmitOn, interpretEditorKey } from "./keyboard";
+import { type ComposerSubmitOn, decideEditorKey, toKeyPress } from "./keyboard";
 import { CLOSED_COMMAND_STATE, type RegisteredPrefix } from "./prefix-detection";
 import {
   diffFlatText,
@@ -182,7 +181,7 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     if (docChanged && plainText.trim().length > 0) {
       const { askUser } = store.getSnapshot();
       const currentQuestion = askUser.questions?.[askUser.step];
-      if (askUser.questions && !currentQuestion?.multiSelect) askUser.clearSelections();
+      if (askUser.active && !currentQuestion?.multiSelect) askUser.clearSelections();
       askUser.optionsRef.current?.clearHighlight();
     }
     mirrorCommandState();
@@ -424,37 +423,29 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
     }
   };
 
+  // The editor's own layer only; the question's and generation's keys are
+  // Composer.Root's, which hears this key next.
   const handleKeyDown = (event: KeyboardEvent) => {
-    // An IME owns Enter (conversion confirm) and the arrows (candidate
-    // window) during composition — 229 covers engines that omit isComposing.
-    if (event.isComposing || event.keyCode === 229) return;
-
     const { store, options } = getDependencies();
-    const action = interpretEditorKey(
-      { key: event.key, shiftKey: event.shiftKey },
-      {
-        isCommandListOpen: commandState.isOpen,
-        hasActiveAskUser: (store.getSnapshot().askUser.questions?.length ?? 0) > 0,
-        isEditorEmpty: getPlainText(doc) === "",
-        hasAttachments: store.getSnapshot().attachments.items.length > 0,
-        submitOn: options.submitOn,
-      },
-    );
+    const action = decideEditorKey(toKeyPress(event), {
+      commandList: commandState.isOpen,
+      empty: getPlainText(doc) === "",
+      hasAttachments: store.getSnapshot().attachments.items.length > 0,
+      submitOn: options.submitOn ?? "enter",
+    });
     if (!action) return;
+    event.preventDefault();
 
     switch (action.type) {
       case "command-select": {
-        event.preventDefault();
         store.commandSelectRef.current?.();
         return;
       }
       case "command-close": {
-        event.preventDefault();
         closeCommands();
         return;
       }
       case "command-navigate": {
-        event.preventDefault();
         store.moveHighlight(action.direction);
         return;
       }
@@ -462,7 +453,6 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
         // Trap the caret inside the active token: clamp Left/Right to the
         // token range so it can't leave while the popup is open (Escape /
         // Dismiss is the only way out).
-        event.preventDefault();
         if (commandState.isOpen && root) {
           const current = caret.start;
           const target = Math.min(
@@ -476,35 +466,19 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
         }
         return;
       }
-      case "ask-user-arrow": {
-        // navigate() moves DOM focus onto the newly highlighted option
-        // (roving tabindex) — never blur to <body>. At the list boundary
-        // (null) focus stays in the editor.
-        event.preventDefault();
-        store.getSnapshot().askUser.optionsRef.current?.navigate(action.direction);
-        return;
-      }
-      case "ask-user-dismiss": {
-        event.preventDefault();
-        store.getSnapshot().askUser.dismissStep();
-        return;
-      }
       case "remove-last-attachment": {
-        event.preventDefault();
         const { items, remove } = store.getSnapshot().attachments;
         const lastItem = items.at(-1);
         if (lastItem) remove(lastItem.id);
         return;
       }
       case "submit": {
-        event.preventDefault();
         void store.submit();
         return;
       }
       case "soft-break": {
-        // The browser's own insertParagraph must be blocked — it would split
+        // The browser's own insertParagraph is blocked above — it would split
         // the editable into block children the flat model doesn't represent.
-        event.preventDefault();
         // A line break is a deliberate exit from an active trigger token —
         // dismiss it like Escape (with re-entry suppression) before inserting,
         // so the popup doesn't linger under the new line.
@@ -773,7 +747,10 @@ export const useComposerEditor = (options: UseComposerEditorOptions): UseCompose
     },
     onKeyDown: (event) => {
       dependenciesRef.current.options.onKeyDown?.(event);
-      if (!event.defaultPrevented) engine.handleKeyDown(event.nativeEvent);
+      if (event.defaultPrevented) return;
+      engine.handleKeyDown(event.nativeEvent);
+      const isHandledByEngine = event.nativeEvent.defaultPrevented;
+      if (isHandledByEngine) event.preventDefault();
     },
     onKeyUp: (event) => {
       dependenciesRef.current.options.onKeyUp?.(event);

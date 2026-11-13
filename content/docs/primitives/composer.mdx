@@ -90,8 +90,8 @@ question — arms the ask-user flow and flips `askUser.active`; compose the
 `AskUser` parts from `@intentface/ui/ask-user` inside a `Panel` (or
 `Popover`), reading the current step from `useComposer(c => c.askUser)`. The
 flow steps through each question (single- or multi-select), and answering or
-skipping the last one fires `onSubmit` with `{ kind: "answers" }`. Passing a
-fresh `questions` array re-arms it from the first step.
+skipping the last one fires `onSubmit` with `{ kind: "answers" }`. Pass a new
+`questions` array to ask again.
 
 <Demo component={<AskUserFlow />} file="primitives/composer/demos/ask-user-flow.tsx" />
 
@@ -155,8 +155,13 @@ transitions.
 
 ## Keyboard
 
-The editor interprets keys by mode — a command list being open, or ask-user
-being active, takes priority over normal typing.
+A key belongs to what has focus. The editor's keys are its own, and an open
+question's keys work from its options and from the page once focus has fallen out
+of every control. They also work from a container around the composer, such as a
+popup that a click on the question's text focused. Escape there is the
+container's, so the popup closes. A key typed into another field inside the
+composer, such as your own input, is that field's. A command list being open, or
+a question being asked, takes priority over normal typing.
 
 **Normal typing**
 
@@ -182,25 +187,41 @@ export const commandKeys = [
 **Ask-user active**
 
 export const askUserKeys = [
-  { keys: "ArrowUp / ArrowDown", description: "Navigate options; up past the first refocuses the editor." },
-  { keys: "ArrowLeft / ArrowRight", description: "Go to the previous / next question." },
-  { keys: "Enter", description: "Select the highlighted option." },
+  { keys: "ArrowUp / ArrowDown", description: "Navigate options, from the editor too; up past the first refocuses the editor." },
+  { keys: "ArrowLeft / ArrowRight", description: "Go to the previous / next question. In the editor, move the caret instead." },
+  { keys: "Enter", description: "Select the highlighted option. In the editor, answer the step with the typed text." },
+  { keys: "Space", description: "Select the highlighted option. In the editor, type a space." },
   { keys: "Escape", description: "Dismiss the current step." },
   { keys: "Any character", description: "Focus the editor and start typing a free-text answer." },
 ];
 
 <KeysTable rows={askUserKeys} />
 
+On a focused button inside the composer, Enter and Space press the button.
+
+Escape goes to the first of these that applies:
+
+1. An IME conversion in progress, which it cancels.
+2. Whatever already handled it.
+3. The open command list, which closes.
+4. The open question, whose step it dismisses.
+5. A generation, which stops while `isGenerating` with an `onStop`.
+6. Nothing in the composer, so it reaches the surface around it.
+
 While `isGenerating`, `Escape` inside the composer calls `Submit`'s `onStop` (via
 `useComposerSubmit`): from the editor, a button, or a part a positioned `Panel`
 renders elsewhere on the page. An Escape outside the composer is left alone, as is
 one something already handled, such as the command list closing. The composer
-marks the Escape it uses with `preventDefault()`, so the same press does not also
-close a surface around it, such as a floating `Tabs.Popup`.
+marks the Escape it uses with `preventDefault()` and stops its propagation, so the
+same press does not also close a surface around it. That covers a floating
+`Tabs.Popup` and portaled popups from other libraries, such as a Base UI
+`Popover` or `Dialog`, which close on any Escape that reaches them.
 
 To keep Escape for something else, call `event.preventPrimitiveHandler()` in
-`Composer.Root`'s `onKeyDown`. To stop from anywhere in the chat, handle Escape on
-its container — the floating dock on the Tabs page does this on `Thread.Root`.
+`Composer.Root`'s `onKeyDown`. That skips every key `Composer.Root` handles, so it
+also skips an open question's keys from the editor and the options. To stop from
+anywhere in the chat, handle Escape on its container — the floating dock on the
+Tabs page does this on `Thread.Root`.
 
 ## API reference
 
@@ -231,7 +252,7 @@ content from `--composer-height`, because that feeds back into the measurement.
 export const rootProps = [
   { name: "onSubmit", type: "(data: ComposerSubmitData) => void | Promise<void>", description: "Fires on message submit and on ask-user answers. Discriminate on data.kind." },
   { name: "commands", type: "ComposerCommandsMap", default: "{}", description: "Prefix → command config (kind, trigger, items, suggestion, placeholder). suggestion: false disables ghost-text completion; placeholder sets the per-prefix empty-query hint (never shown alongside a suggestion — the suggestion wins)." },
-  { name: "questions", type: "AskUserQuestion[]", description: "When set, arms the ask-user flow (blurs the editor, flips askUser.active)." },
+  { name: "questions", type: "AskUserQuestion[]", description: "When set to a non-empty array, asks it and flips askUser.active. A new array asks again; the same array, once answered, stays answered." },
   { name: "isSubmitting", type: "boolean", default: "false", description: "Flips Submit to a stop affordance and gates re-submits." },
   { name: "value", type: "ComposerSnapshot", description: "Controlled editor content." },
   { name: "defaultValue", type: "ComposerSnapshot", description: "Uncontrolled initial editor content." },
@@ -583,10 +604,16 @@ namespace in `@intentface/ui/ask-user`, reading the step through
 `useComposer((c) => c.askUser)` and gating the enclosing `Panel` or `Popover` on
 `askUser.active`.
 
+`askUser.active` is true while a question is being asked. It turns false as soon
+as the last step is answered or skipped, even while `questions` stays set, so a
+panel gated on it closes then. To ask again, pass a new array; passing the same
+array does nothing.
+
 `AskUser.Dismiss` is a plain button you wire to `askUser.dismissStep`;
-`AskUser.Continue` is a `type="button"` that sends through the composer, like
-Enter. Neither ships copy — supply the labels as children, and read
-`askUser.isLastStep` to switch the continue wording.
+`AskUser.Continue` is a `type="button"` that continues the step with the editor's
+text, like Enter, and does nothing once the last step is answered. Neither ships
+copy — supply the labels as children, and read `askUser.isLastStep` to switch the
+continue wording.
 
 ### Hooks
 

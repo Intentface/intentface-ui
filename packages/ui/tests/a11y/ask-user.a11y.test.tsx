@@ -55,8 +55,8 @@ const AskUserHarness = () => {
   );
 };
 
-// activateAskUser defers focus/listener attachment one frame past the commit
-// that mounts the options.
+// A new question moves focus into its options one frame past the commit that
+// mounts them.
 const flushFrames = async () => {
   await act(async () => {
     await new Promise<void>((resolve) => {
@@ -153,7 +153,7 @@ describe("ask-user a11y", () => {
     const radios = screen.getAllByRole("radio");
 
     // A click on non-interactive panel chrome dumps focus to <body>. The
-    // document-level listener (containment-scoped) must still hear arrows.
+    // composer's page listener must still hear arrows there.
     act(() => {
       (document.activeElement as HTMLElement | null)?.blur();
     });
@@ -182,5 +182,42 @@ describe("ask-user a11y", () => {
 
     unmount();
     cleanup();
+  });
+});
+
+// An option holds the highlight in each of these, so the question would take
+// the key if it were the question's.
+describe("ask-user keys belong to what has focus", () => {
+  const renderQuestion = async () => {
+    const submitted: ComposerSubmitData[] = [];
+    render(
+      <Composer.Root questions={SINGLE} onSubmit={(data) => void submitted.push(data)}>
+        <Composer.Textarea aria-label="Message" />
+        <AskUserHarness />
+        <button type="button">Attach</button>
+      </Composer.Root>,
+    );
+    await flushFrames();
+    return submitted;
+  };
+
+  test("a Space typed into the editor is typing", async () => {
+    const submitted = await renderQuestion();
+
+    const notPrevented = fireEvent.keyDown(screen.getByRole("textbox", { name: "Message" }), {
+      key: " ",
+    });
+    expect(notPrevented).toBe(true);
+    expect(submitted).toEqual([]);
+  });
+
+  test("an Enter on a button inside the composer presses the button", async () => {
+    const submitted = await renderQuestion();
+
+    const notPrevented = fireEvent.keyDown(screen.getByRole("button", { name: "Attach" }), {
+      key: "Enter",
+    });
+    expect(notPrevented).toBe(true);
+    expect(submitted).toEqual([]);
   });
 });
