@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { getSegmentedParts, groupTurns, type Turn } from "../src/message-utils";
-import type { ChatMessage, MessagePart } from "../src/types";
+import type { ChatMessage, MessagePart } from "@intentface/ui/types";
+import { getSegmentedParts, groupTurns, type Turn } from "@/lib/ai/message-info";
 
 describe("getSegmentedParts", () => {
   test("groups adjacent same-typed parts and keeps chronology", () => {
@@ -63,7 +63,3 @@ describe("groupTurns", () => {
     expect(turns[0]?.key).toBe("a1");
   });
 });
-
-// getAskUserInfo, getSourcesInfo, splitReasoningByHeaders, getChainInfo, and
-// getReasoningInfo moved to the app (lib/ai/steps-info.ts, lib/ai/message-info.ts)
-// — tool contracts, header conventions, and dedup rules are the consumer's.

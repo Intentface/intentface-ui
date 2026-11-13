@@ -59,6 +59,9 @@ jobs:
         run: bun test
         working-directory: packages/ui
 
+      - name: App tests
+        run: bun run test
+
       - name: Package build (publint gate)
         working-directory: packages/ui
         run: |
