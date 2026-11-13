@@ -41,10 +41,10 @@ const NAMESPACES = {
 };
 const KNOWN_GAPS = [
   [
-    /\bAskUser\b|@intentface\/ui\/ask-user|data-ask-user-/,
+    /^(?:undocumented(?: prop| attribute| CSS variable)?: AskUser\b|no docs page: @intentface\/ui\/ask-user$)/,
     "PR #75 renames AskUser to Ask and data-ask-user-* to data-ask-*; the page is written after it lands.",
   ],
-  [/@intentface\/ui\/message-utils/, "UI-78 removes this entry point."],
+  [/^no docs page: @intentface\/ui\/message-utils$/, "UI-78 removes this entry point."],
 ];
 const SRC = "packages/ui/src";
 const DOCS = process.argv.includes("--docs")
@@ -63,6 +63,8 @@ const walk = (dir) =>
     if (entry.isDirectory()) return walk(full);
     return /\.tsx?$/.test(entry.name) ? [full] : [];
   });
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const union = (sets) => new Set(sets.flatMap((set) => [...set]));
 
@@ -534,14 +536,16 @@ const auditLinks = (file) => {
   const own = routeOf(file);
   const findings = [];
   for (const [, target] of stripFences(readFileSync(file, "utf8")).matchAll(
-    /\]\(((?:\/|#)[^)\s]*)\)/g,
+    /\]\(((?:\/|#|\.{1,2}\/)[^)\s]*)\)/g,
   )) {
-    const [pathAndQuery, anchor] = target.split("#");
-    const route = pathAndQuery.split("?")[0].replace(/^\//, "").replace(/\.md$/, "");
-    const page = pathAndQuery === "" ? pages.get(own) : pages.get(route);
+    const url = new URL(target, `https://docs.invalid/${own}`);
+    const route = decodeURIComponent(url.pathname)
+      .replace(/^\//, "")
+      .replace(/\.mdx?$/, "");
+    const anchor = decodeURIComponent(url.hash.slice(1));
+    const page = pages.get(route);
     if (!page) {
-      if (!appRoutes.has(pathAndQuery.split("?")[0].replace(/^\//, "")))
-        findings.push(`dead link: ${target}`);
+      if (!appRoutes.has(route)) findings.push(`dead link: ${target}`);
     } else if (anchor && !page.ids.has(anchor)) {
       findings.push(`dead link: ${target} (no such heading)`);
     }
@@ -567,7 +571,7 @@ const auditEntryPoints = () => {
     if (NAMESPACES[slug]) continue;
     for (const symbol of exportsOf(module)) {
       const exported = symbol.getName();
-      const mentioned = new RegExp(`(?<![\\w$])${exported.replace(/\$/g, "\\$")}(?![\\w$])`);
+      const mentioned = new RegExp(`(?<![\\w$])${escapeRegExp(exported)}(?![\\w$])`);
       if (!mentioned.test(page[0])) findings.push(`undocumented export: ${name} → ${exported}`);
     }
   }
