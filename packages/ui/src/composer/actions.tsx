@@ -25,6 +25,11 @@ export type ComposerContextWindowState = {
 
 export type ComposerContextWindowProps = PrimitiveProps<"div", ComposerContextWindowState>;
 
+/**
+ * A strip for context beside the input, such as a quoted message. It always renders, with
+ * data-open while it has children and no command list or question is active, and data-closed
+ * otherwise. Hiding it while closed is the consumer's styling.
+ */
 export const ComposerContextWindow = ({
   children,
   className,

@@ -74,6 +74,11 @@ const visuallyHiddenStyle: CSSProperties = {
 
 const ignoreInput = () => {};
 
+/**
+ * The editor surface, a contenteditable that acts like a native textarea with atomic mention
+ * chips. While the editor is empty it lays a placeholder overlay over the editor, so the padding,
+ * height, scrolling and type go on this element, where the editor and the overlay share them.
+ */
 export const ComposerTextarea = ({
   value,
   onValueChange,

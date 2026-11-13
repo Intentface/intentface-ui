@@ -22,11 +22,11 @@ export const Controlled = () => {
           <Composer.Textarea
             value={text}
             onValueChange={setText}
-            className="max-h-32 min-h-12 overflow-y-auto px-2.5 pt-2.5 text-sm text-zinc-900 dark:text-zinc-100 **:data-composer-editor:w-full **:data-composer-editor:max-w-none **:data-composer-editor:leading-6 [&_[data-composer-editor]:focus]:outline-none"
+            className="max-h-32 min-h-12 overflow-y-auto px-2.5 pt-2.5 text-sm leading-6 text-zinc-900 dark:text-zinc-100 **:data-composer-editor:w-full **:data-composer-editor:max-w-none [&_[data-composer-editor]:focus]:outline-none"
           >
             <Composer.Placeholder
               placeholder="Controlled by the parent…"
-              className="text-zinc-400 leading-6 dark:text-zinc-500"
+              className="text-zinc-400 dark:text-zinc-500"
             />
           </Composer.Textarea>
           <Composer.Actions className="flex h-12 items-center justify-end px-2.5">

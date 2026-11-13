@@ -20,22 +20,53 @@ import { Store } from './composer/demos/store';
 - **Prefix commands** — type `/`, `@`, or other prefixes to open command lists.
 - **Panel** — hosts command results, live steps, or an ask-user prompt above the field.
 - **Headless** — behavior lives in `@intentface/ui`; the demos below show one way to style it, and every class in them is yours to change.
+- **The placeholder is already positioned** — `Composer.Textarea` lays it over the editor, so put the padding, height, scrolling and type on the textarea, where the editor and the placeholder share them. Give `Composer.Placeholder` a color only, because a position of its own counts that padding twice and moves the hint off the caret.
 - **Isolate it from your stream** — see [Why the composer needs isolating](#why-the-composer-needs-isolating). The editor is the most expensive thing on the page to re-render per token.
 - **Fits inside your form** — `Composer.Root` renders a `<div>`, so it can sit inside your own `<form>`, and `Composer.Textarea`'s `name` puts its text in that form's `FormData`. Submitting your form doesn't send the message, which goes through `Composer.Root`'s `onSubmit`. Pass `render={<form />}` to make the root a form itself.
 - **Get started** — see [Quick start](/quick-start) to add the package.
 
 ## Anatomy
 
-The bare nesting — every part is optional except `Composer` and `Container`:
+```tsx
+<Composer.Root>
+  <Composer.Panel>
+    <Composer.Command>
+      <Composer.CommandLoading />
+      <Composer.CommandEmpty />
+      <Composer.CommandList>
+        <Composer.CommandItem>
+          <Composer.CommandItemLabel />
+        </Composer.CommandItem>
+      </Composer.CommandList>
+    </Composer.Command>
+  </Composer.Panel>
+  <Composer.Container>
+    <Composer.Textarea>
+      <Composer.Placeholder />
+    </Composer.Textarea>
+    <Composer.Actions>
+      <Composer.Submit />
+    </Composer.Actions>
+  </Composer.Container>
+</Composer.Root>
+```
+
+The second block adds the props and the panel's state callback. It also gates
+the list states on the attributes `Composer.Command` sets, and puts the box and
+type on the textarea, where the placeholder shares them.
 
 ```tsx
-<Composer.Root onSubmit={handleSubmit}>
+<Composer.Root onSubmit={handleSubmit} commands={commands}>
   <Composer.Panel>
     {(composer) =>
       composer.commands.active && (
-        <Composer.Command prefix="@">
-          <Composer.CommandLoading />
-          <Composer.CommandEmpty />
+        <Composer.Command prefix="@" className="group">
+          <Composer.CommandLoading className="hidden group-data-loading:block">
+            Searching…
+          </Composer.CommandLoading>
+          <Composer.CommandEmpty className="hidden group-data-empty:block">
+            No matches
+          </Composer.CommandEmpty>
           <Composer.CommandList>
             {(item) => (
               <Composer.CommandItem value={item.value}>
@@ -48,8 +79,8 @@ The bare nesting — every part is optional except `Composer` and `Container`:
     }
   </Composer.Panel>
   <Composer.Container>
-    <Composer.Textarea>
-      <Composer.Placeholder />
+    <Composer.Textarea className="max-h-40 overflow-y-auto px-3 pt-3 text-sm leading-6">
+      <Composer.Placeholder placeholder="Send a message…" className="text-zinc-400" />
     </Composer.Textarea>
     <Composer.Actions>
       <Composer.Submit />
@@ -77,9 +108,9 @@ a prefix is active. `commands` maps each prefix to its config and items.
 `Composer.Popover` is the floating alternative to `Composer.Panel`. It takes the
 same children — plain nodes or a state callback — but portals them above the
 field, anchored to the active trigger token, so the list overlays instead of
-growing the composer and needs no reserved height. It's collision-aware — near a
-viewport edge it flips, shifts, and caps its height to stay on screen. Mount one
-or the other; the content is identical.
+growing the composer and needs no reserved height. Near a viewport edge it flips
+and shifts to stay on screen, and it publishes the free height for you to cap it
+with. Mount one or the other; the content is identical.
 
 <Demo component={<Popover />} file="primitives/composer/demos/popover.tsx" />
 
@@ -232,7 +263,7 @@ export const rootProps = [
   { name: "onSubmit", type: "(data: ComposerSubmitData) => void | Promise<void>", description: "Fires on message submit and on ask-user answers. Discriminate on data.kind." },
   { name: "commands", type: "ComposerCommandsMap", default: "{}", description: "Prefix → command config (kind, trigger, items, suggestion, placeholder). suggestion: false disables ghost-text completion; placeholder sets the per-prefix empty-query hint (never shown alongside a suggestion — the suggestion wins)." },
   { name: "questions", type: "AskUserQuestion[]", description: "When set, arms the ask-user flow (blurs the editor, flips askUser.active)." },
-  { name: "isSubmitting", type: "boolean", default: "false", description: "Flips Submit to a stop affordance and gates re-submits." },
+  { name: "isSubmitting", type: "boolean", default: "false", description: "Blocks sending a message while true. Submit disables and Enter sends nothing. Sets data-submitting on the root. It does not turn Submit into a stop button. Composer.Submit's isGenerating and onStop do that." },
   { name: "value", type: "ComposerSnapshot", description: "Controlled editor content." },
   { name: "defaultValue", type: "ComposerSnapshot", description: "Uncontrolled initial editor content." },
   { name: "onValueChange", type: "(snapshot: ComposerSnapshot) => void", description: "Fires on editor updates with a fresh snapshot." },
@@ -307,34 +338,55 @@ Focus proxy and layout frame. Renders `data-composer-container`; clicking its
 chrome focuses the editor. Not focusable itself — it carries no role or tab
 stop.
 
+export const containerAttrs = [
+  { attribute: "data-composer-container", description: "The frame element. A mousedown on it outside the editor, a button, a link or an input focuses the editor." },
+];
+
+<AttributesTable rows={containerAttrs} />
+
 ### Composer.Textarea
 
-The editor surface — a contenteditable that acts like a native textarea with
-atomic mention chips. Renders `data-composer-textarea` wrapping the
-editable element (`data-composer-editor`). With `name` set, a hidden
-input mirrors the serialized text into the surrounding form's FormData.
+The editor surface, a contenteditable that acts like a native textarea with
+atomic mention chips. Renders `data-composer-textarea` around the editable
+element (`data-composer-editor`) and, while the editor is empty, a placeholder
+overlay (`data-composer-placeholder`) laid over it. Put the padding, height,
+scrolling and type on this element, so the editor and the overlay share them.
+Padding or type set on the editor alone moves the caret but not the
+placeholder. With `name` set, a hidden input mirrors the serialized text into
+the surrounding form's FormData.
 
 export const textareaProps = [
   { name: "value", type: "string", description: "Controlled plain-text value." },
   { name: "onValueChange", type: "(text: string) => void", description: "Fires on each editor update with plain text." },
   { name: "disabled", type: "boolean", default: "false", description: "Makes the editor non-editable." },
   { name: "autoFocus", type: "boolean", default: "false", description: "Focus the editor on mount." },
-  { name: "placeholder", type: "string", description: "Native-textarea-style placeholder (also sets aria-placeholder). For rich content, pass children instead." },
+  { name: "placeholder", type: "string", description: "The hint the overlay shows while the editor is empty, also set as the editor's aria-placeholder. Children replace it in the overlay, but only this prop sets aria-placeholder." },
   { name: "submitOn", type: '"enter" | "shift-enter"', default: '"enter"', description: "Which Enter chord sends the message; the other inserts a soft break. Pair \"shift-enter\" with enterKeyHint=\"enter\"." },
   { name: "renderChip", type: "(chip: ChipData) => ReactNode", description: "Custom renderer for a committed chip. ChipData carries prefix, value, label, and icon — the default renders label only; add chip.prefix in front to show the trigger." },
-  { name: "children", type: "ReactNode", description: "Placeholder overlay, shown while empty." },
+  { name: "children", type: "ReactNode", description: "The overlay's content while the editor is empty, usually a Composer.Placeholder. Wins over placeholder when both are set." },
   { name: "maxLength", type: "number", description: "Logical-length cap — one per character, one per chip. IME input is capped at composition commit." },
   { name: "required", type: "boolean", default: "false", description: "Native form validation via the hidden input (requires name)." },
   { name: "name", type: "string", description: "Mirrors the serialized text (chips as chip-markdown) into FormData." },
-  { name: "spellCheck", type: "boolean", default: "false", description: "Forwarded to the editable element, with autoCapitalize, enterKeyHint, inputMode, dir, and aria-* passthrough." },
+  { name: "spellCheck", type: "boolean", default: "false", description: "Forwarded to the editable element." },
+  { name: "autoCapitalize", type: "string", description: "Forwarded to the editable element, with the values a native textarea takes." },
+  { name: "enterKeyHint", type: '"enter" | "done" | "go" | "next" | "previous" | "search" | "send"', description: "Forwarded to the editable element. Sets the Enter key's label on a virtual keyboard." },
+  { name: "inputMode", type: '"none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search"', description: "Forwarded to the editable element. Picks the virtual keyboard." },
+  { name: "dir", type: "string", description: "Forwarded to the editable element, not the wrapper." },
+  { name: "aria-label", type: "string", description: "Forwarded to the editable element, which has role textbox." },
+  { name: "aria-labelledby", type: "string", description: "Forwarded to the editable element." },
+  { name: "aria-describedby", type: "string", description: "Forwarded to the editable element." },
   { name: "onFocus / onBlur / onKeyDown / onKeyUp / onPaste / onCopy / onCut", type: "React handlers", description: "Route to the editable element, native-textarea style: they run before the engine, and preventDefault overrides the engine's handling (keydown/clipboard)." },
 ];
 
 <PropsTable rows={textareaProps} />
 
 export const textareaAttrs = [
-  { attribute: "data-composer-textarea", description: "The wrapper element." },
+  { attribute: "data-composer-textarea", description: "The wrapper element. Other HTML props land here." },
   { attribute: "data-composer-editor", description: "The contenteditable editor element." },
+  { attribute: "data-composer-placeholder", description: "The overlay that holds the placeholder. The package places it at position: absolute and inset: 0 over the editor, with pointer-events: none and aria-hidden, so it starts where the caret does. Present only while the editor is empty and no IME composition runs. Give it a color, never a position or padding." },
+  { attribute: "data-mention-chip", description: "The span the editor writes around each committed chip, with the chip's content inside. Non-editable, inline and on the text baseline. Style chips in the editor through it." },
+  { attribute: "data-chip-id", description: "The chip's id, on the same span. Engine-owned. The editor reads its chips back by it, so it is not a styling hook." },
+  { attribute: "data-padding-break", description: "The trailing <br> the editor adds while the text is empty or ends in a line break, so the last line has height. Engine-owned, not a styling hook." },
   { attribute: "data-filled", description: "Present when the editor has content." },
   { attribute: "data-disabled", description: "Present when disabled." },
   { attribute: "data-command-badge", description: "On the active trigger token decoration (e.g. the leading @)." },
@@ -346,8 +398,10 @@ export const textareaAttrs = [
 
 ### Composer.Placeholder
 
-Static or custom placeholder. Renders `data-composer-placeholder-text`.
-Pass **either** `placeholder` or `children`, not both.
+The placeholder's content, placed as `Composer.Textarea`'s child. The textarea
+renders it inside its overlay, which already starts where the caret does, so
+give it a color only. Renders `data-composer-placeholder-text`. Pass **either**
+`placeholder` or `children`, not both.
 
 export const placeholderProps = [
   { name: "placeholder", type: "string", description: "Static placeholder text (mutually exclusive with children)." },
@@ -356,16 +410,23 @@ export const placeholderProps = [
 
 <PropsTable rows={placeholderProps} />
 
+export const placeholderAttrs = [
+  { attribute: "data-composer-placeholder-text", description: "The placeholder element, inside the textarea's data-composer-placeholder overlay. It sits within the textarea's padding and inherits its type." },
+];
+
+<AttributesTable rows={placeholderAttrs} />
+
 ### Composer.ContextWindow
 
-A slot above the input, open only when it has content and no panel is active.
-Content-driven and exposing `data-open`/`data-closed` like `Panel`/`Popover`.
+A strip for context beside the input, such as a quoted message. It always
+renders, with `data-open` while it has children and no command list or question
+is active, and `data-closed` otherwise. Hide it on `data-closed` in your styles.
 Renders `data-composer-context-window`.
 
 export const contextWindowAttrs = [
   { attribute: "data-composer-context-window", description: "The context-window element." },
-  { attribute: "data-open", description: "Present while the window has content and no panel is active." },
-  { attribute: "data-closed", description: "Present while empty or yielding to an active panel." },
+  { attribute: "data-open", description: "Present while the window has children and no command list or question is active. A child that renders null still counts." },
+  { attribute: "data-closed", description: "Present while the window has no children, or while a command list or question is active." },
 ];
 
 <AttributesTable rows={contextWindowAttrs} />
@@ -374,6 +435,12 @@ export const contextWindowAttrs = [
 
 Layout row for buttons. Renders `data-composer-actions`. No
 part-specific props or state attributes.
+
+export const actionsAttrs = [
+  { attribute: "data-composer-actions", description: "The row element." },
+];
+
+<AttributesTable rows={actionsAttrs} />
 
 ### Composer.Submit
 
@@ -419,13 +486,19 @@ Button that opens the file dialog. Renders
 `data-composer-attachment-trigger` named "Add attachment" by default. No
 part-specific props.
 
+export const attachmentTriggerAttrs = [
+  { attribute: "data-composer-attachment-trigger", description: "The button element. Its accessible name is \"Add attachment\" until you pass your own aria-label." },
+];
+
+<AttributesTable rows={attachmentTriggerAttrs} />
+
 ### Composer.Panel
 
 A surface region above the field. `children` is either plain nodes or a callback
 `(composer) => ReactNode` receiving the composer state, so you pick what to show
 by priority (`commands.active ? <Command/> : askUser.active ? <AskUser.Root/> :
 null`). By default (`anchor`) it renders as a **collision-aware, portaled overlay**
-anchored to the `Container` — flipping / shifting / sizing to stay on screen (via
+anchored to the `Container` — flipping and shifting to stay on screen (via
 `@floating-ui/dom`); anchor a ref/element elsewhere, or pass `anchor={false}` for an
 **in-flow** block that grows the composer. Pass `pin` to hold the placement without
 flip/shift. `open` — whether the resolved content is non-empty — arrives as the
@@ -434,12 +507,9 @@ host stays mounted through its close animation (exposing
 `data-starting-style`/`data-ending-style`) and, when positioned, publishes the
 resolved `data-side`/`data-align` so the transition origin follows a flip.
 
-When positioned, the overlay publishes the anchor's geometry as CSS variables —
-opt in from your styling rather than having the primitive impose a size (Base
-UI-style): `--anchor-width` / `--anchor-height` (the anchor's box, e.g.
-`width: var(--anchor-width)` to match the composer) and `--anchor-available-height`
-(free space toward the resolved side, e.g. `max-height: var(--anchor-available-height)`
-so the content scrolls instead of overflowing).
+When positioned, the panel publishes the anchor's size and the free space around
+it as the CSS variables below. It sets no width or height of its own, so size it
+from them in your styles.
 
 export const panelProps = [
   { name: "children", type: 'ReactNode | ((composer: Omit<ComposerState, "size">) => ReactNode)', description: "Panel content, or a callback that reads composer state and returns one branch by priority." },
@@ -460,6 +530,10 @@ export const panelAttrs = [
   { attribute: "data-ending-style", description: "Present while the close transition runs, before unmount." },
   { attribute: "data-side", values: '"top" | "bottom" | "left" | "right"', description: "Resolved side when positioned (anchor) — the origin to animate from." },
   { attribute: "data-align", values: '"start" | "center" | "end"', description: "Resolved alignment when positioned." },
+  { attribute: "--anchor-width", values: "whole px", description: "The anchor's width. Positioned only. width: var(--anchor-width) matches the Container by default." },
+  { attribute: "--anchor-height", values: "whole px", description: "The anchor's height. Positioned only." },
+  { attribute: "--anchor-available-width", values: "whole px", description: "The width free for the panel within the viewport, keeping 8px from its edges. Positioned only." },
+  { attribute: "--anchor-available-height", values: "whole px", description: "The height free toward the resolved side, keeping 8px from the viewport's edge. Positioned only. Use it as max-height so the content scrolls instead of overflowing." },
 ];
 
 <AttributesTable rows={panelAttrs} />
@@ -469,10 +543,12 @@ export const panelAttrs = [
 Floating alternative to `Composer.Panel`. Takes the same `children` (nodes or a
 state callback) but portals them to the body, anchored to the active trigger
 token — overlaying instead of growing the composer. It's collision-aware (via
-`@floating-ui/dom`): opens upward by default and flips below / shifts / caps its
-height to stay on screen, tracking the anchor across scroll, resize, and composer
-growth. It stays mounted and exposes `open` the same way as `Panel` (the `render`
-prop's second argument plus `data-open`/`data-closed`), and publishes the resolved
+`@floating-ui/dom`): opens upward by default and flips below or shifts to stay on
+screen, tracking the anchor across scroll, resize, and composer growth. Like the
+panel, it publishes the anchor's size and the free space around it as CSS
+variables and sets no size of its own. It stays mounted and exposes `open` the
+same way as `Panel` (the `render` prop's second argument plus
+`data-open`/`data-closed`), and publishes the resolved
 `data-side`/`data-align` so the transition origin follows a flip. Positioning is
 written imperatively — the styled layer supplies only box and animation styling,
 not `left`/`top`.
@@ -487,17 +563,23 @@ export const popoverProps = [
 export const popoverAttrs = [
   { attribute: "data-composer-popover", description: "The portaled popover element." },
   { attribute: "data-open", description: "Present while the resolved content is non-empty." },
-  { attribute: "data-closed", description: "Present while empty (stays mounted, holding its last position)." },
-  { attribute: "data-side", values: '"top" | "bottom" | "left" | "right"', description: "Resolved side — flips to \"bottom\" when there's no room above; the origin to animate from." },
-  { attribute: "data-align", values: '"start" | "center" | "end"', description: "Resolved alignment along the side." },
+  { attribute: "data-closed", description: "Present while empty. The popover stays mounted, holding its last position, and before its first open it sits unpositioned at the end of body. Hide it on data-closed." },
+  { attribute: "data-side", values: '"top" | "bottom"', description: "Resolved side — flips to \"bottom\" when there's no room above; the origin to animate from." },
+  { attribute: "data-align", values: '"start" | "end"', description: "Resolved alignment along the side. \"start\" lines up with the token's start edge, and flips to \"end\" when that would overflow the viewport." },
+  { attribute: "--anchor-width", values: "whole px", description: "The width of the command token it anchors to, not the composer's. Set the popover's width yourself." },
+  { attribute: "--anchor-height", values: "whole px", description: "The command token's height." },
+  { attribute: "--anchor-available-width", values: "whole px", description: "The width free for the popover within the viewport, keeping 8px from its edges." },
+  { attribute: "--anchor-available-height", values: "whole px", description: "The height free toward the resolved side, keeping 8px from the viewport's edge. Use it as max-height so the list scrolls instead of overflowing." },
 ];
 
 <AttributesTable rows={popoverAttrs} />
 
 ### Composer.Command
 
-The command popup for one prefix. Renders `data-composer-command-list`
-**only while that prefix is active** (returns nothing otherwise).
+The command popup for one prefix. Renders `data-composer-command-list` while
+that prefix is active, and while a closing `Composer.Panel` animates it out.
+Renders nothing otherwise. Gate `Composer.CommandLoading` and
+`Composer.CommandEmpty` on its `data-loading` and `data-empty`.
 
 export const commandListProps = [
   { name: "prefix", type: "string", default: "(required)", description: "Which trigger prefix this list serves." },
@@ -513,6 +595,40 @@ export const commandListAttrs = [
 
 <AttributesTable rows={commandListAttrs} />
 
+### Composer.CommandLoading
+
+The loading row, with your children as its copy. It always renders, so show it
+from `data-loading` on `Composer.Command`.
+
+export const commandLoadingAttrs = [
+  { attribute: "data-composer-command-loading", description: "The loading element." },
+];
+
+<AttributesTable rows={commandLoadingAttrs} />
+
+### Composer.CommandEmpty
+
+The no-results row, with your children as its copy and `role="status"`. It
+always renders, so show it from `data-empty` on `Composer.Command`.
+
+export const commandEmptyAttrs = [
+  { attribute: "data-composer-command-empty", description: "The empty element." },
+];
+
+<AttributesTable rows={commandEmptyAttrs} />
+
+### Composer.CommandDismiss
+
+A button that dismisses the active command token. The list closes, the typed
+text stays, and the list stays closed until the prefix is typed again. It acts
+on mousedown, so the editor keeps focus. Your children are its label.
+
+export const commandDismissAttrs = [
+  { attribute: "data-composer-command-dismiss", description: "The button element. Out of the tab order." },
+];
+
+<AttributesTable rows={commandDismissAttrs} />
+
 ### Composer.CommandList
 
 Maps resolved items through a render-prop child. Renders
@@ -523,6 +639,12 @@ export const commandItemsProps = [
 ];
 
 <PropsTable rows={commandItemsProps} />
+
+export const commandItemsAttrs = [
+  { attribute: "data-composer-command-items", description: "The list element, with role listbox. The editor points its aria-controls at it." },
+];
+
+<AttributesTable rows={commandItemsAttrs} />
 
 ### Composer.CommandItem
 
@@ -539,26 +661,64 @@ export const commandItemProps = [
 
 export const commandItemAttrs = [
   { attribute: "data-composer-command-item", description: "The row button." },
+  { attribute: "data-command-item", description: "The same row button, with role option. Either attribute selects it." },
   { attribute: "data-highlighted", description: "Present when this row is the active highlight." },
   { attribute: "data-disabled", description: "Present when the item data marks this row disabled." },
 ];
 
 <AttributesTable rows={commandItemAttrs} />
 
-### Row content & states
+### Composer.CommandItemIcon
 
-`Composer.CommandItemIcon`, `Composer.CommandItemLabel`, and
-`Composer.CommandItemDescription` render `<span>`s with
-`data-composer-command-item-{icon,label,description}`.
-`Composer.CommandLoading` (`composer-command-loading`),
-`Composer.CommandEmpty` (`composer-command-empty`), and
-`Composer.CommandDismiss` (`composer-command-dismiss`, a button) fill the list
-states — all render only your children, so you supply the copy. To group, give
-`Composer.CommandGroup` a `groupBy` and a render callback: it buckets the resolved
-(already-filtered) items by your key — in first-appearance order, so keyboard nav
-still flows top-to-bottom — and calls the callback once per group with
-`(group, items)`, wrapping each in `data-command-group`. You render
-`Composer.CommandGroupLabel` (`composer-command-group-label`) + the group's items:
+A `<span>` for a row's icon. No part-specific props.
+
+export const commandItemIconAttrs = [
+  { attribute: "data-composer-command-item-icon", description: "The icon span." },
+];
+
+<AttributesTable rows={commandItemIconAttrs} />
+
+### Composer.CommandItemLabel
+
+A `<span>` for a row's label. No part-specific props.
+
+export const commandItemLabelAttrs = [
+  { attribute: "data-composer-command-item-label", description: "The label span." },
+];
+
+<AttributesTable rows={commandItemLabelAttrs} />
+
+### Composer.CommandItemDescription
+
+A `<span>` for a row's secondary text. No part-specific props.
+
+export const commandItemDescriptionAttrs = [
+  { attribute: "data-composer-command-item-description", description: "The description span." },
+];
+
+<AttributesTable rows={commandItemDescriptionAttrs} />
+
+### Composer.CommandGroup
+
+Groups the resolved items under headings, inside `Composer.Command` in place of
+`Composer.CommandList`. It buckets the already-filtered items by `groupBy`, in
+order of first appearance, and calls `children` once per group inside a
+`data-command-group` element. Arrow keys follow the order of the items, not of
+the groups, so pass items already sorted by group. It takes no `className`,
+`style` or `render`, so style each group through `[data-command-group]`.
+
+export const commandGroupProps = [
+  { name: "groupBy", type: "(item: Item) => string", default: "(required)", description: "Returns an item's group key. Annotate the parameter with your item type to type the items." },
+  { name: "children", type: "(group: string, items: Item[]) => ReactNode", default: "(required)", description: "Renders one group from its key and its items." },
+];
+
+<PropsTable rows={commandGroupProps} />
+
+export const commandGroupAttrs = [
+  { attribute: "data-command-group", description: "The element around each group, with role group." },
+];
+
+<AttributesTable rows={commandGroupAttrs} />
 
 ```tsx
 <Composer.CommandGroup groupBy={(item: Issue) => item.group}>
@@ -574,6 +734,17 @@ still flows top-to-bottom — and calls the callback once per group with
   )}
 </Composer.CommandGroup>
 ```
+
+### Composer.CommandGroupLabel
+
+A group's heading, rendered in `Composer.CommandGroup`'s callback. No
+part-specific props.
+
+export const commandGroupLabelAttrs = [
+  { attribute: "data-composer-command-group-label", description: "The heading element." },
+];
+
+<AttributesTable rows={commandGroupLabelAttrs} />
 
 ### Ask-user
 
