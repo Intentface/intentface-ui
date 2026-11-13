@@ -85,17 +85,73 @@ The top inset is everything that covers the thread's top, plus a spacing token. 
 - **Off the scrollbar.** The header spans only its own contents from the left edge, as in the playground, and the fades and the composer slot keep to the column's width, so none of them covers the viewport's scrollbar. A header that must span the full width belongs in flow above `Thread.Root`, where it covers nothing.
 - **The numbers are the app's.** `3.25rem`, `--spacing(3)`, `--spacing(4)`, `gap-6` and `background` stand for the app's own tokens.
 
+## Turns and segments
+
+```ts
+import {
+  type FilePart,
+  isFilePart,
+  isReasoningPart,
+  isTextPart,
+  isToolPart,
+  type ReasoningPart,
+  type TextPart,
+  type ToolPart,
+  type UnknownPart,
+} from "@intentface/ui/types";
+
+export type MessageSegment =
+  | { type: "reasoning"; parts: ReasoningPart[] }
+  | { type: "tool"; parts: ToolPart[] }
+  | { type: "text"; parts: TextPart[] }
+  | { type: "file"; parts: FilePart[] };
+
+const getSegmentType = (part: UnknownPart): MessageSegment["type"] | null => {
+  if (isReasoningPart(part)) return "reasoning";
+  if (isTextPart(part)) return "text";
+  if (isFilePart(part)) return "file";
+  if (isToolPart(part)) return "tool";
+  return null;
+};
+
+export const getSegmentedParts = (parts: readonly UnknownPart[]) => {
+  const segments: MessageSegment[] = [];
+  for (const part of parts) {
+    const type = getSegmentType(part);
+    if (!type) continue;
+    const last = segments.at(-1);
+    if (last?.type === type) (last.parts as UnknownPart[]).push(part);
+    else segments.push({ type, parts: [part] } as MessageSegment);
+  }
+  return segments;
+};
+
+export const groupTurns = <M extends { id: string; role: string }>(messages: readonly M[]) => {
+  const turns: { key: string; messages: M[] }[] = [];
+  for (const message of messages) {
+    const turn = turns.at(-1);
+    if (message.role === "user" || !turn) turns.push({ key: message.id, messages: [message] });
+    else turn.messages.push(message);
+  }
+  return turns;
+};
+```
+
+- These helpers are the app's own, in a module such as `messages.ts`. The package ships the part types and guards they use.
+- A turn starts at each user message. Its key is the first message's id, so the key stays put while a reply streams.
+- A part no guard matches, such as a source, starts no segment, so the text on either side of it merges into one segment.
+
 ## A message row from AI SDK parts
 
 ```tsx
 "use client";
 
 import { Message } from "@intentface/ui/message";
-import { getSegmentedParts } from "@intentface/ui/message-utils";
 import { Reasoning, useReasoning } from "@intentface/ui/reasoning";
 import { Steps } from "@intentface/ui/steps";
 import type { ToolUIPart, UIMessage } from "ai";
 import { memo } from "react";
+import { getSegmentedParts } from "./messages";
 
 const STEP_STATUS = {
   "input-streaming": "active",
@@ -171,9 +227,9 @@ export const Row = memo(({ message, isLast, isError }: RowProps) => (
 
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { Message } from "@intentface/ui/message";
-import { getSegmentedParts, groupTurns } from "@intentface/ui/message-utils";
 import { Thread } from "@intentface/ui/thread";
 import type { UIMessage } from "ai";
+import { getSegmentedParts, groupTurns } from "./messages";
 import { Row } from "./row";
 
 const PendingIndicator = () => <span aria-hidden="true">•••</span>;

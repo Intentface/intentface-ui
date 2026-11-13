@@ -1,13 +1,6 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import {
-  getFileParts,
-  getSegmentedParts,
-  getTextInfo,
-  groupTurns,
-  type MessageSegment,
-} from "@intentface/ui/message-utils";
 import type { ToolPart } from "@intentface/ui/types";
 import {
   Brain,
@@ -59,8 +52,13 @@ import { useThrottledText } from "@/hooks/use-throttled-text";
 import { prepareAttachmentsForSend } from "@/lib/ai/attachments";
 import {
   getChainInfo,
+  getFileParts,
   getReasoningInfo,
+  getSegmentedParts,
   getSourcesInfo,
+  getTextInfo,
+  groupTurns,
+  type MessageSegment,
   splitReasoningByHeaders,
 } from "@/lib/ai/message-info";
 import { getAskUserInfo, getAskUserStepInfo, getToolCallInfo } from "@/lib/ai/steps-info";

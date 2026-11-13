@@ -2,7 +2,6 @@
 
 import { Composer, type ComposerSubmitData } from "@intentface/ui/composer";
 import { Message } from "@intentface/ui/message";
-import { groupTurns } from "@intentface/ui/message-utils";
 import { Thread } from "@intentface/ui/thread";
 import { ArrowUp } from "@keyline-icons/react";
 import { useState } from "react";
@@ -17,6 +16,20 @@ const INITIAL: ChatMessage[] = [
     text: "Sure — it covers the composer's segment model, how chips serialise, and why the editor owns its own DOM.",
   },
 ];
+
+type Turn = { key: string; messages: ChatMessage[] };
+
+// A turn is a user message and the replies after it. Its key is the first
+// message's id, so it stays put while a reply streams in.
+const groupTurns = (messages: ChatMessage[]) => {
+  const turns: Turn[] = [];
+  for (const message of messages) {
+    const turn = turns.at(-1);
+    if (message.role === "user" || !turn) turns.push({ key: message.id, messages: [message] });
+    else turn.messages.push(message);
+  }
+  return turns;
+};
 
 // Three primitives assembled: Thread owns the scroll area and reserves space
 // for its floating composer, Message renders each turn, Composer takes input.

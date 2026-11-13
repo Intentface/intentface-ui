@@ -83,10 +83,6 @@
       "types": "./dist/tabs/index.d.ts",
       "default": "./dist/tabs/index.js"
     },
-    "./message-utils": {
-      "types": "./dist/message-utils.d.ts",
-      "default": "./dist/message-utils.js"
-    },
     "./chip-markdown": {
       "types": "./dist/chip-markdown.d.ts",
       "default": "./dist/chip-markdown.js"
