@@ -206,7 +206,7 @@ type ScrollTarget = { getTop: () => number; tracksEnd: boolean };
 // How long after a programmatic scroll the sentinel may leave view without
 // releasing the follow. Cleared earlier by scrollend where supported; the
 // timeout is the Safari fallback.
-const AUTO_SCROLL_SETTLE_MS = 200;
+export const AUTO_SCROLL_SETTLE_MS = 200;
 
 // Sub-pixel scrollTop rounding differs across engines; a small IntersectionObserver
 // rootMargin keeps edge detection from flickering right at the top/bottom boundary.
