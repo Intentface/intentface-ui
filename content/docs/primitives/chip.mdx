@@ -12,9 +12,9 @@ import { Preview } from './chip/demos/preview';
 ## Usage guidelines
 
 - **Inline token** — flows with the surrounding text instead of breaking the line box.
-- **Two homes** — backs the composer's mention decorations and the chips a message reconstructs from its wire format.
+- **Two homes** — `Composer.Textarea` renders each committed mention as a label-only chip by default. In a message, `Message.Text` hands each chip to your `renderChip`, which can return one.
 - **Unstyled** — how a chip looks is yours. Tint it with a class, or with a `data-*` attribute your styles read.
-- **Hover preview** — a `Chip.Preview` child promotes the chip to a hover card and is never rendered inline.
+- **The preview surface is yours** — a `Chip.Preview` child is never rendered inline. `renderWithPreview` receives it and builds the hover card, and without `renderWithPreview` the preview is dropped.
 - **Get started** — see [Quick start](/quick-start) to add the package.
 
 ## Anatomy
@@ -57,7 +57,7 @@ panel looks right and cannot be reached without a pointer.
 Every part accepts `className`, `style`, and `render` (see
 [Styling](/handbook/styling)) and emits a bespoke part attribute (`data-<part>`) unless noted.
 
-### Chip
+### Chip.Root
 
 The inline token surface. Flows with the surrounding text rather than breaking
 the line box, and lifts a `Chip.Preview` child into whatever surface
@@ -80,10 +80,22 @@ export const rootAttrs = [
 Leading inline icon, baseline-aligned to the label and `aria-hidden`, so
 decoration stays out of the chip's accessible name. Renders a `<span>` element.
 
+export const iconAttrs = [
+  { attribute: "data-chip-icon", description: "The icon element." },
+];
+
+<AttributesTable rows={iconAttrs} />
+
 ### Chip.Label
 
 The chip's text, which reads as part of the sentence around it. Renders a
 `<span>` element.
+
+export const labelAttrs = [
+  { attribute: "data-chip-label", description: "The label element." },
+];
+
+<AttributesTable rows={labelAttrs} />
 
 ### Chip.Preview
 

@@ -1,6 +1,6 @@
 ---
 title: Message
-description: A role-aware container for one turn, with chip-segmented text and selection hooks.
+description: A role-aware container for one message, with chip-segmented text and selection hooks.
 source: message
 ---
 
@@ -12,7 +12,7 @@ import { Selection } from './message/demos/selection';
 
 ## Usage guidelines
 
-- **One turn's container** — `Message.Root` reports the role and position as data attributes and renders no layout of its own.
+- **One message's container** — `Message.Root` reports the role and position as data attributes and renders no layout of its own.
 - **Segmented text** — `Message.Text` reconstructs inline chips from the wire format and takes render callbacks for both runs and chips.
 - **Everything else is yours** — bubbles, avatars, copy buttons, source pills, attachment previews and markdown rendering are composed by you around these parts.
 - **Memoise your row, not ours** — see [Why the memo boundary is yours](#why-the-memo-boundary-is-yours). Getting this wrong re-renders every message on every stream chunk.
@@ -20,29 +20,33 @@ import { Selection } from './message/demos/selection';
 
 ## Anatomy
 
-The package provides three parts. `Message.Root` is the only required one:
-
 ```tsx
 <Message.Turn>
-  <Message.Root role={role} isLast={isLast} isError={isError}>
-    <Message.Text>{text}</Message.Text>
+  <Message.Root>
+    <Message.Text />
   </Message.Root>
 </Message.Turn>
 ```
 
-Everything a finished chat row needs beyond that — the bubble surface, actions,
-sources, attachments, markdown — is your own markup, styled off the root's data
+A realistic turn. The question and its reply share one `Message.Turn`, and
+everything around the text is your own markup, styled off the root's data
 attributes:
 
 ```tsx
-<Message.Root role="assistant" isLast className="group flex flex-col gap-2">
-  <Markdown>{content}</Markdown>
+<Message.Turn className="flex flex-col gap-4">
+  <Message.Root role="user">
+    <Message.Text>{question.text}</Message.Text>
+  </Message.Root>
 
-  <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-    <button type="button" onClick={() => copy(content)}>Copy</button>
-    <button type="button" onClick={regenerate}>Regenerate</button>
-  </div>
-</Message.Root>
+  <Message.Root role="assistant" isLast={isLast} isError={isError} className="group flex flex-col gap-2">
+    <Markdown>{reply.text}</Markdown>
+
+    <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+      <button type="button" onClick={() => copy(reply.text)}>Copy</button>
+      <button type="button" onClick={regenerate}>Regenerate</button>
+    </div>
+  </Message.Root>
+</Message.Turn>
 ```
 
 ## Examples
@@ -101,8 +105,9 @@ Three rules keep the memo effective while a reply streams:
 - **Take callbacks from stable context inside the row**, not as inline props
   from the map.
 
-Done right, a stream chunk re-renders exactly one row. See
-[Composer performance](/primitives/composer#performance) for the full render model.
+Done right, a stream chunk re-renders exactly one row.
+[Why the composer needs isolating](/primitives/composer#why-the-composer-needs-isolating)
+puts the same kind of memo boundary around the composer.
 
 ## API reference
 
@@ -111,7 +116,7 @@ All three parts accept `className`, `style`, and `render`
 
 ### Message.Root
 
-One turn's container. Reports the role and position as data attributes and
+One message's container. Reports the role and position as data attributes and
 renders no layout of its own, so the bubble, avatar and actions around it stay
 yours. Renders a `<div>` element.
 
@@ -134,8 +139,17 @@ export const rootAttrs = [
 
 ### Message.Turn
 
-Groups consecutive messages from one role into a single visual turn. Renders a
-`<div>` element, and takes no props of its own beyond the shared ones.
+Wraps one exchange, a question and the replies that follow it, in one element.
+In the `"follow"` and `"jump"` [auto-scroll modes](/primitives/thread#choosing-an-auto-scroll-mode),
+`Thread.Content` lands its last child at the top, so a turn keeps the question
+in view while its reply streams in. Renders a `<div>` element, and takes no
+props of its own beyond the shared ones.
+
+export const turnAttrs = [
+  { attribute: "data-message-turn", description: "The turn element." },
+];
+
+<AttributesTable rows={turnAttrs} />
 
 ### Message.Text
 
@@ -144,28 +158,80 @@ message rebuilds its own chips with no sidecar metadata. Renders a `<span>`
 element.
 
 export const textProps = [
-  { name: "children", type: "string", default: "(required)", description: "The message text; chip tokens are parsed out and rendered." },
-  { name: "renderText", type: "(text, index) => ReactNode", description: "Custom renderer for plain text runs." },
-  { name: "renderChip", type: "(chip, index) => ReactNode", description: "Custom renderer for reconstructed chips." },
+  { name: "children", type: "string", default: "(required)", description: "The message text. Each [Label](chip:prefix:value) token in it is parsed out and rendered as a chip." },
+  { name: "renderText", type: "(text: string, index: number) => ReactNode", description: "Renders one run of plain text between chips, such as through your markdown renderer. Without it, the text renders as is." },
+  { name: "renderChip", type: "(chip: MessageChipSegment, index: number) => ReactNode", description: "Renders one chip. chip carries the label, prefix, value and optional icon parsed from its token. Without it, each chip renders as a span with data-message-chip that holds its label." },
 ];
 
 <PropsTable rows={textProps} />
 
-### Selection
-
-Text selection scoped to a message is exposed as functions rather than a part,
-so the toolbar (or whatever you build on it) stays yours.
-
-export const hooks = [
-  { name: "useMessageSelection", type: "(scope: HTMLElement | null) => MessageSelection | null", description: "Subscribe to the text selection scoped to a message element; settles on mouseup/keyup." },
-  { name: "useMessageSelectionScope", type: "() => { anchorRef, contentElement }", description: "Resolve the owning message's content element from an anchor rendered inside it." },
-  { name: "readMessageSelection", type: "(scope: HTMLElement) => MessageSelection | null", description: "Read the current selection once, without subscribing." },
+export const textAttrs = [
+  { attribute: "data-message-text", description: "The text element." },
+  { attribute: "data-message-chip", description: "The default chip: a span holding the chip's label. Rendered only when renderChip is not set." },
 ];
 
-<PropsTable rows={hooks} />
+<AttributesTable rows={textAttrs} />
 
 ### Types
 
 `MessageSelection`, `MessageState`, `MessageChipSegment`, `MessageRootProps`,
 `MessageTurnProps`, and `MessageTextProps` are exported from
 `@intentface/ui/message`.
+
+## useMessageSelection
+
+`useMessageSelection(scope)` subscribes to the text selection inside `scope`,
+an element such as a message's content, and listens to nothing while `scope` is
+`null`. It reads the selection when a drag or a key press settles, on `mouseup`
+and `keyup`, and clears it once the selection collapses. It returns `null`
+unless both ends of the selection sit inside `scope`.
+
+export const selectionMembers = [
+  { name: "text", type: "string", description: "The selected text." },
+  { name: "range", type: "Range", description: "A copy of the selection's range, so a toolbar can anchor to its rect. Later changes to the live selection do not move it." },
+];
+
+<PropsTable rows={selectionMembers} />
+
+`readMessageSelection(scope)` returns the same value once, without subscribing.
+
+## useMessageSelectionScope
+
+Find the message's content element from inside the message, so a selection
+toolbar scopes to the text and not to the actions or sources around it. Put the
+returned `anchorRef` on any element inside `Message.Root`. The hook walks up to
+the closest `[data-message]` and returns the first `[data-message-content]`
+inside it.
+
+No part renders `data-message-content`, so put it on the element that wraps the
+message's text. Without it, `contentElement` stays `null` and
+`useMessageSelection` reports nothing. The hook looks once, when the anchor
+mounts, so the content element must be in the DOM by then.
+
+```tsx
+const SelectionToolbar = () => {
+  const { anchorRef, contentElement } = useMessageSelectionScope();
+  const selection = useMessageSelection(contentElement);
+
+  return (
+    <>
+      <span ref={anchorRef} hidden />
+      {selection && <QuoteButton text={selection.text} />}
+    </>
+  );
+};
+
+<Message.Root role="assistant">
+  <div data-message-content="">
+    <Message.Text>{text}</Message.Text>
+  </div>
+  <SelectionToolbar />
+</Message.Root>
+```
+
+export const scopeMembers = [
+  { name: "anchorRef", type: "(node: HTMLElement | null) => void", description: "A callback ref for any element inside Message.Root. A hidden span is enough." },
+  { name: "contentElement", type: "HTMLElement | null", description: "The first [data-message-content] element inside the anchor's closest [data-message], or null when there is none." },
+];
+
+<PropsTable rows={scopeMembers} />
