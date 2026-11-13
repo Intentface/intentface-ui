@@ -253,15 +253,37 @@ describe("rows rendered as links", () => {
           <Nav.Item value="home" active render={<Link href="/" />}>
             <Nav.Label>Home</Nav.Label>
           </Nav.Item>
-          <Nav.Item value="inbox">
+          <Nav.Item value="inbox" render={(props) => <a href="/inbox" {...props} />}>
             <Nav.Label>Inbox</Nav.Label>
+          </Nav.Item>
+          <Nav.Item value="settings" render={<ToLink to="/settings" />}>
+            <Nav.Label>Settings</Nav.Label>
+          </Nav.Item>
+          <Nav.Item value="install">
+            <Nav.Label>Install</Nav.Label>
           </Nav.Item>
         </Nav.List>
       </Nav.Root>,
     );
 
-    expect(host.querySelector('[data-nav-item="home"]')?.outerHTML).toMatch(/^<a href="\/"/);
-    expect(host.querySelector('[data-nav-item="home"]')?.hasAttribute("role")).toBe(false);
-    expect(host.querySelector('[data-nav-item="inbox"]')?.getAttribute("role")).toBe("button");
+    for (const value of ["home", "inbox", "settings"]) {
+      const row = host.querySelector(`[data-nav-item="${value}"]`);
+      expect(row?.tagName).toBe("A");
+      expect(row?.hasAttribute("role")).toBe(false);
+    }
+    expect(host.querySelector('[data-nav-item="install"]')?.getAttribute("role")).toBe("button");
+  });
+
+  test("a row given some other element takes its role from you", () => {
+    const { getByRole } = render(
+      <Nav.Root>
+        <Nav.List>
+          <Nav.Item value="inbox" role="button" render={<span />}>
+            <Nav.Label>Inbox</Nav.Label>
+          </Nav.Item>
+        </Nav.List>
+      </Nav.Root>,
+    );
+    expect(getByRole("button", { name: "Inbox" }).tagName).toBe("SPAN");
   });
 });
