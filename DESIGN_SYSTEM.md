@@ -24,20 +24,22 @@ Four variables in `:root`. Everything else is computed from them.
 
 ```css
 :root {
-  --bg: #ffffff; /* background hue */
-  --fg: #1a1a1a; /* foreground hue */
-  --acc: #0169cc; /* accent hue */
-  --con: 0.35; /* contrast multiplier (0–1) — scales every state delta */
+  --bg: oklch(1 0 0); /* #ffffff, background hue */
+  --fg: oklch(0.2103 0.0059 285.89); /* #18181b, foreground hue */
+  --acc: oklch(0.5286 0.1734 254.97); /* #0169cc, accent hue */
+  --con: 0.3; /* contrast multiplier (0–1) — scales every state delta */
 }
 ```
+
+Write the color seeds in `oklch()`, never hex. Surfaces derive from the seeds with `oklch(from var(--bg) … c h)`, and Chrome 157 converts a near-gray hex such as `#18181b` to OKLCH with a `none` hue, which resolves to 0°. The seed keeps its chroma, so every derived surface turns pink while the seed itself still looks gray. An `oklch()` seed keeps its hue as written. The theme configurator picks hex, so `hooks/use-theme-overrides.ts` converts it with `formatOklch` (`lib/oklch.ts`) before setting the seed. The `browserslist` in `package.json` keeps Firefox at 113 or later for the same reason: Next's CSS compiler rewrites `oklch()` as hex and `lab()` for any target without `oklch()` support.
 
 `.dark` overrides the seeds, several surface base values, and two of the deltas — dark mode isn't just "swapped seeds":
 
 ```css
 .dark {
-  --bg: #111111;
-  --fg: #fcfcfc;
-  --acc: #4a9eed;
+  --bg: oklch(0.2103 0.0059 285.89); /* #18181b */
+  --fg: oklch(0.9674 0.0013 286.38); /* #f4f4f5 */
+  --acc: oklch(0.6754 0.1409 250.69); /* #4c9bea */
 
   /* Surface bases retuned for dark — see the table below */
   --base-bg: var(--bg);
