@@ -1,0 +1,234 @@
+---
+title: Types
+description: Structural types for a chat message, its parts and the request status, with guards that narrow a part to one type.
+source: types.ts
+---
+
+import { Parts } from './types/demos/parts';
+import { Status } from './types/demos/status';
+import { ToolStates } from './types/demos/tool-states';
+
+<Demo component={<Parts />} file="reference/types/demos/parts.tsx" replay={false} />
+
+## Usage guidelines
+
+- **An AI SDK message fits as it is** — `UIMessage` satisfies `ChatMessage` structurally, so the messages `useChat` returns need no adapter to reach code typed with `ChatMessage`. The reverse doesn't hold, because `role` here is any string.
+- **Narrow with the guards** — `UnknownPart` keeps `MessagePart` open, so `part.type === "text"` doesn't narrow a part and `isTextPart(part)` does.
+- **Unknown parts pass through** — a part no type here describes, such as `step-start`, `dynamic-tool` or `source-document`, still fits as `UnknownPart`. Nothing drops it, so your renderer decides whether to draw it.
+- **Expect more tool states** — the AI SDK's tool parts have three states `ToolPartState` doesn't list: `approval-requested`, `approval-responded` and `output-denied`. `isToolPart` lets those parts through, so give your renderer a fallback.
+- **Count `"submitted"` as generating** — `ChatStatus` is `"submitted"` from the send until the reply starts. Treat it like `"streaming"`, otherwise the stop button and any pending indicator wait for the first chunk.
+- **Imports anywhere** — the module holds types and five plain functions with no `"use client"` directive, so a server can import it too.
+- **Get started** — see [Quick start](/quick-start) to add the package.
+
+## Anatomy
+
+```ts
+type ChatMessage = {
+  id: string;
+  role: string;
+  metadata?: unknown;
+  parts: MessagePart[];
+};
+```
+
+A component typed with `ChatMessage` takes the messages `useChat` returns as they are, and `isTextPart` picks out their text.
+
+```tsx
+"use client";
+
+import { useChat } from "@ai-sdk/react";
+import { Message } from "@intentface/ui/message";
+import { type ChatMessage, isTextPart } from "@intentface/ui/types";
+
+const Row = ({ message }: { message: ChatMessage }) => (
+  <Message.Root role={message.role}>
+    {message.parts.filter(isTextPart).map((part, index) => (
+      <Message.Text key={index}>{part.text}</Message.Text>
+    ))}
+  </Message.Root>
+);
+
+export const Messages = () => {
+  const { messages } = useChat();
+  return messages.map((message) => <Row key={message.id} message={message} />);
+};
+```
+
+## Examples
+
+### Drawing a tool call in each state
+
+A tool part carries different fields at each point of its life: a partial `input` while it streams, then `output` or `errorText`. Switch on `state`, and keep a default for the states the AI SDK adds.
+
+<Demo component={<ToolStates />} file="reference/types/demos/tool-states.tsx" replay={false} />
+
+### Showing that a reply is on its way
+
+Use `ChatStatus` to decide what the input and the reply show. No part of the reply exists while the status is `"submitted"`, so a pending indicator is the only sign that one is coming.
+
+<Demo component={<Status />} file="reference/types/demos/status.tsx" replay={false} />
+
+## API reference
+
+Every type here is structural, so anything with the same shape fits, an AI SDK message included.
+
+### ChatMessage
+
+A chat message. An AI SDK `UIMessage` satisfies it structurally, so no adapter is needed. `Metadata` types `metadata`, and `Part` types each part.
+
+```ts
+type ChatMessage<Metadata = unknown, Part extends UnknownPart = MessagePart>
+```
+
+export const chatMessage = [
+  { name: "id", type: "string", default: "(required)", description: "Identifies the message. Use it as the React key." },
+  { name: "role", type: "string", default: "(required)", description: "Who wrote it, such as \"user\" or \"assistant\". The package never lists the roles, so the app owns the set." },
+  { name: "metadata", type: "Metadata", description: "Whatever the app attaches to the message." },
+  { name: "parts", type: "Part[]", default: "(required)", description: "The content, in order." },
+];
+
+<PropsTable rows={chatMessage} />
+
+### MessagePart
+
+Every part a message carries. `UnknownPart` keeps the union open, so a check on `part.type` can't narrow it. Use the [part guards](#part-guards) instead.
+
+```ts
+type MessagePart =
+  | TextPart
+  | ReasoningPart
+  | FilePart
+  | SourceUrlPart
+  | ToolPart
+  | DataPart
+  | UnknownPart;
+```
+
+### TextPart
+
+Text in a message. `state` is `"streaming"` while it arrives and `"done"` once it's complete.
+
+export const textPart = [
+  { name: "type", type: '"text"', default: "(required)", description: "Identifies the part." },
+  { name: "text", type: "string", default: "(required)", description: "The text so far." },
+  { name: "state", type: '"streaming" | "done"', description: "Whether more text is coming." },
+];
+
+<PropsTable rows={textPart} />
+
+### ReasoningPart
+
+The model's reasoning, kept apart from its answer. `state` works as on `TextPart`.
+
+export const reasoningPart = [
+  { name: "type", type: '"reasoning"', default: "(required)", description: "Identifies the part." },
+  { name: "text", type: "string", default: "(required)", description: "The reasoning so far." },
+  { name: "state", type: '"streaming" | "done"', description: "Whether more reasoning is coming." },
+];
+
+<PropsTable rows={reasoningPart} />
+
+### FilePart
+
+A file in a message, by URL: a hosted URL or a data URL. A `FilePart` is also an AI SDK `FileUIPart`, so `sendMessage` takes one in `files`.
+
+export const filePart = [
+  { name: "type", type: '"file"', default: "(required)", description: "Identifies the part." },
+  { name: "mediaType", type: "string", default: "(required)", description: "The file's IANA media type, such as \"image/png\"." },
+  { name: "url", type: "string", default: "(required)", description: "A hosted URL or a data URL. A server can't read a blob: URL, so turn one into a data URL before you send it." },
+  { name: "filename", type: "string", description: "The file's name, when it has one." },
+];
+
+<PropsTable rows={filePart} />
+
+### SourceUrlPart
+
+A web page the model cites as a source.
+
+export const sourceUrlPart = [
+  { name: "type", type: '"source-url"', default: "(required)", description: "Identifies the part." },
+  { name: "sourceId", type: "string", default: "(required)", description: "Identifies the source." },
+  { name: "url", type: "string", default: "(required)", description: "The page's URL." },
+  { name: "title", type: "string", description: "The page's title, when the model has one." },
+];
+
+<PropsTable rows={sourceUrlPart} />
+
+### ToolPart
+
+A tool call. `type` is `tool-` followed by the tool's name, and the type parameters type `input` and `output`. `isToolPart` narrows to `ToolPart<unknown, unknown>`, so check `input` and `output` before you read a field.
+
+```ts
+type ToolPart<Input = unknown, Output = unknown>
+```
+
+export const toolPart = [
+  { name: "type", type: "`tool-${string}`", default: "(required)", description: "tool- and the tool's name, as in tool-search." },
+  { name: "toolCallId", type: "string", default: "(required)", description: "Identifies this call." },
+  { name: "state", type: '"input-streaming" | "input-available" | "output-available" | "output-error"', default: "(required)", description: "Where the call is. See the values below." },
+  { name: "input", type: "Input", description: "The arguments the model wrote. Partial or absent while the state is \"input-streaming\"." },
+  { name: "output", type: "Output", description: "The tool's result, once the state is \"output-available\"." },
+  { name: "errorText", type: "string", description: "Why the call failed, once the state is \"output-error\"." },
+];
+
+<PropsTable rows={toolPart} />
+
+`ToolPartState` is the type of `state`, the point a tool call has reached: its input still streaming, its input complete, its output returned, or an error. The AI SDK has three more states, `approval-requested`, `approval-responded` and `output-denied`, and `isToolPart` lets those parts through too.
+
+export const toolStates = [
+  { value: '"input-streaming"', description: "The model is still writing the input." },
+  { value: '"input-available"', description: "The input is complete, and the tool hasn't returned." },
+  { value: '"output-available"', description: "The tool returned, and output holds the result." },
+  { value: '"output-error"', description: "The call failed, and errorText says why." },
+];
+
+<ValuesTable rows={toolStates} />
+
+### DataPart
+
+Data the app streams with a message. `type` is `data-` followed by a name the app chooses.
+
+export const dataPart = [
+  { name: "type", type: "`data-${string}`", default: "(required)", description: "data- and the name the app gave the data." },
+  { name: "id", type: "string", description: "In the AI SDK, a later chunk with the same type and id replaces this part's data." },
+  { name: "data", type: "unknown", description: "The data. Check its shape before you read it." },
+];
+
+<PropsTable rows={dataPart} />
+
+### UnknownPart
+
+The minimal part contract, which every part meets. Parts this package doesn't describe, such as `step-start`, `dynamic-tool` and parts added later, are carried through untouched.
+
+export const unknownPart = [
+  { name: "type", type: "string", default: "(required)", description: "What kind of part it is." },
+];
+
+<PropsTable rows={unknownPart} />
+
+### ChatStatus
+
+The status of the chat's request: `"submitted"` from the send until the reply starts, `"streaming"` while it arrives, then `"ready"` or `"error"`. Structurally identical to the AI SDK's `ChatStatus`.
+
+export const chatStatus = [
+  { value: '"submitted"', description: "The message is sent, and no part of the reply has arrived." },
+  { value: '"streaming"', description: "The reply is arriving." },
+  { value: '"ready"', description: "The last reply is complete, and a new message can be sent." },
+  { value: '"error"', description: "The request failed." },
+];
+
+<ValuesTable rows={chatStatus} />
+
+### Part guards
+
+Each guard takes any part and narrows it to one type.
+
+```ts
+isTextPart(part: UnknownPart): part is TextPart
+isReasoningPart(part: UnknownPart): part is ReasoningPart
+isFilePart(part: UnknownPart): part is FilePart
+isSourceUrlPart(part: UnknownPart): part is SourceUrlPart
+isToolPart(part: UnknownPart): part is ToolPart
+```
+
+`isTextPart`, `isReasoningPart`, `isFilePart` and `isSourceUrlPart` narrow a part when its `type` is `"text"`, `"reasoning"`, `"file"` or `"source-url"`. `isToolPart` narrows a part to `ToolPart` when its `type` starts with `tool-` and it has `state` and `toolCallId`. A `dynamic-tool` part doesn't match.

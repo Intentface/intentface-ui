@@ -32,13 +32,13 @@ and every one exposes its state through context hooks.
 The composer's editor is isolated from the message stream, so tokens arriving
 dozens of times a second don't re-render it. The thread follows new content while
 you're at the bottom and releases when you scroll away. See
-[Composer performance](/primitives/composer#performance).
+[Why the composer needs isolating](/primitives/composer#why-the-composer-needs-isolating).
 
 ### AI SDK compatible
 
-The package defines its own structural message types, which a Vercel AI SDK
-`UIMessage` already satisfies — so SDK messages pass straight into the components
-with no adapter.
+The package defines its own [structural message types](/reference/types), which
+a Vercel AI SDK `UIMessage` already satisfies, so SDK messages pass straight
+into the components with no adapter.
 
 ## Primitives
 

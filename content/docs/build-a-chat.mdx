@@ -74,29 +74,64 @@ Swap local state for `useChat`, which owns the message list and the request:
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import type { AttachmentItem } from "@intentface/ui/attachments";
 import { Composer, type ComposerSubmitData } from "@intentface/ui/composer";
+import type { FileUIPart } from "ai";
 
 export function Chat() {
   const { messages, sendMessage, status, stop } = useChat();
 
-  const handleSubmit = (data: ComposerSubmitData) => {
-    if (data.kind === "message" && data.text.trim()) {
-      sendMessage({ text: data.text, files: data.files });
-    }
+  const handleSubmit = async (data: ComposerSubmitData) => {
+    if (data.kind !== "message") return;
+    // The composer revokes the blob URLs once onSubmit settles, so read them first.
+    const files = await Promise.all(data.files.map(toFilePart));
+    sendMessage({ text: data.text, files });
   };
 
   return (
     <Composer.Root onSubmit={handleSubmit}>
       {/* … the same tree as stage 3 … */}
-      <Composer.Submit isGenerating={status === "streaming"} onStop={stop} />
+      <Composer.Submit
+        isGenerating={status === "submitted" || status === "streaming"}
+        onStop={stop}
+      />
     </Composer.Root>
   );
 }
+
+const toFilePart = async (item: AttachmentItem): Promise<FileUIPart> => {
+  const blob = await (await fetch(item.url)).blob();
+  const url = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+  return { type: "file", url, mediaType: item.mediaType ?? blob.type, filename: item.filename };
+};
 ```
 
-`Composer.Submit` takes `isGenerating` and `onStop`: while generating it flips to
-`type="button"`, relabels itself, and calls `onStop` instead of submitting, so
-send-to-stop needs no branching of your own.
+`useChat` reports `"submitted"` from the send until the reply starts, and
+`"streaming"` while it arrives, so pass both as `isGenerating`. Otherwise the
+button offers send, not stop, while the request is already in flight. While
+generating, `Composer.Submit` calls `onStop` instead of sending and changes its
+label from "Send message" to "Stop generating", so send-to-stop needs no
+branching of your own.
+
+By default a composer attachment's `url` is a `blob:` URL that only this page
+can read, so `toFilePart` turns each one into a data URL the server can decode.
+
+`messages` from `useChat` are `UIMessage`s, which satisfy this package's
+[`ChatMessage`](/reference/types#chatmessage) contract structurally, so they
+render through `Message` with no adapter. A `UIMessage` keeps its text in
+`parts`, so stage 3's `{message.text}` becomes the message's text parts, picked
+out with `isTextPart` from `@intentface/ui/types`:
+
+```tsx
+{message.parts.filter(isTextPart).map((part, index) => (
+  <Message.Text key={index}>{part.text}</Message.Text>
+))}
+```
 
 The route is the standard AI SDK handler — nothing in this package is involved:
 
@@ -117,12 +152,9 @@ export async function POST(req: Request) {
 }
 ```
 
-`messages` from `useChat` are `UIMessage`s, which satisfy this package's
-`ChatMessage` contract structurally, so they render through `Message` with no
-adapter.
-
 ## Next steps
 
 - [Why the composer needs isolating](/primitives/composer#why-the-composer-needs-isolating) — keeping the composer from re-rendering on every chunk
 - [Composer](/primitives/composer) — commands, chips, attachments, and the ask-user flow
 - [Steps](/primitives/steps) and [Reasoning](/primitives/reasoning) — surfacing tool calls and thinking
+- [Types](/reference/types) — the message and part types, and the guards that pick parts out of a `UIMessage`

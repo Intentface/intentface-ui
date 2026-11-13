@@ -1,0 +1,102 @@
+---
+title: Chip markdown
+description: The token that carries an inline chip inside message text, and the functions that write and parse it.
+source: chip-markdown.ts
+---
+
+import { Encode } from './chip-markdown/demos/encode';
+import { Parse } from './chip-markdown/demos/parse';
+
+<Demo component={<Parse />} file="reference/chip-markdown/demos/parse.tsx" replay={false} />
+
+## Usage guidelines
+
+- **The text carries the chip** — a token holds the label, the prefix, the value and an optional icon key. A stored message rebuilds its chips from its own text, with nothing stored beside it.
+- **`Message.Text` parses for you** — it runs `parseChipSegments` on its text and hands each chip to `renderChip`. Call `parseChipSegments` yourself only for text you draw without `Message.Text`.
+- **The composer writes for you** — the text `Composer.Root` passes to `onSubmit` already holds each chip as a token, and pasting a token into the composer inserts a chip. Call `encodeChipMarkdown` when your own code puts a chip into text.
+- **Read labels, not tokens** — a chat title, a notification or a search index should show each chip's `label`. Join the segments, as the demo above does, rather than showing the raw text.
+- **Some characters don't survive** — a token doesn't parse back when its prefix holds `:`, `)` or `[`, or its value holds `)`. Keep prefixes to plain words, and use an id rather than a file name as the value when names can hold `)`.
+- **Safe on untrusted text** — a value with a malformed `%` escape is kept as written instead of throwing, and parsing time grows linearly with the length of the text.
+- **Imports anywhere** — the module is plain functions and types with no `"use client"` directive, so a server can import it too.
+- **Get started** — see [Quick start](/quick-start) to add the package.
+
+## Anatomy
+
+```md
+[Label](chip:prefix:value?icon=key)
+```
+
+A real token escapes the brackets in its label and percent-encodes its value. The icon key is optional.
+
+```md
+[Q3 brief \[draft\]](chip:doc:reports%2Fq3%20brief.pdf?icon=file)
+```
+
+## Examples
+
+### Writing a chip into text
+
+Use `encodeChipMarkdown` when your code adds a chip to text, such as a reply your server writes. Edit the fields to see what the token escapes and what `parseChipSegments` reads back from it.
+
+<Demo component={<Encode />} file="reference/chip-markdown/demos/encode.tsx" replay={false} />
+
+## API reference
+
+### encodeChipMarkdown
+
+Writes a chip as a token, `[Label](chip:prefix:value?icon=key)`. The label is escaped, and the value and icon are percent-encoded, which leaves `)` as it is. A token doesn't parse back when the prefix holds `:`, `)` or `[`, when the value holds `)`, or when the label, prefix or value is empty.
+
+```ts
+encodeChipMarkdown(chip: ChipData): string
+```
+
+### parseChipSegments
+
+Splits message text into text and chip segments, in order. Anything that isn't a whole token, a plain Markdown link included, stays in the text, and a value with a malformed `%` escape is kept as written.
+
+```ts
+parseChipSegments(text: string): ChipSegment[]
+```
+
+Text without a token comes back as one text segment, and an empty string as no segments.
+
+### escapeMarkdownLink
+
+Backslash-escapes `[`, `]`, `(`, `)` and `\`, so the string can sit inside a Markdown link's label. `encodeChipMarkdown` runs it on the label, and `parseChipSegments` removes the backslashes again.
+
+```ts
+escapeMarkdownLink(input: string): string
+```
+
+### ChipData
+
+A chip: the label it shows, the prefix and value that say what it points at, and an optional icon key. `encodeChipMarkdown` takes one, and so do the composer's `insertChip` and `Composer.Textarea`'s `renderChip`.
+
+export const chipData = [
+  { name: "label", type: "string", default: "(required)", description: "What the chip shows." },
+  { name: "prefix", type: "string", default: "(required)", description: "The kind of thing it points at, such as \"file\" or \"doc\". Must not hold :, ) or [." },
+  { name: "value", type: "string", default: "(required)", description: "Which thing it points at, such as a path or an id. Must not hold )." },
+  { name: "icon", type: "string", description: "An icon key. Omitted from the token when empty." },
+];
+
+<PropsTable rows={chipData} />
+
+### ChipSegment
+
+One run of message text: plain text, or a chip parsed from a token.
+
+```ts
+type ChipSegment =
+  | { type: "text"; text: string }
+  | { type: "chip"; label: string; prefix: string; value: string; icon?: string };
+```
+
+A chip segment has the same fields as `ChipData`, with `type: "chip"` added. `Message.Text` passes chip segments to `renderChip`.
+
+### ChipIconKey
+
+An icon key, carried as an opaque string. The app owns the set of keys and narrows to it at its own boundary.
+
+```ts
+type ChipIconKey = string;
+```

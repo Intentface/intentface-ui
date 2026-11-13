@@ -35,9 +35,9 @@ Each entry point is its own import and has its own docs page.
 | `@intentface/ui/shell` | A collapsible, resizable sidebar beside the content. https://ui.intentface.com/primitives/shell.md |
 | `@intentface/ui/nav` | A nav tree with roving focus, typeahead and collapsible groups. https://ui.intentface.com/primitives/nav.md |
 | `@intentface/ui/tabs` | Closable tabs whose panel renders in the layout or anchored to its tab. https://ui.intentface.com/primitives/tabs.md |
-| `@intentface/ui/types` | The message types and part type guards, such as `isToolPart`. No page, so read the exported types and their JSDoc. |
+| `@intentface/ui/types` | The message types and part type guards, such as `isToolPart`. https://ui.intentface.com/reference/types.md |
 | `@intentface/ui/message-utils` | Pure helpers over messages: `groupTurns`, `getSegmentedParts`, `getTextInfo` and `getFileParts`. No page, so read the exported types and their JSDoc. |
-| `@intentface/ui/chip-markdown` | The chip wire format in message text: `encodeChipMarkdown` and `parseChipSegments`. No page, so read the exported types and their JSDoc. |
+| `@intentface/ui/chip-markdown` | The chip wire format in message text: `encodeChipMarkdown` and `parseChipSegments`. https://ui.intentface.com/reference/chip-markdown.md |
 | `@intentface/ui/generative` | Experimental. Checks and reads a model's UI tool call against a catalog of the app's components. https://ui.intentface.com/generative/catalog.md |
 
 ## Before building
