@@ -2,6 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
+import { formatOklch } from "@/lib/oklch";
 import type { ThemeMode } from "@/lib/store/settings";
 import { useSettingsStore } from "@/lib/store/settings";
 
@@ -26,10 +27,14 @@ export const useThemeOverrides = () => {
     for (const [key, cssVar] of CSS_VARS) {
       const value = overrides[key];
       if (value !== undefined) {
-        style.setProperty(cssVar, String(value));
+        style.setProperty(cssVar, formatSeed(value));
       } else {
         style.removeProperty(cssVar);
       }
     }
   }, [resolvedTheme, themeOverrides]);
 };
+
+// The picker's hex goes in as oklch(): see the Seeds comment in globals.css.
+const formatSeed = (value: string | number) =>
+  typeof value === "number" ? String(value) : formatOklch(value);

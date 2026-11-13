@@ -10,10 +10,17 @@
     "liga" 1,
     "calt" 1;
 
-  /* ─── Seeds ─── */
-  --bg: #ffffff;
-  --fg: #18181b;
-  --acc: #0169cc;
+  /* ─── Seeds ───
+     Color seeds are written in oklch(), never hex. Every surface derives from
+     them with oklch(from … c h), and Chrome 157 reads a near-gray hex seed's
+     hue as `none`, which resolves to 0°: each derived surface then turns pink
+     while the seed itself stays gray. use-theme-overrides converts the theme
+     configurator's hex for the same reason, and package.json's browserslist
+     keeps Firefox at 113 or later: below that, the CSS compiler rewrites these
+     seeds as hex. */
+  --bg: oklch(1 0 0); /* #ffffff */
+  --fg: oklch(0.2103 0.0059 285.89); /* #18181b */
+  --acc: oklch(0.5286 0.1734 254.97); /* #0169cc */
   --con: 0.3;
 
   /* State deltas (OKLCH L offsets, scale with --con).
@@ -152,9 +159,9 @@
 }
 
 .dark {
-  --bg: #18181b;
-  --fg: #f4f4f5;
-  --acc: #4c9bea;
+  --bg: oklch(0.2103 0.0059 285.89); /* #18181b */
+  --fg: oklch(0.9674 0.0013 286.38); /* #f4f4f5 */
+  --acc: oklch(0.6754 0.1409 250.69); /* #4c9bea */
 
   /* State deltas flip positive in dark — surfaces sit far from
      white, so states lift toward white instead of sinking. */

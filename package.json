@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "bun@1.3.8",
+  "browserslist": [
+    "chrome 111",
+    "edge 111",
+    "firefox 113",
+    "safari 16.4"
+  ],
   "workspaces": [
     "packages/*"
   ],
