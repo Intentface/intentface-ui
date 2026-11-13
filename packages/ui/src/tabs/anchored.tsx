@@ -22,8 +22,7 @@ import { useTabsContextStore, useTabsStore } from "./store";
  *
  * Wrapping `Tabs.Viewport` in these three parts is the entire difference
  * between a panel that sits in the layout and one that floats above the open
- * tab. Nothing else changes — same Root, same List, same Panels, same ARIA —
- * because the panels portal into the viewport wherever it happens to be:
+ * tab:
  *
  *   List + Viewport                                in the layout
  *   List + Portal > Positioner > Popup > Viewport  anchored to the open tab

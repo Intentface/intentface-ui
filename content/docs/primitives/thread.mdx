@@ -331,6 +331,7 @@ writes. Renders `data-thread-root`.
 export const rootProps = [
   { name: "autoScroll", type: '"off" | "bottom" | "jump" | "follow"', default: '"follow"', description: "Landing + follow behavior (see Auto-scroll)." },
   { name: "preserveScrollOnPrepend", type: "boolean", default: "false", description: "Hold the reading position when older rows load in above (history pagination). Opt-in — it attaches a passive scroll listener." },
+  { name: "children", type: "ReactNode", description: "The viewport, the composer slot and anything you lay over them, such as a fade." },
 ];
 
 <PropsTable rows={rootProps} />
@@ -395,10 +396,22 @@ floating scroll button or an overlay panel, has to be absolute or portaled like
 `Composer.Panel`'s default. An in-flow `Composer.Panel` (`anchor={false}`) is
 part of the slot, so `--thread-inset-bottom` grows to include it.
 
+export const composerAttrs = [
+  { attribute: "data-thread-composer", description: "The slot. Its border box is what the composer variables on the root measure." },
+];
+
+<AttributesTable rows={composerAttrs} />
+
 ### Thread.Placeholder
 
-Empty-state slot, shown when there are no messages. Renders
-`data-thread-placeholder`.
+Empty-state slot. It renders whenever you render it, so show it only while
+there are no messages. Renders `data-thread-placeholder`.
+
+export const placeholderAttrs = [
+  { attribute: "data-thread-placeholder", description: "The empty-state slot. Present only while you render it, so an ancestor can style the empty state with :has()." },
+];
+
+<AttributesTable rows={placeholderAttrs} />
 
 ## useThread
 

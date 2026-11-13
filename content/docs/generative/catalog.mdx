@@ -120,6 +120,8 @@ Use `markdown.tree` wherever the UI can't be drawn: the model's own history, a s
 
 Every helper is a plain function over plain data, importable on a server, grouped by what it works on: `tree`, `bindings` and `markdown`. Only `useTree` is a hook.
 
+Each helper that takes a catalog or a tree is generic over the catalog's type, `C extends AnyCatalog`, and types what it returns from it. `AnyCatalog` is the type every catalog fits. Use it as the bound when a function of your own takes any catalog.
+
 ### defineCatalog
 
 Types a catalog from each component's schema. The catalog stays plain data, so the server's tool and the client's drawing import the same object. It's typed exactly as written, so the types also know which props each component binds, and a key a component doesn't have is an error.
@@ -128,11 +130,11 @@ Types a catalog from each component's schema. The catalog stays plain data, so t
 defineCatalog(catalog: { components; limits?; refDescription? }): Catalog
 ```
 
-Each component takes these keys:
+Each component is a `ComponentDefinition`, with these keys:
 
 export const componentKeys = [
   { name: "description", type: "string", description: "When to use it, written for the model." },
-  { name: "props", type: "StandardSchema & StandardJSONSchema", description: "Validates its props, and converts to the JSON Schema the model is shown." },
+  { name: "props", type: "StandardSchema & StandardJSONSchema", description: "Validates its props, and converts to the JSON Schema the model is shown. The type is exported as ComponentSchema." },
   { name: "container", type: "boolean", default: "false", description: "Whether it holds other components." },
   { name: "bind", type: "string[]", description: "Props the model may point at data (`{ \"$data\": ref }`) instead of writing out. Typed to the schema's keys." },
   { name: "markdown", type: "(props, children: string) => string", description: "How it reads as Markdown. `children` is its children's Markdown. A container without one reads as its children." },
@@ -143,30 +145,40 @@ export const componentKeys = [
 The catalog itself takes two more keys. Both `tree.schema` and `tree.validate` read them, so the schema the model is shown and the check it meets can't disagree:
 
 export const catalogKeys = [
-  { name: "limits", type: "{ nodes?: number; depth?: number; children?: number }", default: "{ nodes: 40, depth: 6, children: 24 }", description: "Caps on one call: shown to the model in the tool's schema, and checked." },
+  { name: "limits", type: "{ nodes?: number; depth?: number; children?: number }", default: "{ nodes: 40, depth: 6, children: 24 }", description: "Caps on one call, all checked. The node and children caps are also in the tool's schema." },
   { name: "refDescription", type: "string", description: "What a ref looks like, in the model's terms." },
 ];
 
 <PropsTable rows={catalogKeys} />
+
+Both defaults are exported, with the full shape of the limits:
+
+```ts
+type Limits = { nodes: number; depth: number; children: number };
+
+const DEFAULT_LIMITS: Limits = { nodes: 40, depth: 6, children: 24 };
+
+const DEFAULT_REF_DESCRIPTION = "Where the data comes from: its ref, exactly as given.";
+```
 
 ### tree
 
 What the model writes: its schema, a whole call checked, a partial one read, and issues worded for the model.
 
 ```ts
-tree.schema(catalog: Catalog, options?: { single?: boolean }): JSONSchema & StandardSchema
+tree.schema(catalog: C, options?: TreeSchemaOptions): JSONSchema & StandardSchema
 
-tree.validate(input: unknown, catalog: Catalog): Promise<{ value: Tree } | { issues: TreeIssue[] }>
+tree.validate(input: unknown, catalog: C): Promise<TreeResult<C>>
 
-tree.read(
-  input: unknown,
-  catalog: Catalog,
-  options?: { resolve?: (binding: FoundBinding) => unknown },
-): { root?: TreeNode }
+tree.read(input: unknown, catalog: C, options?: ReadTreeOptions): TreeRead<C>
 
 tree.formatIssues(issues: TreeIssue[], max?: number): string
 
-type TreeIssue = { code: string; message: string; path: (string | number)[] };
+type TreeSchemaOptions = { single?: boolean };
+type TreeResult<C> = { value: Tree<C>; issues?: undefined } | { value?: undefined; issues: TreeIssue[] };
+type ReadTreeOptions = { resolve?: (binding: FoundBinding) => unknown };
+type TreeRead<C> = { root?: TreeNode<C> };
+type TreeIssue = { code: TreeIssueCode; message: string; path: (string | number)[] };
 ```
 
 `tree.schema` builds the tool's input schema from each component's own. It's plain JSON Schema, so any model SDK takes it as is. It also carries a Standard Schema, left out of its JSON, from which the AI SDK's `tool()` types the input as what the model writes, partial while it streams. That types the call but doesn't check it: the call passes through as written, so `tree.validate` in `execute` can return the issues to the model. Pass it as is, not a spread copy, which loses the Standard Schema. It's strict, for structured-output modes: every object closed, every property required, and optional props nullable. `tree.validate` reads the nulls back as absent. It throws when a component's schema can't convert, or converts with `$ref`.
@@ -177,11 +189,21 @@ export const schemaOptions = [
 
 <PropsTable rows={schemaOptions} />
 
-`tree.validate` checks a whole call against the catalog: its shape read as meant, its structure and limits checked, and each element's props validated. It resolves to `{ value }` with the checked tree, or `{ issues }`. A bound prop keeps its binding until `bindings.resolve` replaces it, and the types say so: in a `Tree`, a prop the component binds is its value or a `Binding`; in the `ResolvedTree` that `bindings.resolve` returns, it's its value. Two slips are read as the model meant them: `component` written for `type`, and props written beside `type`. Elements may come as a list or as a map keyed by id.
+`tree.validate` checks a whole call against the catalog: its shape read as meant, its structure and limits checked, and each element's props validated. It resolves to `{ value }` with the checked tree, or `{ issues }`. A bound prop keeps its binding until `bindings.resolve` replaces it. Two slips are read as the model meant them: `component` written for `type`, and props written beside `type`. Elements may come as a list or as a map keyed by id.
+
+The checked tree is a `Tree`, which holds the root's id and every element by id as `{ root, elements }`. It's plain JSON, safe to store. Each element is a `TreeElement`. In the `ResolvedTree` that `bindings.resolve` returns, each is a `ResolvedTreeElement` instead. An element has these fields:
+
+export const elementFields = [
+  { name: "type", type: "string", description: "The component's name in the catalog." },
+  { name: "props", type: "the component's props", description: "In a TreeElement, a prop the component binds is its value or a Binding. In a ResolvedTreeElement, every prop holds its data." },
+  { name: "children", type: "string[]", description: "The ids of the elements inside, in order. Absent when there are none." },
+];
+
+<PropsTable rows={elementFields} />
 
 `tree.read` reads partial or whole input as nodes to draw, without throwing. A node whose type isn't known yet is skipped; one whose props don't validate yet, or whose data isn't resolved, is pending. It's the pure form of `useTree`, for tests and servers.
 
-`tree.formatIssues` writes issues as text for the model, one per line: where, then what's wrong. It takes an optional maximum, 8 by default, and counts the rest. Each issue carries one of these codes:
+`tree.formatIssues` writes issues as text for the model, one per line: where, then what's wrong. It takes an optional maximum, 8 by default, and counts the rest. Each issue's `code` is a `TreeIssueCode`, one of these:
 
 export const issueCodes = [
   { value: "invalid_input", description: "The input isn't an object." },
@@ -210,27 +232,33 @@ export const issueCodes = [
 Data by reference: the bindings in a tree, and the tree with their data in place.
 
 ```ts
-bindings.find(tree: Tree): FoundBinding[]
+bindings.find(tree: Tree<C>): FoundBinding[]
 
 bindings.resolve(
-  tree: Tree,
-  catalog: Catalog,
+  tree: Tree<C>,
+  catalog: C,
   resolve: (binding: FoundBinding) => unknown | Promise<unknown>,
-): Promise<{ value: ResolvedTree } | { issues: TreeIssue[] }>
+): Promise<ResolvedTreeResult<C>>
 
-type FoundBinding = { $data: string; columns?: string[]; column?: string; id: string; prop: string };
+isBinding(value: unknown): value is Binding
+
+type Binding = { $data: string; columns?: string[]; column?: string };
+type FoundBinding = Binding & { id: string; prop: string };
+type ResolvedTreeResult<C> = { value: ResolvedTree<C>; issues?: undefined } | { value?: undefined; issues: TreeIssue[] };
 ```
 
 `bindings.find` lists every binding in a tree, for the host to resolve. Each comes with the element's `id` and the `prop` it sits in.
 
 `bindings.resolve` replaces every binding with its data and validates each element again with the data in place. `resolve` returns what a ref names, such as a tool result's rows, and may fetch it; the binding's columns are picked from it. `undefined` means not found, which is an `unresolved_binding` issue.
 
+`isBinding` says whether a prop's value is a binding rather than its data. It's its own export, outside `bindings`.
+
 ### markdown
 
 A tree as Markdown, and the helpers that keep text the model wrote literal in it.
 
 ```ts
-markdown.tree(tree: Tree, catalog: Catalog): string
+markdown.tree(tree: Tree<C>, catalog: C): string
 
 // One line of literal text, for a label, a cell or a heading. A marker that
 // would open a block is escaped, so it stays text on a line of its own too.
@@ -256,11 +284,9 @@ The four helpers turn text the model wrote into Markdown that reads as written, 
 `tree.read` in a component: the call's input as nodes to draw. While `streaming`, a node that was ready keeps its last valid props until newer ones validate, so a value caught mid-word doesn't blink back to pending.
 
 ```ts
-useTree(
-  input: unknown,
-  catalog: Catalog,
-  options?: { streaming?: boolean; resolve?: (binding: FoundBinding) => unknown },
-): { root?: TreeNode }
+useTree(input: unknown, catalog: C, options?: UseTreeOptions): TreeRead<C>
+
+type UseTreeOptions = ReadTreeOptions & { streaming?: boolean };
 ```
 
 ```tsx

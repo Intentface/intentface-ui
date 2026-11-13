@@ -82,8 +82,10 @@ chrome.
 ### Anchoring the panel to its tab
 
 Wrap the viewport and the panel floats above the open tab instead of sitting in
-the layout. Nothing else changes — same Root, same List, same ARIA — because
-the content portals into the viewport wherever it happens to be:
+the layout. The Root, the List and the ARIA stay the same, because
+`Tabs.Viewport` renders in place wherever it sits and reads the open tab from
+the Root. Only `Tabs.Portal` moves anything. It mounts the surface in
+`document.body`, or in the `container` you pass.
 
 <Demo component={<Anchored />} file="primitives/tabs/demos/anchored.tsx" />
 
@@ -267,6 +269,7 @@ export const rootProps = [
   { name: "disabled", type: "boolean", default: "false", description: "Disable the whole collection." },
   { name: "dismissOnEscape", type: "boolean", default: "true", description: "Escape closes the open panel, unless something already handled it (event.defaultPrevented)." },
   { name: "store", type: "TabsStore", description: "An explicit Tabs.createStore() handle. Must be stable for the Root's lifetime." },
+  { name: "children", type: "ReactNode", description: "The strip, the viewport and anything else the container holds." },
 ];
 
 <PropsTable rows={rootProps} />
@@ -312,6 +315,10 @@ inside a `Tabs.List` it joins the collection and the roving focus, and `Delete`
 closes it. Outside one it takes an explicit value, keeps its own tab stop, and
 toggles — a panel with no tab behind it, anchored to the button that owns it.
 
+The arrow keys follow the Root's `items` rather than the DOM, and focus the
+element each trigger registers with the store under its `value`. A strip that
+renders its triggers in another order still arrows in the order of `items`.
+
 With `openOnHover`, leaving closes the tab again unless the mouse heads into the
 popup. A press on the tab, or a press or focus inside the popup, keeps it.
 
@@ -326,7 +333,7 @@ export const triggerProps = [
 <PropsTable rows={triggerProps} />
 
 export const triggerAttrs = [
-  { attribute: "data-tabs-trigger", values: "the tab's value", description: "The tab, and its identity — the strip's roving focus finds tabs by this attribute and reads the value back off it. Select it without the value for styling." },
+  { attribute: "data-tabs-trigger", description: "The tab. It carries no value, because the roving focus finds tabs through the store rather than by querying the DOM. To style one tab by its value, give it a className of your own." },
   { attribute: "data-selected", description: "Present while this tab's panel is showing." },
   { attribute: "data-disabled", description: "Present while disabled." },
   { attribute: "data-orientation", values: '"horizontal" | "vertical"', description: "The strip's orientation." },
@@ -466,6 +473,7 @@ exit animation, which `Tabs.Popup` reports as finished.
 export const portalProps = [
   { name: "container", type: "HTMLElement | null", default: "document.body", description: "Where the surface is portaled." },
   { name: "keepMounted", type: "boolean", default: "false", description: "Keep the surface mounted while nothing is open. Costs a live positioning loop." },
+  { name: "children", type: "ReactNode", description: "The surface, usually a Tabs.Positioner. Kept in the DOM through the exit animation." },
 ];
 
 <PropsTable rows={portalProps} />
@@ -480,6 +488,7 @@ export const positionerProps = [
   { name: "align", type: '"start" | "center" | "end"', default: '"center"', description: "Alignment along that side." },
   { name: "sideOffset", type: "number", default: "8", description: "Gap between the tab and the surface." },
   { name: "collisionPadding", type: "number", default: "8", description: "How far clear of the viewport edges to stay." },
+  { name: "children", type: "ReactNode", description: "The surface it places, usually a Tabs.Popup." },
 ];
 
 <PropsTable rows={positionerProps} />

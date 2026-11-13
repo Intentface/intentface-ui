@@ -1124,6 +1124,10 @@ export const ThreadComposer = ({
 
 export type ThreadPlaceholderProps = PrimitiveProps<"div">;
 
+/**
+ * Empty-state slot. It renders whenever you render it, so show it only while
+ * there are no messages.
+ */
 export const ThreadPlaceholder = ({
   className,
   render,
