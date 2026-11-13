@@ -22,6 +22,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
   type WheelEvent,
 } from "react";
@@ -91,8 +92,9 @@ type ThreadContextValue = {
   interruptScroll: () => void;
   scrollRef: RefObject<HTMLDivElement | null>;
   contentRef: RefObject<HTMLDivElement | null>;
-  topSentinelRef: RefObject<HTMLDivElement | null>;
-  bottomSentinelRef: RefObject<HTMLDivElement | null>;
+  setContentElement: (element: HTMLDivElement | null) => void;
+  setTopSentinel: (element: HTMLDivElement | null) => void;
+  setBottomSentinel: (element: HTMLDivElement | null) => void;
 };
 
 const ThreadContext = createContext<ThreadContextValue | null>(null);
@@ -219,8 +221,10 @@ const useThreadScroll = (
 ): ThreadContextValue => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const topSentinelRef = useRef<HTMLDivElement>(null);
-  const bottomSentinelRef = useRef<HTMLDivElement>(null);
+
+  const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
+  const [topSentinel, setTopSentinel] = useState<HTMLDivElement | null>(null);
+  const [bottomSentinel, setBottomSentinel] = useState<HTMLDivElement | null>(null);
 
   // Edge state = each sentinel is in view. IntersectionObserver computes it off
   // the main thread (no scrollTop/scrollHeight reads); the bottom edge drives
@@ -365,8 +369,6 @@ const useThreadScroll = (
   useEffect(() => {
     const scroller = scrollRef.current;
     const rootElement = rootRef.current;
-    const topSentinel = topSentinelRef.current;
-    const bottomSentinel = bottomSentinelRef.current;
     if (!scroller || !topSentinel || !bottomSentinel) return;
 
     // One observer for both edge sentinels; its `root` is the scroll container.
@@ -416,11 +418,23 @@ const useThreadScroll = (
     return () => {
       io.disconnect();
       scroller.removeEventListener("scrollend", settle);
-      animationRef.current?.cancel();
-      animationRef.current = null;
-      clearAutoScrollingTimeout();
     };
-  }, [atTopStore, atBottomStore, rootRef, clearAutoScrollingTimeout, leaveBottom]);
+  }, [
+    topSentinel,
+    bottomSentinel,
+    atTopStore,
+    atBottomStore,
+    rootRef,
+    clearAutoScrollingTimeout,
+    leaveBottom,
+  ]);
+
+  const endScroll = useCallback(() => {
+    stopAnimation();
+    clearAutoScrollingTimeout();
+  }, [stopAnimation, clearAutoScrollingTimeout]);
+
+  useEffect(() => endScroll, [endScroll]);
 
   // The live end. Tracked by default — re-read per frame, so streaming growth
   // moves the destination along with it.
@@ -546,8 +560,7 @@ const useThreadScroll = (
   }, []);
 
   useLayoutEffect(() => {
-    const content = contentRef.current;
-    if (!content || mode === "off") return;
+    if (!contentElement || mode === "off") return;
 
     const followsStream = mode !== "jump";
 
@@ -561,17 +574,17 @@ const useThreadScroll = (
     let firstTurn: Element | null = null;
     const land = (mutations: MutationRecord[] = []) => {
       const previousFirst = firstTurn;
-      firstTurn = content.firstElementChild;
+      firstTurn = contentElement.firstElementChild;
       // A switch whose history loads async goes A → [] → B across separate
       // commits, so the add-only commit isn't flagged `replaced`. Treat "was
       // empty, now populated" as a fresh land (instant), not an incremental
       // turn — shadcn's `previousItemCount === 0` rule, read off the DOM since
       // the headless thread owns no item count. Tracked before the early
       // returns so the prepend / deep-link-jump paths keep it accurate.
-      const hasContent = content.children.length > 0;
+      const hasContent = contentElement.children.length > 0;
       const repopulated = hasContent && !hadContent;
       hadContent = hasContent;
-      if (preserveOnPrependRef.current && wasPrepended(mutations, previousFirst, content)) {
+      if (preserveOnPrependRef.current && wasPrepended(mutations, previousFirst, contentElement)) {
         return;
       }
       // A queued deep-link jump owns the landing: landing at the bottom would
@@ -636,10 +649,10 @@ const useThreadScroll = (
 
     land();
     const turns = new MutationObserver(land);
-    turns.observe(content, { childList: true });
+    turns.observe(contentElement, { childList: true });
 
     const growth = followsStream ? new ResizeObserver(follow) : null;
-    growth?.observe(content);
+    growth?.observe(contentElement);
     // The scroller too: a drag or window resize moves the bottom even when
     // the content keeps its size (a last turn taller than its reserve).
     if (scrollRef.current) growth?.observe(scrollRef.current);
@@ -648,7 +661,7 @@ const useThreadScroll = (
       turns.disconnect();
       growth?.disconnect();
     };
-  }, [mode, scrollToEnd, flushPendingJump]);
+  }, [contentElement, mode, scrollToEnd, flushPendingJump]);
 
   // Prepend preservation — hold the reading position while older history loads
   // in above. Native scroll anchoring (Chrome/Firefox) already keeps the
@@ -659,13 +672,12 @@ const useThreadScroll = (
   useLayoutEffect(() => {
     if (!preserveScrollOnPrepend) return;
     const scroller = scrollRef.current;
-    const content = contentRef.current;
-    if (!scroller || !content) return;
+    if (!scroller || !contentElement) return;
 
     // Rows are vertically ordered, so the first row crossing the viewport top
     // is found by binary search — no full scan.
     const findFirstVisibleRow = (): Element | null => {
-      const rows = content.children;
+      const rows = contentElement.children;
       const viewportTop = scroller.getBoundingClientRect().top;
       let low = 0;
       let high = rows.length - 1;
@@ -704,14 +716,14 @@ const useThreadScroll = (
       if (Math.abs(delta) > 0.5) scroller.scrollTop += delta;
     };
 
-    let firstTurn: Element | null = content.firstElementChild;
+    let firstTurn: Element | null = contentElement.firstElementChild;
     const observer = new MutationObserver((mutations) => {
       const previousFirst = firstTurn;
-      firstTurn = content.firstElementChild;
-      if (wasPrepended(mutations, previousFirst, content)) restore();
+      firstTurn = contentElement.firstElementChild;
+      if (wasPrepended(mutations, previousFirst, contentElement)) restore();
       capture();
     });
-    observer.observe(content, { childList: true });
+    observer.observe(contentElement, { childList: true });
 
     capture();
     scroller.addEventListener("scroll", capture, { passive: true });
@@ -720,7 +732,7 @@ const useThreadScroll = (
       observer.disconnect();
       scroller.removeEventListener("scroll", capture);
     };
-  }, [preserveScrollOnPrepend]);
+  }, [contentElement, preserveScrollOnPrepend]);
 
   // Visibility tracking — created lazily by the first useThreadVisibility
   // subscriber, torn down with the last. An IntersectionObserver maintains the
@@ -829,8 +841,9 @@ const useThreadScroll = (
       interruptScroll,
       scrollRef,
       contentRef,
-      topSentinelRef,
-      bottomSentinelRef,
+      setContentElement,
+      setTopSentinel,
+      setBottomSentinel,
     }),
     [
       atTopStore,
@@ -1020,13 +1033,13 @@ export const ThreadContent = ({
   style,
   ...elementProps
 }: ThreadContentProps) => {
-  const { contentRef, topSentinelRef, bottomSentinelRef } = useThreadContext();
+  const { contentRef, setContentElement, setTopSentinel, setBottomSentinel } = useThreadContext();
 
   const element = useRenderElement(
     "div",
     { className, render, style },
     {
-      ref: contentRef,
+      ref: [contentRef, setContentElement],
       props: [
         {
           "data-thread-content": "",
@@ -1043,14 +1056,14 @@ export const ThreadContent = ({
   return (
     <>
       <div
-        ref={topSentinelRef}
+        ref={setTopSentinel}
         data-thread-top=""
         aria-hidden
         style={{ height: SENTINEL_HEIGHT, width: "100%", flexShrink: 0 }}
       />
       {element}
       <div
-        ref={bottomSentinelRef}
+        ref={setBottomSentinel}
         data-thread-bottom=""
         aria-hidden
         style={{ height: SENTINEL_HEIGHT, width: "100%", flexShrink: 0 }}
