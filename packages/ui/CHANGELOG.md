@@ -1,5 +1,17 @@
 # @intentface/ui
 
+## 0.10.0
+
+### Minor Changes
+
+- [Breaking] Remove the `@intentface/ui/message-utils` entry point. Copy the helpers you use from [its 0.8.0 source](https://github.com/Intentface/intentface-ui/blob/b0e1802e397d7bfa5b82f0c472ef27e87b175a9f/packages/ui/src/message-utils.ts) into your app, where they import only `@intentface/ui/types`.
+
+### Patch Changes
+
+- [Nav] Fix `Nav.Item`, `Nav.Trigger` and `Nav.Action` rendered as links announcing as buttons. They now set `role="button"` only on their own `div`.
+- [Steps] Fix a settled `Steps.Panel` inside an opening or closing panel taking that panel's `--panel-height`.
+- [Reasoning] Fix a settled `Reasoning.Content` inside an opening or closing panel taking that panel's `--panel-height`.
+
 ## 0.9.0
 
 ### Minor Changes
