@@ -79,7 +79,7 @@ A prop in the first column means the app sets the state and the part reflects it
 | `status` → `data-status` | `Steps.Item`, and `Steps.Icon` and `Steps.Label` inside it | always, the status string | The icon and label per status, such as a spinner while active. The string is the app's own. |
 | `data-open`, `data-closed` | `Steps.Item`, `Steps.Trigger`, `Steps.Panel` | while open, while closed | A chevron, read from the trigger through a descendant selector. |
 | `data-nested` | `Steps.Item` | inside another item | The indent and the rail of nested steps. |
-| `--panel-height` | `Steps.Panel` | only while opening or closing | The height transition, with `data-starting-style` and `data-ending-style` pinning it to 0. |
+| `--panel-height` | `Steps.Panel` | a length while opening or closing, `initial` once settled open | The height transition, with `data-starting-style` and `data-ending-style` pinning it to 0. |
 
 ## Reasoning
 
@@ -87,7 +87,7 @@ A prop in the first column means the app sets the state and the part reflects it
 |------|----|---------|------------|
 | `isStreaming` → `data-streaming` | `Reasoning.Root` | while the reasoning streams | A thinking style, such as a shimmer on the label. The root is also `aria-busy`. |
 | `data-open`, `data-closed` | `Reasoning.Root`, `Reasoning.Trigger`, `Reasoning.Content` | while open, while closed | A chevron and the open style. |
-| `--panel-height` | `Reasoning.Content` | only while opening or closing | The height transition, as with `Steps.Panel`. |
+| `--panel-height` | `Reasoning.Content` | a length while opening or closing, `initial` once settled open | The height transition, as with `Steps.Panel`. |
 
 ## Chip
 

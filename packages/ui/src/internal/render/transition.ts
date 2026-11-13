@@ -332,9 +332,8 @@ export const useOpenTransition = (
   }, [measureHeight, open, mounted, transitionStatus, ref]);
 
   // Release the measurement once the open transition settles, so the panel tracks content
-  // that grows while it is open. With `height` null the custom property is never written, so
-  // a consumer's `height: var(--…)` is invalid at computed-value time and falls back to
-  // `auto`. The close re-measures a pixel value first, so it still animates from a number.
+  // that grows while it is open. The close re-measures a pixel value first, so it still
+  // animates from a number.
   useOpenChangeComplete({
     open: true,
     ref,
