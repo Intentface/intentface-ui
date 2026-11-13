@@ -114,7 +114,6 @@ The thread owns scrolling. It follows the stream while the user is at the bottom
 | Rule | Summary |
 |------|---------|
 | Build order | `Thread.Root` holds `Thread.Viewport`, which holds `Thread.Content`, and the turns are the direct children of `Thread.Content`. `Thread.Composer` comes after the viewport and holds `Composer.Root`. |
-| Content from the start | Render `Thread.Content` together with `Thread.Root`, even with no messages. A `Thread.Content` mounted later, as in `{messages.length > 0 && <Thread.Content>}`, never lands or follows. |
 | Turns in Content | Never render turns straight into `Thread.Viewport`. The thread watches only the direct children of `Thread.Content`, so auto-follow and landing stop working. |
 | One turn per exchange | Group messages with `groupTurns`, and wrap each question and its replies in one `Message.Turn`. Otherwise the newest reply lands at the top and pushes its question out of view. A flat transcript with one row per message needs `autoScroll="bottom"`. |
 | Definite height | `Thread.Root` needs a height from the app's layout. `Thread.Viewport` is a size container, so it needs a definite height too, such as `h-full`. A viewport sized only by `max-height` collapses. |
