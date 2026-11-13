@@ -61,7 +61,7 @@ What each part renders, what the package already sets on it inline, and what the
 |------|------|------|
 | Every `Shell` part | Nothing positioned. The grip writes `--shell-sidebar-width` on the root | The sidebar out of flow, the gutter, the width with its `min-width` and `max-width`, an opaque background, and the hotspot's position. |
 | `Nav.List` | `--nav-depth`, and `--nav-list-height` during transitions | The indent and the collapse. |
-| `Nav.Item`, `Nav.Trigger` | A `div` with `role="button"`, which a row rendered as a link drops | A row height that matches the rail. Never `overflow: hidden`. |
+| `Nav.Item`, `Nav.Trigger` | A `div` with `role="button"`, which a row given its own element through `render` drops | A row height that matches the rail. Never `overflow: hidden`. |
 | `Tabs.Positioner` | `position: absolute`, its `left` and `top`, and hidden until placed | Its `z-index` only. `Tabs.Popup` inside it carries the surface. |
 | `Tabs.Popup` | Nothing | The surface and its transitions. |
 | `Tabs.Trigger` | A `div` with `role="button"` | `position: relative` and `overflow: hidden` when a close button sits over the label. |
