@@ -10,7 +10,7 @@
 - [Composer] Fix an Escape typed into another field inside `Composer.Root` dismissing the open question's step or stopping generation.
 - [Composer] Fix Space and the arrow keys typed into the editor selecting an option or changing the step while an option was highlighted.
 - [Composer] Fix Enter or Space on a button inside the composer selecting the highlighted option instead of pressing the button.
-- [Composer] Fix keys on other elements of the page driving the composer's open question. Keys still reach it when focus fell onto the page itself.
+- [Composer] Fix keys on other elements of the page driving the composer's open question. Keys still reach it when focus fell onto the page itself, or onto a popup or other container around the composer.
 - [Composer] An empty `questions` array now asks nothing.
 - [Composer] `preventPrimitiveHandler()` in `Composer.Root`'s `onKeyDown` now also skips the question's keys, which `Composer.Root` now handles.
 - [Composer] [Breaking] Remove `interpretEditorKey`, `interpretAskUserKey`, `EditorKeyAction` and `EditorKeyContext` from `@intentface/ui/composer`; they were the composer's internal key tables, so handle keys in `Composer.Textarea`'s or `Composer.Root`'s `onKeyDown` instead.

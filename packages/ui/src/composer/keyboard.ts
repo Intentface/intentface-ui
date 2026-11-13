@@ -45,6 +45,8 @@ export type KeyOrigin =
   | "part"
   /** The page itself: focus fell out of every control. */
   | "nowhere"
+  /** A focusable element around this composer, such as a popup that a click on the composer's chrome focused. */
+  | "around"
   /** Another field, another composer, or another composer's options. */
   | "foreign";
 
@@ -63,7 +65,7 @@ const FIELD = 'input, textarea, select, [contenteditable]:not([contenteditable="
 export const classifyTreeKey = (
   target: EventTarget | null,
   scope: KeyScope,
-): Exclude<KeyOrigin, "nowhere"> => {
+): Exclude<KeyOrigin, "nowhere" | "around"> => {
   if (!(target instanceof Element)) return "part";
   if (scope.editor?.contains(target)) return "editor";
   if (scope.options?.contains(target)) return "options";
@@ -72,11 +74,22 @@ export const classifyTreeKey = (
   return root && root !== scope.root ? "foreign" : "part";
 };
 
-/** The page listener's classifier: only the page itself is unowned. */
-export const isPageTarget = (target: EventTarget | null, ownerDocument: Document) =>
-  target === ownerDocument ||
-  target === ownerDocument.body ||
-  target === ownerDocument.documentElement;
+/**
+ * The page listener's classifier: only the page itself and the elements around
+ * this composer are unowned. Root's own handler hears keys on Root itself.
+ */
+export const classifyStrayKey = (target: EventTarget | null, root: Element | null) => {
+  if (!root) return null;
+  const { ownerDocument } = root;
+  if (
+    target === ownerDocument ||
+    target === ownerDocument.body ||
+    target === ownerDocument.documentElement
+  )
+    return "nowhere";
+  if (target instanceof Element && target !== root && target.contains(root)) return "around";
+  return null;
+};
 
 // ---------------------------------------------------------------------------
 // The editor's layer: the command list anchored in it, and its text keys.
@@ -161,6 +174,9 @@ export const decideComposerKey = (
   origin: KeyOrigin,
 ): ComposerKeyAction | null => {
   if (press.composing || press.handled || origin === "foreign") return null;
+  // The container closes on it, so the composer must not also dismiss the step,
+  // which sends the answers on the last one, or stop generation.
+  if (press.key === "Escape" && origin === "around") return null;
   if (state.question.phase === "asking") {
     return decideQuestionKey(press, state.question.highlighted, origin);
   }

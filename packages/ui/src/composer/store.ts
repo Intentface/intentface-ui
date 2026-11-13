@@ -41,9 +41,9 @@ import {
 import {
   type ComposerKeyAction,
   type ComposerKeyState,
+  classifyStrayKey,
   classifyTreeKey,
   decideComposerKey,
-  isPageTarget,
   toKeyPress,
 } from "./keyboard";
 import type {
@@ -184,7 +184,7 @@ export type ComposerStore = {
   resetAttachments: () => void;
   /** Composer.Root's keydown: the question's and generation's keys for anything in its tree. True when it used the key; the caller marks it used. */
   handleKeyDown: (event: KeyboardEvent) => boolean;
-  /** The question's keys when focus fell onto the page itself. Mounted by Composer.Root; returns the cleanup. */
+  /** The question's keys when focus fell onto the page itself or a container around the composer. Mounted by Composer.Root; returns the cleanup. */
   listenForStrayKeys: (ownerDocument: Document) => () => void;
   // Clears `present` on native panel slices whose `active` is false — the Panel calls
   // this once its close animation finishes, so closing content stays mounted until then.
@@ -450,8 +450,9 @@ export const createComposerStore = (): ComposerStore => {
 
   // --- Keys
   // The composer's layers, the question then generation. Root runs them for
-  // keys in its tree; the page listener for keys on the page itself, so a
-  // chrome click that drops focus to <body> doesn't strand the question.
+  // keys in its tree; the page listener for keys on the page itself or on a
+  // container around the composer, so a chrome click that drops focus to <body>
+  // or to a focusable popup doesn't strand the question.
   const readKeyState = (): ComposerKeyState => ({
     question:
       flow.phase === "asking"
@@ -508,8 +509,9 @@ export const createComposerStore = (): ComposerStore => {
   // control itself otherwise.
   const listenForStrayKeys = (ownerDocument: Document) => {
     const handleStrayKey = (event: KeyboardEvent) => {
-      if (!isPageTarget(event.target, ownerDocument)) return;
-      const action = decideComposerKey(toKeyPress(event), readKeyState(), "nowhere");
+      const origin = classifyStrayKey(event.target, rootRef.current);
+      if (!origin) return;
+      const action = decideComposerKey(toKeyPress(event), readKeyState(), origin);
       if (!action) return;
       event.preventDefault();
       runComposerKey(action);
