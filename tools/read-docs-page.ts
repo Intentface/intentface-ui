@@ -17,7 +17,9 @@ export const readDocsPage = tool({
       return { error: `No documentation page "${slug}". Call listDocsPages for valid slugs.` };
     }
 
-    const filePath = page.absolutePath ?? path.join(process.cwd(), "content", "docs", page.path);
+    // Scoped under content/docs so the bundler traces that folder, not the
+    // whole project; next.config includes it for /api/chat.
+    const filePath = path.join(process.cwd(), "content", "docs", page.path);
     // Demos are inlined as code blocks — the tag alone carries no source.
     const markdown = await expandDemos(await readFile(filePath, "utf8"));
 
