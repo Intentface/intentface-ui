@@ -3,6 +3,7 @@
 import type { CSSProperties, RefObject } from "react";
 import {
   createContext,
+  isValidElement,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -672,11 +673,21 @@ export const NavGroup = ({
 // Rows — Item and Trigger
 // ---------------------------------------------------------------------------
 
-/** Elements the browser already activates on Enter or Space. */
+const isLink = (element: Element | null) =>
+  element?.tagName === "A" && element.hasAttribute("href");
+
 /** A button handles Enter and Space itself; a link handles only Enter. */
 const activatesItself = (element: HTMLElement, key: string) =>
-  element.tagName === "BUTTON" ||
-  (key === "Enter" && element.tagName === "A" && element.hasAttribute("href"));
+  element.tagName === "BUTTON" || (key === "Enter" && isLink(element));
+
+const rendersHref = (render: unknown) =>
+  isValidElement<{ href?: unknown }>(render) && render.props.href != null;
+
+const useButtonRole = (ref: RefObject<HTMLElement | null>, render: unknown) => {
+  const [link, setLink] = useState(() => rendersHref(render));
+  useIsomorphicLayoutEffect(() => setLink(isLink(ref.current)));
+  return link ? undefined : "button";
+};
 
 /**
  * What `Item` and `Trigger` have in common: one tab stop for the whole nav,
@@ -687,7 +698,6 @@ const useRow = (value: string, disabled: boolean, active: boolean, activate: () 
   const { highlighted, setHighlighted } = useRoving();
 
   return {
-    role: "button",
     // Exactly one row is tabbable. Before the roving state is seeded — a server
     // render, or the frame before hydration — the active row carries it, which
     // is both the conventional place for it and the one that keeps a row
@@ -722,7 +732,8 @@ export type NavItemProps = PrimitiveProps<"div", NavItemState> & {
 /**
  * A leaf row. A `div[role="button"]` rather than an anchor, so an action can
  * sit inside it — swap the element with `render={<Link href="…" />}` when you
- * want a real navigation, or handle `onClick` and route yourself.
+ * want a real navigation, which drops the role so it announces as a link, or
+ * handle `onClick` and route yourself.
  */
 export const NavItem = ({
   value,
@@ -740,6 +751,7 @@ export const NavItem = ({
   const ref = useRef<HTMLElement | null>(null);
 
   const row = useRow(value, isDisabled, active, () => ref.current?.click());
+  const role = useButtonRole(ref, render);
 
   return useRenderElement(
     "div",
@@ -748,7 +760,7 @@ export const NavItem = ({
       state: { depth, nested: group !== null, active, disabled: isDisabled },
       stateAttributesMapping: DEPTH_ATTRIBUTES,
       ref,
-      props: [{ ...row, "data-nav-item": value }, elementProps],
+      props: [{ ...row, role, "data-nav-item": value }, elementProps],
     },
   );
 };
@@ -796,6 +808,7 @@ export const NavTrigger = ({
   const row = useRow(group.value, isDisabled, active, () =>
     hasToggle ? ref.current?.click() : toggle(),
   );
+  const role = useButtonRole(ref, render);
   const context = useMemo(() => ({ disabled: isDisabled, setHasToggle }), [isDisabled]);
 
   const element = useRenderElement(
@@ -814,6 +827,7 @@ export const NavTrigger = ({
       props: [
         {
           ...row,
+          role,
           "data-nav-trigger": group.value,
           // On a page row the caret announces the open state, not the row.
           "aria-expanded": hasToggle ? undefined : group.open,
@@ -949,6 +963,8 @@ export type NavActionProps = PrimitiveProps<"div", NavPartState> & { children?: 
 export const NavAction = ({ className, render, style, ...elementProps }: NavActionProps) => {
   const depth = use(NavDepthContext);
   const group = use(NavGroupContext);
+  const ref = useRef<HTMLElement | null>(null);
+  const role = useButtonRole(ref, render);
 
   const stop = (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
     event.stopPropagation();
@@ -960,10 +976,11 @@ export const NavAction = ({ className, render, style, ...elementProps }: NavActi
     {
       state: { depth, nested: group !== null },
       stateAttributesMapping: DEPTH_ATTRIBUTES,
+      ref,
       props: [
         {
           "data-nav-action": "",
-          role: "button",
+          role,
           tabIndex: -1,
           onClick: stop,
           onPointerDown: stop,
