@@ -21,6 +21,8 @@ const packageSourceAliases = {
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@intentface/ui"],
+  // next dev would otherwise append its own rules to AGENTS.md on every start.
+  agentRules: false,
   turbopack: { resolveAlias: packageSourceAliases },
   // Any docs page is readable as markdown by appending `.md` — the convention
   // agents expect, and guessable from a page URL. It maps onto the same handler
