@@ -7,7 +7,9 @@ import type { AskUserQuestion } from "../src/composer/types";
 
 // Where a key was pressed decides whether the open question takes it. Each
 // case presses one key on one element while the first option holds the
-// highlight and the first step already has an answer, SQLite.
+// highlight and the first step already has an answer, SQLite. The composer sits
+// in a focusable container, as in a Base UI Popover or Dialog popup, which takes
+// focus when a click lands on the composer's chrome.
 
 const QUESTIONS: AskUserQuestion[] = [
   { question: "Which database?", options: [{ label: "PostgreSQL" }, { label: "SQLite" }] },
@@ -46,6 +48,7 @@ const ORIGINS = {
   "an option": () => screen.getByRole("radio", { name: "PostgreSQL" }),
   "a button in the composer": () => screen.getByRole("button", { name: "Attach" }),
   "the page": () => document.body,
+  "a container around the composer": () => screen.getByRole("dialog", { name: "Popup" }),
   "another field in the composer": () => screen.getByRole("textbox", { name: "Note" }),
 };
 
@@ -69,6 +72,7 @@ const TABLE: Record<string, Record<Origin, Outcome>> = {
     "an option": "dismisses the step",
     "a button in the composer": "dismisses the step",
     "the page": "dismisses the step",
+    "a container around the composer": "is left alone",
     "another field in the composer": "is left alone",
   },
   ArrowDown: {
@@ -76,6 +80,7 @@ const TABLE: Record<string, Record<Origin, Outcome>> = {
     "an option": "moves through the options",
     "a button in the composer": "moves through the options",
     "the page": "moves through the options",
+    "a container around the composer": "moves through the options",
     "another field in the composer": "is left alone",
   },
   ArrowRight: {
@@ -83,6 +88,7 @@ const TABLE: Record<string, Record<Origin, Outcome>> = {
     "an option": "changes the step",
     "a button in the composer": "changes the step",
     "the page": "changes the step",
+    "a container around the composer": "changes the step",
     "another field in the composer": "is left alone",
   },
   Enter: {
@@ -90,6 +96,7 @@ const TABLE: Record<string, Record<Origin, Outcome>> = {
     "an option": "selects the option",
     "a button in the composer": "is left alone",
     "the page": "selects the option",
+    "a container around the composer": "selects the option",
     "another field in the composer": "is left alone",
   },
   " ": {
@@ -97,6 +104,7 @@ const TABLE: Record<string, Record<Origin, Outcome>> = {
     "an option": "selects the option",
     "a button in the composer": "is left alone",
     "the page": "selects the option",
+    "a container around the composer": "selects the option",
     "another field in the composer": "is left alone",
   },
   a: {
@@ -104,6 +112,7 @@ const TABLE: Record<string, Record<Origin, Outcome>> = {
     "an option": "types the answer",
     "a button in the composer": "types the answer",
     "the page": "types the answer",
+    "a container around the composer": "types the answer",
     "another field in the composer": "is left alone",
   },
 };
@@ -115,6 +124,7 @@ const ORIGIN_NAMES: Origin[] = [
   "an option",
   "a button in the composer",
   "the page",
+  "a container around the composer",
   "another field in the composer",
 ];
 
@@ -125,12 +135,14 @@ const CASES = Object.entries(TABLE).flatMap(([key, row]) =>
 const pressOn = async (origin: Origin, key: string) => {
   const store = createComposerStore();
   render(
-    <Composer.Root store={store} questions={QUESTIONS} onSubmit={() => {}}>
-      <Composer.Textarea aria-label="Message" />
-      <Question />
-      <button type="button">Attach</button>
-      <input aria-label="Note" />
-    </Composer.Root>,
+    <div role="dialog" aria-label="Popup" tabIndex={-1}>
+      <Composer.Root store={store} questions={QUESTIONS} onSubmit={() => {}}>
+        <Composer.Textarea aria-label="Message" />
+        <Question />
+        <button type="button">Attach</button>
+        <input aria-label="Note" />
+      </Composer.Root>
+    </div>,
   );
   await flushFrames();
   act(() => store.getSnapshot().askUser.toggleOption("SQLite"));

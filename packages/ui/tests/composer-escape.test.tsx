@@ -313,7 +313,11 @@ describe("inside a popup or dialog from another library", () => {
     };
     document.addEventListener("keydown", onDocumentKeyDown);
     render(
-      <div role="dialog" onKeyDown={(event) => event.key === "Escape" && layer("popup")}>
+      <div
+        role="dialog"
+        tabIndex={-1}
+        onKeyDown={(event) => event.key === "Escape" && layer("popup")}
+      >
         {composer}
       </div>,
     );
@@ -395,6 +399,17 @@ describe("inside a popup or dialog from another library", () => {
     await flushFrames();
 
     pressEscape(screen.getByRole("textbox", { name: "Note" }));
+    expect(submitted).toEqual([]);
+    expect(view.layer.mock.calls).toEqual([["popup"], ["document"]]);
+  });
+
+  // A click on the composer's chrome moves focus to the popup, which Base UI makes focusable.
+  test("an Escape on the popup itself reaches it and leaves the step open", async () => {
+    const submitted: ComposerSubmitData[] = [];
+    using view = renderInLayer(<AskingComposer onSubmit={(data) => void submitted.push(data)} />);
+    await flushFrames();
+
+    pressEscape(screen.getByRole("dialog"));
     expect(submitted).toEqual([]);
     expect(view.layer.mock.calls).toEqual([["popup"], ["document"]]);
   });
