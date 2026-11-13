@@ -332,7 +332,7 @@ export const UserText = ({ text }: { text: string }) => (
 ```
 
 - The trigger names its own group, so the chevron inside reads the trigger's `data-open`.
-- `--panel-height` exists only while the panel opens or closes. The starting and ending styles pin the height to 0 on the first and last frames, so the transition runs between 0 and the measured height.
-- Between transitions the variable is gone, so an open panel takes its natural height and grows with streamed content.
+- `--panel-height` holds a length while the panel opens or closes. The starting and ending styles pin the height to 0 on the first and last frames, so the transition runs between 0 and the measured height.
+- Once the panel settles open the variable is `initial`, so the panel takes its natural height and grows with streamed content, and a nested panel never takes an outer panel's height.
 - A panel laid out as a flex column also needs `[&>*]:shrink-0`, or its children shrink while it is clamped to 0 and it measures itself as empty.
 - `Reasoning.Content` works the same way.

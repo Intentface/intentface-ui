@@ -1,7 +1,7 @@
 /*
- * `--panel-height` is published only while a transition runs, and released once
- * the panel settles open. That release is what lets the open panel keep growing
- * as sections stream in: with the property gone the declaration is invalid at
+ * `--panel-height` holds a measured height while a transition runs, and is
+ * reset to `initial` once the panel settles open. That reset is what lets the
+ * open panel keep growing as sections stream in: the declaration is invalid at
  * computed-value time and `height` lands back on `auto`.
  */
 

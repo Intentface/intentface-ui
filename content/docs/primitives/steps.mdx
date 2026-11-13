@@ -70,11 +70,15 @@ invented and then styled.
 ## Why the panel releases its height
 
 The panel publishes its measured height as `--panel-height` while an open or
-close transition runs, and **releases it once the panel settles open**. So
-`height: var(--panel-height)` animates from a real number, and then — with the
-variable no longer written — becomes invalid at computed-value time and falls
-back to `auto`. That is what lets an open panel track content appearing inside
-it, rather than staying pinned to the height it had when it opened.
+close transition runs, and **releases it once the panel settles open** by
+resetting it to `initial`. So `height: var(--panel-height)` animates from a real
+number, and then becomes invalid at computed-value time and falls back to
+`auto`. That is what lets an open panel track content appearing inside it,
+rather than staying pinned to the height it had when it opened.
+
+The reset is `initial` rather than an absent variable because custom properties
+inherit. A settled panel nested in one that is still moving would otherwise take
+the outer panel's height for the length of its transition.
 
 The demo at the top of this page uses it. Collapse and expand the timeline,
 then expand **Searched the web** while the timeline is already open — the outer
@@ -151,7 +155,7 @@ export const panelAttrs = [
   { attribute: "data-closed", description: "Present while closed." },
   { attribute: "data-starting-style", description: "Present on the first open frame (enter transition)." },
   { attribute: "data-ending-style", description: "Present while the exit animation runs." },
-  { attribute: "--panel-height", values: "measured px", description: "The panel's natural height, published only while the open or close transition runs so a height transition has a number to animate from. Deliberately released once the panel settles open, which makes `height: var(--panel-height)` fall back to `auto` so the open panel tracks content that grows inside it." },
+  { attribute: "--panel-height", values: "measured px | initial", description: "The panel's natural height while the open or close transition runs, so a height transition has a number to animate from. `initial` once the panel settles open, which makes `height: var(--panel-height)` fall back to `auto`, so the open panel tracks content that grows inside it and a nested panel never takes an outer panel's height." },
 ];
 
 <AttributesTable rows={panelAttrs} />
