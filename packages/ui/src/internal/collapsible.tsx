@@ -158,11 +158,13 @@ const CollapsiblePanel = ({
         {
           id: panelId,
           hidden,
-          // Once the open transition settles the height is released back to null, so the
-          // property stops being written and a `height: var(…)` consumer falls back to auto
-          // — that is what lets an open panel track content that grows.
-          style:
-            height !== null ? ({ "--panel-height": `${height}px` } as CSSProperties) : undefined,
+          // `initial` rather than unset because custom properties inherit, so a settled panel
+          // nested in a moving one would otherwise take that ancestor's height. On an
+          // unregistered property `initial` is guaranteed-invalid, so a `height: var(…)`
+          // consumer falls back to auto.
+          style: {
+            "--panel-height": height === null ? "initial" : `${height}px`,
+          } as CSSProperties,
         },
         elementProps,
       ],
