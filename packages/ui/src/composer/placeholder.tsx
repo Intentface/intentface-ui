@@ -12,6 +12,10 @@ import { useRenderElement } from "../internal/render/useRenderElement";
 export type ComposerPlaceholderProps = Omit<PrimitiveProps<"div">, "children"> &
   ({ placeholder: string; children?: never } | { placeholder?: never; children: ReactNode });
 
+/**
+ * The placeholder's content, placed as Composer.Textarea's child. The textarea renders it inside
+ * its overlay, which already starts where the caret does, so it takes a color only.
+ */
 export const ComposerPlaceholder = ({
   placeholder,
   children,

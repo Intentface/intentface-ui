@@ -47,7 +47,7 @@ export type Catalog<
   Schemas extends Record<string, ComponentSchema> = Record<string, ComponentSchema>,
 > = {
   components: { [Type in keyof Schemas]: ComponentDefinition<Schemas[Type]> };
-  /** Caps on one call: shown to the model in the tool's schema, and checked. */
+  /** Caps on one call, all checked. The node and children caps are also in the tool's schema. */
   limits?: Partial<Limits>;
   /** What a ref looks like, in the model's terms. */
   refDescription?: string;

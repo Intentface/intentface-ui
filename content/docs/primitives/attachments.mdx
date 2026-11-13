@@ -14,7 +14,7 @@ import { Dropzone } from './attachments/demos/dropzone';
 - **Pending-file tray** — the strip above the composer input, showing attachment chips with a remove affordance.
 - **Model included** — accept matching and blob-URL lifecycle ship in the package; the tray's layout and motion are yours.
 - **No media taxonomy** — `Attachments.Item` is a structural slot; read the item's `mediaType` and decide what an image, a PDF, or a file looks like.
-- **Drop + pick** — a `Dropzone` overlay (in place, or portalled elsewhere via `portalSelector`) plus a `Trigger` file picker.
+- **Drop + pick** — a `Dropzone` overlay (in place, or portalled elsewhere via `portalSelector`) plus a `Trigger` button you wire to your own file input.
 - **Get started** — see [Quick start](/quick-start) to add the package.
 
 ## Anatomy
@@ -67,10 +67,16 @@ map in the demo and can be localised there.
 Every part accepts `className`, `style`, and `render` (see
 [Styling](/handbook/styling)) and emits a bespoke part attribute (`data-<part>`) unless noted.
 
-### Attachments
+### Attachments.Root
 
 The tray container. Mount it only when there are items to show; it renders no
 layout of its own. Renders a `<div>` element.
+
+export const rootAttrs = [
+  { attribute: "data-attachments", description: "The tray element." },
+];
+
+<AttributesTable rows={rootAttrs} />
 
 ### Attachments.Item
 
@@ -97,6 +103,12 @@ export const removeProps = [
 
 <PropsTable rows={removeProps} />
 
+export const removeAttrs = [
+  { attribute: "data-attachments-remove", description: "The remove button." },
+];
+
+<AttributesTable rows={removeAttrs} />
+
 ### Attachments.Dropzone
 
 The drop overlay. `portalSelector` only moves where it renders (e.g. over an
@@ -104,9 +116,10 @@ app shell region); where files can be dropped is `Composer.Attachments`'
 `globalDrop`, not this part. Renders a `<div>` element.
 
 export const dropzoneProps = [
-  { name: "visible", type: "boolean", default: "false", description: "Show the overlay (while files are dragged over the scope)." },
-  { name: "keepMounted", type: "boolean", default: "false", description: "Keep it mounted (hidden) when not visible." },
-  { name: "portalSelector", type: "string", description: "CSS selector to portal into (the mechanism behind global)." },
+  { name: "visible", type: "boolean", default: "false", description: "Renders the overlay while true. The part tracks no drag itself, so pass your drag state, such as isDragging from the composer's attachments state." },
+  { name: "keepMounted", type: "boolean", default: "false", description: "Keep the overlay mounted while visible is false. It renders without data-visible and is not hidden, so hide it in CSS." },
+  { name: "portalSelector", type: "string", description: "CSS selector of the element to render the overlay into, through a portal. The part looks it up after mount, and renders in place until then or when nothing matches. Where a drop is accepted is Composer.Attachments' globalDrop, not this prop." },
+  { name: "children", type: "ReactNode", description: "The overlay content, such as a \"Drop to attach\" label." },
 ];
 
 <PropsTable rows={dropzoneProps} />
@@ -125,16 +138,29 @@ immediately. Validation emits an `AttachmentErrorCode` — `"accept"`,
 `"max_file_size"` or `"max_files"` — never copy, so the message is yours to
 write and localise. Renders a `<span>` element with `role="alert"`.
 
+export const errorAttrs = [
+  { attribute: "data-attachments-error", description: "The error element." },
+];
+
+<AttributesTable rows={errorAttrs} />
+
 ### Attachments.Trigger
 
 The file-picker button, named "Add attachment" by default. The package owns no
 file input; wire this to your own. Renders a `<button>` element.
 
+export const triggerAttrs = [
+  { attribute: "data-attachments-trigger", description: "The picker button." },
+];
+
+<AttributesTable rows={triggerAttrs} />
+
 ## Utilities
 
 `@intentface/ui/attachments` exports the generic mechanics:
-`toAttachmentItem` (the default blob ingestion), `matchesAccept`, and
-`revokeAttachmentUrl`.
+`toAttachmentItem` (the default blob ingestion), `matchesAccept`,
+`revokeAttachmentUrl`, and `revokeAllAttachmentUrls`. The two revoke functions
+release only `blob:` URLs and leave any other URL alone.
 
 Everything above that is yours: the accept and size policy, the media taxonomy
 that decides what an image or a PDF looks like, and the adapter that turns

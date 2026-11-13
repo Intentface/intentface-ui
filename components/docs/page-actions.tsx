@@ -38,7 +38,7 @@ export const PageActions = ({ slug, source }: PageActionsProps) => {
         variant="ghost"
         size="sm"
         nativeButton={false}
-        aria-label={source ? "Primitive source on GitHub" : "GitHub repository"}
+        aria-label={source ? "Source on GitHub" : "GitHub repository"}
         render={
           <a
             href={source ? `${REPO}/tree/main/packages/ui/src/${source}` : REPO}

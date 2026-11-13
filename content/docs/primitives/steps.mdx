@@ -92,21 +92,28 @@ makes the panel measure itself as `0px`.
 Every part accepts `className`, `style`, and `render` (see
 [Styling](/handbook/styling)) and emits a bespoke part attribute (`data-<part>`) unless noted.
 
-### Steps
+### Steps.Root
 
 The timeline container. Ships the disclosure and status plumbing and no row
 content: what a tool call or a reasoning step looks like is yours. Renders a
 `<div>` element.
 
+export const rootAttrs = [
+  { attribute: "data-steps", description: "The timeline container." },
+];
+
+<AttributesTable rows={rootAttrs} />
+
 ### Steps.Item
 
 One node of the tree, and the unit that nests: an item's panel may hold further
-items, so a timeline goes as deep as the run did. Renders a `<div>` element, plus
+items, so a timeline goes as deep as the run did. Publishes its `status` to the
+icon and label through context. Renders a `<div>` element, with
 `aria-current="step"` while `status` is `"active"`.
 
 export const itemProps = [
   { name: "status", type: "string", default: '"complete"', description: "Node status (commonly complete / active / pending); seeds context for Icon/Label and drives data-status." },
-  { name: "defaultOpen", type: "boolean", default: "status === active", description: "Uncontrolled initial open state — open by default while active." },
+  { name: "defaultOpen", type: "boolean", default: 'status === "active"', description: "Uncontrolled initial open state — open by default while active." },
   { name: "open", type: "boolean", description: "Controlled open state." },
   { name: "onOpenChange", type: "(open: boolean) => void", description: "Fires on toggle." },
 ];
@@ -127,17 +134,21 @@ export const itemAttrs = [
 
 The row that expands an item. A real button, so the tree is plain sequential tab
 order rather than a composite widget with its own keyboard model. Renders a
-`<button>` element
-(`aria-expanded`, `aria-controls`). Carries `data-open`/`data-closed` for the
-chevron. The styled layer groups it as `group/steps-trigger` so children read
-`group-data-open/steps-trigger:…`.
+`<button>` element.
+
+export const triggerAttrs = [
+  { attribute: "data-steps-trigger", description: "The trigger button." },
+  { attribute: "data-open", description: "Present while its item is open." },
+  { attribute: "data-closed", description: "Present while its item is closed." },
+];
+
+<AttributesTable rows={triggerAttrs} />
 
 ### Steps.Panel
 
 The collapsible body. Publishes its measured height while a transition runs and
 releases it once settled open, so an open panel grows with content that arrives
-inside it. Renders
-`data-steps-panel`.
+inside it. Renders a `<div>` element.
 
 export const panelProps = [
   { name: "keepMounted", type: "boolean", default: "false", description: "Keep the panel in the DOM (hidden) when closed." },
@@ -195,9 +206,9 @@ export const labelAttrs = [
 
 ### Steps.Status
 
-The status as text for assistive technology. Renders a visually hidden `<span>`
+The only part that speaks the status. Renders a visually hidden `<span>`
 holding the resolved status string; pass `children` to localise the wording,
-and `style`/`className` to override the hiding. It is not a live region: a
+and `style` to override the inline styles that hide it. It is not a live region: a
 screen reader reads it when it reaches the row, but a change is not announced
 as it happens. Wrap the list in your own `role="status"` region if it should be.
 

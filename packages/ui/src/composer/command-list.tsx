@@ -3,8 +3,7 @@
 // Composer.Command family — resolution (sync/async items, fuzzy filter),
 // keyboard/mouse selection, chip insertion, dismissal, and the nav/items
 // context split (highlight changes don't re-render the items map, and items
-// mutations don't re-render every row). All unstyled; state panels as
-// data-state / data-highlighted.
+// mutations don't re-render every row).
 
 import {
   type ComponentProps,
@@ -139,7 +138,7 @@ const useResolvedItems = (
 // ---------------------------------------------------------------------------
 // Composer.Command — the orchestrator: resolves items for the active
 // prefix, owns the highlight/selection/dismiss logic, and provides the two
-// contexts. Renders null unless this prefix is the active one.
+// contexts.
 // ---------------------------------------------------------------------------
 
 const EMPTY_ITEMS: CommandItemData[] = [];
@@ -399,8 +398,7 @@ const useCommandListNav = (componentName: string): CommandListNavContextValue =>
 };
 
 // ---------------------------------------------------------------------------
-// Slot primitives — unstyled structural parts of the list. Each sets its
-// its part attribute and forwards props; the styled layer supplies the look.
+// Slot primitives — unstyled structural parts of the list.
 // ---------------------------------------------------------------------------
 
 export type ComposerCommandListProps<Item extends CommandItemData> = Omit<
@@ -445,6 +443,10 @@ export const ComposerCommandList = <Item extends CommandItemData>({
 
 export type ComposerCommandLoadingProps = PrimitiveProps<"div">;
 
+/**
+ * The loading row, with the children as its copy. It always renders, so show it from
+ * data-loading on Composer.Command.
+ */
 export const ComposerCommandLoading = ({
   children,
   className,
@@ -462,6 +464,10 @@ export const ComposerCommandLoading = ({
 
 export type ComposerCommandEmptyProps = PrimitiveProps<"div">;
 
+/**
+ * The no-results row, with the children as its copy. It always renders, so show it from
+ * data-empty on Composer.Command.
+ */
 export const ComposerCommandEmpty = ({
   children,
   className,
@@ -552,6 +558,7 @@ export const ComposerCommandItem = ({ value, ...props }: ComposerCommandItemProp
 
 export type ComposerCommandItemIconProps = PrimitiveProps<"span">;
 
+/** A span for a row's icon. */
 export const ComposerCommandItemIcon = ({
   className,
   render,
@@ -566,6 +573,7 @@ export const ComposerCommandItemIcon = ({
 
 export type ComposerCommandItemLabelProps = PrimitiveProps<"span">;
 
+/** A span for a row's label. */
 export const ComposerCommandItemLabel = ({
   className,
   render,
@@ -580,6 +588,7 @@ export const ComposerCommandItemLabel = ({
 
 export type ComposerCommandItemDescriptionProps = PrimitiveProps<"span">;
 
+/** A span for a row's secondary text. */
 export const ComposerCommandItemDescription = ({
   className,
   render,
@@ -604,6 +613,11 @@ export type ComposerCommandGroupProps<Item extends CommandItemData = CommandItem
 // integer-like keys), and renders the child once per group inside a `command-group`
 // container. Nav order stays store-driven, so a group whose items all filter out just
 // doesn't render. Annotate `groupBy`'s param to type the items (no inline JSX generic).
+/**
+ * Groups the resolved items under headings, inside Composer.Command in place of
+ * Composer.CommandList. Arrow keys follow the order of the items, not of the groups, so pass
+ * items already sorted by group.
+ */
 export const ComposerCommandGroup = <Item extends CommandItemData = CommandItemData>({
   groupBy,
   children: renderGroup,
@@ -620,6 +634,7 @@ export const ComposerCommandGroup = <Item extends CommandItemData = CommandItemD
 
 export type ComposerCommandGroupLabelProps = PrimitiveProps<"div">;
 
+/** A group's heading, rendered in Composer.CommandGroup's callback. */
 export const ComposerCommandGroupLabel = ({
   className,
   render,

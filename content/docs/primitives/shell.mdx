@@ -35,13 +35,14 @@ import { Range } from './shell/demos/range';
 </Shell.Root>
 ```
 
-A shell whose sidebar starts where the visitor left it. Note the gutter — it is
-not a part of the package, and it is the piece that makes the rest work:
+A shell whose sidebar starts where the visitor left it. The gutter is your own
+`div` rather than a part of the package, and it is the piece that makes the
+rest work.
 
 ```tsx
 <Shell.Root defaultOpen={stored?.open ?? true} onOpenChange={save}>
   <Shell.Hotspot />
-  <Gutter />
+  <div data-slot="shell-gutter" />
 
   <Shell.Sidebar onResize={(width) => save({ width })}>
     <Shell.Trigger aria-label="Collapse sidebar" />
@@ -176,6 +177,11 @@ then animates two cheap properties on two different elements — `left` on the
 panel and `width` on the gutter — rather than fighting one element to do both.
 
 ```css
+[data-shell] {
+  /* Your own colour for the sidebar. */
+  --chrome: #f5f5f6;
+}
+
 [data-shell-sidebar] {
   position: fixed;
   inset-block: 0;
@@ -230,6 +236,7 @@ export const rootProps = [
   { name: "open", type: "boolean", description: "Controlled open state." },
   { name: "onOpenChange", type: "(open: boolean) => void", description: "Fires on every open/close. Persist it here." },
   { name: "store", type: "ShellStore", description: "An explicit Shell.createStore() handle, for state reachable from outside this tree. Must be stable for the Root's lifetime." },
+  { name: "children", type: "ReactNode", description: "The sidebar, the viewport, the hotspot and your gutter." },
 ];
 
 <PropsTable rows={rootProps} />
@@ -290,6 +297,7 @@ export const triggerAttrs = [
   { attribute: "data-shell-trigger", description: "The toggle button." },
   { attribute: "data-state", values: '"expanded" | "collapsed"', description: "Whether the sidebar is open." },
   { attribute: "data-hotspot", description: "Present while the sidebar is floating out." },
+  { attribute: "data-resizing", description: "Present mid-drag." },
 ];
 
 <AttributesTable rows={triggerAttrs} />
@@ -309,7 +317,8 @@ export const gripProps = [
 export const gripAttrs = [
   { attribute: "data-shell-grip", description: "The separator." },
   { attribute: "data-state", values: '"expanded" | "collapsed"', description: "Whether the sidebar is open." },
-  { attribute: "data-resizing", description: "Present while this grip is being dragged." },
+  { attribute: "data-hotspot", description: "Present while the sidebar is floating out." },
+  { attribute: "data-resizing", description: "Present for the duration of a resize drag." },
 ];
 
 <AttributesTable rows={gripAttrs} />
@@ -325,6 +334,7 @@ export const hotspotAttrs = [
   { attribute: "data-shell-hotspot", description: "The hover strip." },
   { attribute: "data-state", values: '"expanded" | "collapsed"', description: "Whether the sidebar is open — key the strip off collapsed so it vanishes when expanded." },
   { attribute: "data-hotspot", description: "Present while the sidebar is floating out." },
+  { attribute: "data-resizing", description: "Present mid-drag." },
 ];
 
 <AttributesTable rows={hotspotAttrs} />

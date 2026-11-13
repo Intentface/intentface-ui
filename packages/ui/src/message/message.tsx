@@ -38,8 +38,8 @@ export type MessageRootProps = Omit<PrimitiveProps<"div", MessageState>, "role">
 };
 
 /**
- * One turn's container. Reports the role and position as data attributes and
- * renders no layout of its own, so the bubble, avatar and actions around it
+ * One message's container. Reports the role and position as data attributes
+ * and renders no layout of its own, so the bubble, avatar and actions around it
  * stay yours.
  * Renders a `<div>` element.
  */
@@ -71,7 +71,9 @@ export const MessageRoot = ({
 export type MessageTurnProps = PrimitiveProps<"div">;
 
 /**
- * Groups consecutive messages from one role into a single visual turn.
+ * Wraps one exchange, a question and the replies that follow it, in one
+ * element. In `"follow"` and `"jump"`, `Thread.Content` lands its last child at
+ * the top, so a turn keeps the question in view while its reply streams in.
  * Renders a `<div>` element.
  */
 export const MessageTurn = ({ className, render, style, ...elementProps }: MessageTurnProps) =>
@@ -194,8 +196,11 @@ export const useMessageSelection = (scope: HTMLElement | null): MessageSelection
 
 /**
  * Resolves the owning message's content element from an invisible anchor node
- * rendered anywhere inside the message. Scoping to message-content keeps the
- * toolbar off markers, sources, and actions elsewhere in the message.
+ * rendered anywhere inside the message. It returns the first
+ * `[data-message-content]` inside the anchor's closest `[data-message]`. No
+ * part renders that attribute, so the consumer puts it on the content element,
+ * and without it `contentElement` stays null. Scoping to message-content keeps
+ * the toolbar off markers, sources, and actions elsewhere in the message.
  */
 export const useMessageSelectionScope = () => {
   const [contentElement, setContentElement] = useState<HTMLElement | null>(null);

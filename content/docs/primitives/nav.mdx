@@ -90,6 +90,12 @@ The package publishes the signal; the geometry is yours. This is what draws the
 `rail` and `branches` trees above — copy it and change the numbers.
 
 ```css
+/* Your own colour for the line. Opaque, because the 2px bridges overlap and a
+   translucent colour doubles up into dashes. */
+[data-nav] {
+  --rail: #e4e4e7;
+}
+
 /* The lane. `indent` is the first rung and every rung above it emits this too,
    so one rule sizes the lane for all of them. */
 [data-nav-list][data-indent] {
@@ -109,7 +115,7 @@ The package publishes the signal; the geometry is yours. This is what draws the
   content: "";
   position: absolute;
   left: -7px;
-  border-color: var(--rail-color);
+  border-color: var(--rail);
   border-left-width: 1px;
 }
 
@@ -293,6 +299,7 @@ export const rootProps = [
   { name: "loop", type: "boolean", default: "false", description: "Wrap at the ends when arrowing past the first or last row." },
   { name: "disabled", type: "boolean", default: "false", description: "Disable every row at once — a read-only view of the tree." },
   { name: "typeahead", type: "boolean", default: "true", description: "Seek a row by typing its label." },
+  { name: "children", type: "ReactNode", description: "The top-level Nav.List, and anything else the container holds." },
 ];
 
 <PropsTable rows={rootProps} />
@@ -312,7 +319,8 @@ is no trigger above it.
 
 export const listProps = [
   { name: "guide", type: '"none" | "indent" | "rail" | "branches"', description: "Overrides the Root's default for this list." },
-  { name: "keepMounted", type: "boolean", default: "false", description: "Keep a closed list in the DOM behind `hidden`. Its rows are not navigable while hidden." },
+  { name: "keepMounted", type: "boolean", default: "false", description: "Keep a closed list in the DOM behind hidden=\"until-found\", so the browser's find-in-page can reveal it. Its rows are not navigable while hidden." },
+  { name: "children", type: "ReactNode", description: "The level's rows: Nav.Item and Nav.Group." },
 ];
 
 <PropsTable rows={listProps} />
@@ -342,6 +350,7 @@ the group context its trigger and list read.
 export const groupProps = [
   { name: "value", type: "string", default: "(required)", description: "Identifies the group in the expanded set, and in persistence." },
   { name: "disabled", type: "boolean", description: "Disable this branch's rows." },
+  { name: "children", type: "ReactNode", description: "The branch's Nav.Trigger and Nav.List." },
 ];
 
 <PropsTable rows={groupProps} />
@@ -368,6 +377,7 @@ The arrow keys open and close it from the row either way.
 export const triggerProps = [
   { name: "active", type: "boolean", default: "false", description: "This branch is the one being shown." },
   { name: "disabled", type: "boolean", description: "Defaults to the group's own disabled state." },
+  { name: "children", type: "ReactNode", description: "The row's contents, with a Nav.Toggle when the branch is also a page." },
 ];
 
 <PropsTable rows={triggerProps} />
@@ -393,6 +403,12 @@ since the arrow keys already open the group from the row, and it stops every
 event it handles — anything that escaped would activate the row, or follow its
 link, on its way out of opening the group.
 
+export const toggleProps = [
+  { name: "children", type: "ReactNode", description: "The caret's icon." },
+];
+
+<PropsTable rows={toggleProps} />
+
 export const toggleAttrs = [
   { attribute: "data-nav-toggle", description: "The caret." },
   { attribute: "data-open", description: "Present while the group is open — rotate the caret off this." },
@@ -411,6 +427,7 @@ export const itemProps = [
   { name: "value", type: "string", default: "(required)", description: "Identifies the row for roving focus and typeahead." },
   { name: "active", type: "boolean", default: "false", description: "The route this row points at is the one being shown." },
   { name: "disabled", type: "boolean", description: "Defaults to the Root's disabled state." },
+  { name: "children", type: "ReactNode", description: "The row's contents, such as a Nav.Icon, a Nav.Label and a Nav.Action." },
 ];
 
 <PropsTable rows={itemProps} />
@@ -458,6 +475,12 @@ A control inside a row — the affordance that opens a menu, say. Renders
 order, so arrowing walks rows rather than stopping at every affordance, and it
 stops every event it handles — anything that escaped would activate the row on
 its way out of opening the menu.
+
+export const actionProps = [
+  { name: "children", type: "ReactNode", description: "What the control shows, usually an icon." },
+];
+
+<PropsTable rows={actionProps} />
 
 export const actionAttrs = [
   { attribute: "data-nav-action", description: "The control." },

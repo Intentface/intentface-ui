@@ -5,8 +5,8 @@
 // time (e.g. a per-prefix variant) is the renderer's job, not wire data.
 
 /**
- * Opaque wire string. The styled layer owns the concrete union and narrows
- * at its own boundary.
+ * An icon key, carried as an opaque string. The app owns the set of keys and
+ * narrows to it at its own boundary.
  */
 export type ChipIconKey = string;
 
@@ -22,6 +22,10 @@ const TAIL = String.raw`\]\(chip:([^[:)]+):([^[)?]+)(?:\?([^[)]*))?\)`;
 // match without the tail is plain text.
 const SCAN_PATTERN = new RegExp(String.raw`\[${LABEL}(?:${TAIL})?`, "g");
 
+/**
+ * A chip: the label it shows, the prefix and value that say what it points
+ * at, and an optional icon key.
+ */
 export type ChipData = {
   prefix: string;
   value: string;
@@ -29,6 +33,7 @@ export type ChipData = {
   icon?: ChipIconKey;
 };
 
+/** One run of message text: plain text, or a chip parsed from a token. */
 export type ChipSegment =
   | { type: "text"; text: string }
   | {
@@ -39,6 +44,10 @@ export type ChipSegment =
       icon?: ChipIconKey;
     };
 
+/**
+ * Backslash-escapes `[`, `]`, `(`, `)` and `\`, so the string can sit inside a
+ * Markdown link's label.
+ */
 export const escapeMarkdownLink = (input: string): string =>
   input.replace(/[[\]()\\]/g, (match) => `\\${match}`);
 
@@ -54,6 +63,12 @@ const safeDecode = (value: string): string => {
   }
 };
 
+/**
+ * Writes a chip as a token, `[Label](chip:prefix:value?icon=key)`. The label is
+ * escaped, and the value and icon are percent-encoded, which leaves `)` as it
+ * is. A token doesn't parse back when the prefix holds `:`, `)` or `[`, when the
+ * value holds `)`, or when the label, prefix or value is empty.
+ */
 export const encodeChipMarkdown = (chip: ChipData): string => {
   const params = new URLSearchParams();
   if (chip.icon) params.set("icon", chip.icon);
@@ -62,6 +77,11 @@ export const encodeChipMarkdown = (chip: ChipData): string => {
   return `[${escapeMarkdownLink(chip.label)}](chip:${chip.prefix}:${value}${query ? `?${query}` : ""})`;
 };
 
+/**
+ * Splits message text into text and chip segments, in order. Anything that
+ * isn't a whole token, a plain Markdown link included, stays in the text, and a
+ * value with a malformed `%` escape is kept as written.
+ */
 export const parseChipSegments = (text: string): ChipSegment[] => {
   const segments: ChipSegment[] = [];
   let lastIndex = 0;

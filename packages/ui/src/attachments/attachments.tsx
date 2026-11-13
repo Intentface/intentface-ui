@@ -165,7 +165,10 @@ export type AttachmentsDropzoneState = {
 
 export type AttachmentsDropzoneProps = PrimitiveProps<"div", AttachmentsDropzoneState> & {
   visible?: boolean;
-  /** Keep the dropzone mounted (hidden) when not visible. */
+  /**
+   * Keep the dropzone mounted when not visible. It renders without
+   * data-visible and is not hidden, so hide it in CSS.
+   */
   keepMounted?: boolean;
   /** CSS selector to portal the dropzone into (e.g. an app shell region). */
   portalSelector?: string;

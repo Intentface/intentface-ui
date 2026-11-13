@@ -11,59 +11,59 @@ import { Streaming } from './reasoning/demos/streaming';
 
 ## Usage guidelines
 
-- **Chain-of-thought disclosure** — a collapsible block for a model's thinking.
-- **Live label** — shimmers "Thinking…" while streaming and settles to "Thought for Ns" when it stops; the duration is tracked for you.
-- **Sectioned content** — bold `**Header**` lines split the text into labelled sections, rendered as markdown.
-- **State via `useReasoning`** — read streaming, open, and duration from anywhere inside.
+- **One block of thinking** — Reasoning discloses a single block of reasoning text. When reasoning interleaves with tool calls, [Steps](/primitives/steps) shows them in order.
+- **The parts ship no copy and no markdown** — `Reasoning.Trigger` has no label, and `Reasoning.Content` renders its children as given. A label that changes while the model thinks, sections and markdown are yours, built from `useReasoning` and your own text.
+- **A stored message needs its duration passed in** — the root only times a stream it watches. A message loaded from history never streamed in this mount, so pass the saved seconds through `duration`, or `useReasoning().duration` stays `undefined`.
 - **Get started** — see [Quick start](/quick-start) to add the package.
 
 ## Anatomy
 
 ```tsx
-<Reasoning.Root isStreaming={isStreaming}>
+<Reasoning.Root>
   <Reasoning.Trigger />
-  <Reasoning.Content>{reasoningText}</Reasoning.Content>
+  <Reasoning.Content />
 </Reasoning.Root>
 ```
 
-Driven from a streaming message, passing the reasoning parts' text:
+A realistic block. `ThinkingLabel` is your component that reads `useReasoning`,
+and `Markdown` is your renderer, because the package ships neither:
 
 ```tsx
-<Reasoning.Root isStreaming={isLast && isStreaming} defaultOpen={false}>
-  <Reasoning.Trigger label={headers} />
-  <Reasoning.Content>{texts}</Reasoning.Content>
+<Reasoning.Root isStreaming={isStreaming} duration={savedDuration}>
+  <Reasoning.Trigger>
+    <ThinkingLabel />
+  </Reasoning.Trigger>
+  <Reasoning.Content>
+    <Markdown>{reasoningText}</Markdown>
+  </Reasoning.Content>
 </Reasoning.Root>
 ```
 
 ## Examples
 
-### Tracking the streaming state
+### Labelling the trigger while it streams
 
-`isStreaming` is the only input. While it is true the root carries
-`data-streaming` and `aria-busy`; the moment it flips false the elapsed time is
-captured and handed back as `duration`, so the trigger's label changes without
-you timing anything.
+Pass `isStreaming`, and read the rest from `useReasoning`. While it is true, the
+root carries `data-streaming` and `aria-busy`. When it turns false, the root
+stores the elapsed seconds as `duration`, so the label below moves from
+"Thinking…" to "Thought for 3s" without timing anything itself.
 
 <Demo component={<Streaming />} file="primitives/reasoning/demos/streaming.tsx" replay={false} />
-
-The panel animates through `--panel-height`, which is published only while a
-transition runs and released once it settles open. That release is what lets an
-open panel keep growing as sections stream into it.
 
 ## API reference
 
 Every part accepts `className`, `style`, and `render` (see
 [Styling](/handbook/styling)) and emits a bespoke part attribute (`data-<part>`) unless noted.
 
-### Reasoning
+### Reasoning.Root
 
 The disclosure root. Tracks how long `isStreaming` stayed true and hands the
 elapsed seconds back through `useReasoning`, so a label can change without the
 consumer timing anything. Renders a `<div>` element.
 
 export const rootProps = [
-  { name: "isStreaming", type: "boolean", default: "false", description: "While true the trigger shimmers; the streamed duration is captured when it flips false." },
-  { name: "duration", type: "number", description: "Override the tracked streaming duration (seconds)." },
+  { name: "isStreaming", type: "boolean", default: "false", description: "Whether the reasoning is still streaming. The root starts timing when it turns true, and stores the elapsed seconds as duration when it turns false." },
+  { name: "duration", type: "number", description: "Seeds useReasoning().duration, in seconds, for reasoning that finished before this mount. The root reads it once on mount and ignores later changes. The next stream it watches replaces the value." },
   { name: "defaultOpen", type: "boolean", default: "false", description: "Uncontrolled initial open state." },
   { name: "open", type: "boolean", description: "Controlled open state." },
   { name: "onOpenChange", type: "(open: boolean) => void", description: "Fires on toggle." },
@@ -73,7 +73,7 @@ export const rootProps = [
 
 export const rootAttrs = [
   { attribute: "data-reasoning", description: "The disclosure root." },
-  { attribute: "data-streaming", description: "Present while isStreaming is true." },
+  { attribute: "data-streaming", description: "Present while isStreaming is true, alongside aria-busy." },
   { attribute: "data-open", description: "Present while open." },
   { attribute: "data-closed", description: "Present while closed." },
 ];
@@ -87,7 +87,7 @@ and `duration` from `useReasoning` if it should change while the model is
 thinking. Renders a `<button>` element.
 
 export const triggerProps = [
-  { name: "children", type: "ReactNode", description: "The trigger content — a label, a chevron, whatever you need." },
+  { name: "children", type: "ReactNode", description: "The label, and any icon or chevron. The trigger has no text of its own, so without children it is an unnamed button." },
 ];
 
 <PropsTable rows={triggerProps} />
@@ -107,7 +107,7 @@ and releases it once settled open, so a panel that is open keeps growing as text
 streams in. Renders a `<div>` element.
 
 export const contentProps = [
-  { name: "children", type: "string | string[]", default: "(required)", description: "Reasoning text; bold headers split it into sections." },
+  { name: "children", type: "ReactNode", description: "The reasoning, rendered as given. The package neither parses markdown nor splits the text into sections." },
   { name: "keepMounted", type: "boolean", default: "false", description: "Keep the panel in the DOM (hidden) when closed." },
 ];
 
@@ -126,13 +126,14 @@ export const contentAttrs = [
 
 ## useReasoning
 
-Read the disclosure state from anywhere inside `<Reasoning.Root>`:
+Read the disclosure state from anywhere inside `<Reasoning.Root>`. It throws
+outside one.
 
 export const hookMembers = [
-  { name: "isStreaming", type: "boolean", description: "Whether reasoning is still streaming in." },
+  { name: "isStreaming", type: "boolean", description: "The root's isStreaming prop." },
   { name: "isOpen", type: "boolean", description: "Whether the panel is open." },
-  { name: "setIsOpen", type: "(open: boolean) => void", description: "Toggle the panel." },
-  { name: "duration", type: "number | undefined", description: "Tracked streaming duration in seconds." },
+  { name: "setIsOpen", type: "(open: boolean) => void", description: "Opens or closes the panel, and calls onOpenChange." },
+  { name: "duration", type: "number | undefined", description: "Seconds the last stream took, rounded up to a whole second. undefined until a stream ends, unless the root's duration prop seeded it." },
 ];
 
 <PropsTable rows={hookMembers} />

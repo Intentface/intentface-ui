@@ -76,7 +76,8 @@ export type StepsItemProps = ComponentProps<typeof Collapsible> & {
  * One node of the tree, and the unit that nests: an item's panel may hold
  * further items, so a timeline goes as deep as the run did. Publishes its
  * `status` to the icon and label through context.
- * Renders a `<div>` element.
+ * Renders a `<div>` element, with `aria-current="step"` while `status` is
+ * `"active"`.
  */
 export const StepsItem = ({ status = "complete", defaultOpen, ...props }: StepsItemProps) => {
   const isNested = use(NestedContext);
