@@ -126,8 +126,9 @@ export const useComposerSnapshot = ({
     const editor = editorRef.current;
     if (!editor || initializedRef.current) return;
     if (defaultValue) {
-      editor.applySnapshot(defaultValue);
+      // Before applying: the apply reports, and the report records the snapshot the host echoes.
       lastAppliedRef.current = defaultValue;
+      editor.applySnapshot(defaultValue);
     }
     initializedRef.current = true;
   }, [editorRef, defaultValue]);
@@ -137,8 +138,8 @@ export const useComposerSnapshot = ({
     const editor = editorRef.current;
     if (!editor || !value) return;
     if (lastAppliedRef.current === value) return;
-    editor.applySnapshot(value);
     lastAppliedRef.current = value;
+    editor.applySnapshot(value);
   }, [editorRef, isControlled, value]);
 
   const reportEditorUpdate = useCallback(() => {
