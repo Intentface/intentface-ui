@@ -52,7 +52,6 @@ export const createVisibilityStore = () => {
   const listeners = new Set<() => void>();
   return {
     getSnapshot: () => snapshot,
-    hasListeners: () => listeners.size > 0,
     setSnapshot: (next: ThreadVisibilityState) => {
       if (visibilityStatesEqual(snapshot, next)) return;
       snapshot = next;

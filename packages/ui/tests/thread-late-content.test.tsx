@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { act, render } from "@testing-library/react";
-import { Thread, type ThreadAutoScrollMode } from "../src/thread";
+import { act, render, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { Thread, type ThreadAutoScrollMode, useThread, useThreadVisibility } from "../src/thread";
 import { AUTO_SCROLL_SETTLE_MS } from "../src/thread/thread";
 
 // happy-dom's IntersectionObserver and ResizeObserver never fire.
@@ -49,29 +50,46 @@ const resize = (target: Element) =>
     for (const { callback } of watching(resizeWatchers, target)) callback([]);
   });
 
+// Visibility snapshots are rebuilt on the next animation frame.
+const reportRowInView = async (row: Element) => {
+  await reportInView(row);
+  await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+};
+
+const CurrentMessage = () => <output>{useThreadVisibility().currentMessageId}</output>;
+
+let scrollToMessage: ReturnType<typeof useThread>["scrollToMessage"];
+const Commands = () => {
+  scrollToMessage = useThread().scrollToMessage;
+  return null;
+};
+
 const SCROLL_HEIGHT = 1200;
 
 const Chat = ({
   turns,
   autoScroll,
   preserveScrollOnPrepend,
+  children,
 }: {
   turns: string[];
   autoScroll?: ThreadAutoScrollMode;
   preserveScrollOnPrepend?: boolean;
+  children?: ReactNode;
 }) => (
   <Thread.Root autoScroll={autoScroll} preserveScrollOnPrepend={preserveScrollOnPrepend}>
     <Thread.Viewport>
       {turns.length > 0 && (
         <Thread.Content>
           {turns.map((turn) => (
-            <p key={turn} data-turn={turn}>
+            <p key={turn} data-turn={turn} data-message-id={turn}>
               {turn}
             </p>
           ))}
         </Thread.Content>
       )}
     </Thread.Viewport>
+    {children}
   </Thread.Root>
 );
 
@@ -83,7 +101,7 @@ const renderChat = (props: Parameters<typeof Chat>[0]) => {
   const scrolls: ScrollToOptions[] = [];
   scroller.scrollTo = ((options: ScrollToOptions) => scrolls.push(options)) as never;
   const showTurns = (turns: string[]) => view.rerender(<Chat {...props} turns={turns} />);
-  return { root: part("[data-thread-root]"), scroller, scrolls, part, showTurns };
+  return { root: part("[data-thread-root]"), scroller, scrolls, part, showTurns, view };
 };
 
 describe("Thread.Content mounted after Thread.Root", () => {
@@ -178,12 +196,107 @@ describe("Thread.Content mounted after Thread.Root", () => {
     expect(root.hasAttribute("data-at-bottom")).toBe(false);
   });
 
+  describe("useThreadVisibility subscribed before Content mounts", () => {
+    test("tracks the rows once Content mounts", async () => {
+      const { part, showTurns } = renderChat({ turns: [], children: <CurrentMessage /> });
+
+      showTurns(["m1", "m2"]);
+      await reportRowInView(part('[data-message-id="m2"]'));
+
+      expect(part("output").textContent).toBe("m2");
+    });
+
+    test("tracks a Content remounted for a new chat", async () => {
+      const { part, showTurns } = renderChat({ turns: ["old"], children: <CurrentMessage /> });
+      await reportRowInView(part('[data-message-id="old"]'));
+      showTurns([]);
+      expect(part("output").textContent).toBe("");
+
+      showTurns(["new"]);
+      await reportRowInView(part('[data-message-id="new"]'));
+
+      expect(part("output").textContent).toBe("new");
+    });
+
+    test("ignores an intersection delivered after Content unmounted", async () => {
+      const { part, showTurns } = renderChat({ turns: ["old"], children: <CurrentMessage /> });
+      const row = part('[data-message-id="old"]');
+      const queued = watching(intersectionWatchers, row);
+      await reportRowInView(row);
+      showTurns([]);
+
+      await act(async () => {
+        for (const { callback } of queued) {
+          callback([{ target: row, isIntersecting: true }] as never[]);
+        }
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      });
+
+      expect(part("output").textContent).toBe("");
+    });
+  });
+
+  describe("scrollToMessage called before Content mounts", () => {
+    const JUMP = { top: 0, behavior: "instant" } as const;
+    const jumpTo = (messageId: string) => scrollToMessage(messageId, { behavior: "instant" });
+
+    test('queues the jump and runs it when the row mounts, with autoScroll "off"', () => {
+      const { scrolls, showTurns } = renderChat({
+        turns: [],
+        autoScroll: "off",
+        children: <Commands />,
+      });
+
+      const queued = jumpTo("m2");
+      showTurns(["m1", "m2"]);
+
+      expect(queued).toBe(true);
+      expect(scrolls).toEqual([JUMP]);
+    });
+
+    test("lets the queued jump override the landing", () => {
+      const { scrolls, showTurns } = renderChat({ turns: [], children: <Commands /> });
+
+      const queued = jumpTo("m2");
+      showTurns(["m1", "m2"]);
+
+      expect(queued).toBe(true);
+      expect(scrolls).toEqual([JUMP]);
+    });
+
+    test("runs a jump queued on an empty Content that a keyed remount replaced", async () => {
+      const Keyed = ({ chat, turns }: { chat: string; turns: string[] }) => (
+        <Thread.Root autoScroll="off">
+          <Thread.Viewport>
+            <Thread.Content key={chat}>
+              {turns.map((turn) => (
+                <p key={turn} data-message-id={turn}>
+                  {turn}
+                </p>
+              ))}
+            </Thread.Content>
+          </Thread.Viewport>
+          <Commands />
+        </Thread.Root>
+      );
+      const { container, rerender } = render(<Keyed chat="First" turns={[]} />);
+      const scroller = container.querySelector("[data-thread-scroller]") as HTMLElement;
+      const scrolls: ScrollToOptions[] = [];
+      scroller.scrollTo = ((options: ScrollToOptions) => scrolls.push(options)) as never;
+      jumpTo("m2");
+
+      rerender(<Keyed chat="Second" turns={[]} />);
+      rerender(<Keyed chat="Second" turns={["m1", "m2"]} />);
+
+      await waitFor(() => expect(scrolls).toEqual([JUMP]));
+    });
+  });
+
   describe("with preserveScrollOnPrepend", () => {
     const VIEWPORT_TOP = 0;
     const TURN_HEIGHT = 40;
     const READING_TOP = 100;
     const PUSHED_DOWN = 200;
-    const originalRect = HTMLElement.prototype.getBoundingClientRect;
     const rowTops = new Map<string, number>();
 
     beforeEach(() => {
@@ -194,7 +307,9 @@ describe("Thread.Content mounted after Thread.Root", () => {
       };
     });
     afterEach(() => {
-      HTMLElement.prototype.getBoundingClientRect = originalRect;
+      // The stub is an own property; assigning the original back would leave one
+      // that hides a stub another file puts on Element.prototype.
+      Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
     });
 
     test("holds the reading position when older turns load in above", async () => {
