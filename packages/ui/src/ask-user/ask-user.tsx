@@ -519,9 +519,9 @@ export const AskUserDismiss = ({
   );
 
 /**
- * Continue/submit button. Sends through the composer store, like Enter: advances
- * the step, and submits the answers on the last. preventDefault() on the click
- * cancels it.
+ * Continue/submit button. Continues the step with the editor's text, like Enter
+ * while a question is open, and submits the answers on the last. It does nothing
+ * once the last step is answered. preventDefault() on the click cancels it.
  */
 export type AskUserContinueProps = PrimitiveProps<"button">;
 
@@ -543,7 +543,8 @@ export const AskUserContinue = ({
           "data-ask-user-continue": "",
           // Merged ahead of the consumer's onClick, which therefore runs first.
           onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
-            if (!event.defaultPrevented) void store.submit();
+            if (event.defaultPrevented) return;
+            store.getSnapshot().askUser.continueStep(store.controller.getText());
           },
         },
         elementProps,

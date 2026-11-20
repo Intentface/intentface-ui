@@ -1,12 +1,11 @@
-// Ask-user — pure state machine for the questionnaire flow. State is a current
-// step plus a map of per-step answers; every transition is an immutable map
-// operation, so the store only owns the state cell and the effect execution.
+// Ask-user — the question flow as one union and one total reducer. The store
+// owns the flow cell and runs the effects; everything a step does is decided
+// here.
 
 import type { AskUserQuestion, ComposerAnswerEntry } from "./types";
 
 // ---------------------------------------------------------------------------
-// Types — the machine state plus the effect/action/transition vocabulary the
-// store speaks to it in.
+// Types — the flow plus the event/effect vocabulary the store speaks to it in.
 // ---------------------------------------------------------------------------
 
 export type AnswerEntry = {
@@ -14,28 +13,33 @@ export type AnswerEntry = {
   freeText: string;
 };
 
-export type AskUserState = {
-  step: number;
-  answers: Map<number, AnswerEntry>;
-};
+export type Answers = Map<number, AnswerEntry>;
 
-export const INITIAL_ASK_USER_STATE: AskUserState = {
-  step: 0,
-  answers: new Map(),
-};
+/** The `questions` prop after parsing: never empty, and the consumer's own array, so identity means "the same questions". */
+export type Questions = [AskUserQuestion, ...AskUserQuestion[]];
 
-// Everything a transition may ask of the outside world. The store executes
-// these against the editor controller, the options handle, and the submit
-// callback — the transitions below only describe them.
-export type AskUserEffect =
-  | { type: "clear-input" }
-  | { type: "set-input-text"; text: string }
-  | { type: "focus-input" }
-  | { type: "focus-options" }
-  | { type: "reset-highlight" }
-  | { type: "submit-answers"; answers: ComposerAnswerEntry[] };
+/**
+ * `answered` is terminal for its array: it keeps the questions so setting the
+ * same array again stays answered, and it ignores every answer event. Only a
+ * new array (asking) or none (idle) leaves it. `step` exists only while asking.
+ */
+export type AskUserFlow =
+  | { readonly phase: "idle" }
+  | {
+      readonly phase: "asking";
+      readonly questions: Questions;
+      /** 0 <= step < questions.length */
+      readonly step: number;
+      readonly answers: Answers;
+    }
+  | { readonly phase: "answered"; readonly questions: Questions; readonly answers: Answers };
 
-export type AskUserAction =
+type AskingFlow = Extract<AskUserFlow, { phase: "asking" }>;
+
+export const IDLE_FLOW: AskUserFlow = { phase: "idle" };
+
+export type AskUserEvent =
+  | { type: "questions-changed"; questions: Questions | null }
   | { type: "toggle-option"; label: string }
   | { type: "select-option"; label: string }
   | { type: "clear-selections" }
@@ -44,83 +48,203 @@ export type AskUserAction =
   | { type: "step-back"; currentText: string }
   | { type: "step-forward"; currentText: string };
 
+type AnswerEvent = Exclude<AskUserEvent, { type: "questions-changed" }>;
+
+// Everything a transition may ask of the outside world. The store executes
+// these against the editor controller, the options handle, and the submit
+// callback.
+export type AskUserEffect =
+  | { type: "clear-input" }
+  | { type: "set-input-text"; text: string }
+  | { type: "focus-input" }
+  // The step's options mount after the flow changes: a new flow renders them a
+  // commit later (a frame), a step change as soon as the highlight resets (a
+  // microtask).
+  | { type: "focus-options"; after: "frame" | "microtask" }
+  | { type: "reset-highlight" }
+  | { type: "submit-answers"; answers: ComposerAnswerEntry[] };
+
 export type AskUserTransition = {
-  next: AskUserState;
+  flow: AskUserFlow;
   effects: AskUserEffect[];
 };
 
-// ---------------------------------------------------------------------------
-// Answer helpers — immutable operations on the per-step answer map, plus the
-// projection/query the store reads.
-// ---------------------------------------------------------------------------
-
-const emptyEntry = (): AnswerEntry => ({
-  selected: new Set<string>(),
-  freeText: "",
-});
-
-const cloneAnswers = (source: Map<number, AnswerEntry>) => new Map(source);
-
-// Record `text` as the step's free-text answer. Single-select treats text and
-// a chosen option as mutually exclusive, so any selection is dropped;
-// multi-select keeps existing selections alongside the text. Empty text is a
-// no-op (returns an untouched clone).
-const writeFreeText = (
-  answers: Map<number, AnswerEntry>,
-  step: number,
-  text: string,
-  multiSelect: boolean,
-) => {
-  const next = cloneAnswers(answers);
-  if (text.length === 0) return next;
-  const previous = next.get(step) ?? emptyEntry();
-  next.set(step, {
-    selected: multiSelect ? previous.selected : new Set(),
-    freeText: text,
-  });
-  return next;
+/** The data half of the public `askUser` slice. */
+export type AskUserView = {
+  /** True only while asking: false once the last step is answered, with `questions` still set. */
+  active: boolean;
+  questions: AskUserQuestion[] | null;
+  /** Reads questions.length once answered, so `questions[step]` is undefined there. */
+  step: number;
+  answers: Answers;
+  isLastStep: boolean;
+  isSingle: boolean;
 };
 
-// Remove the step's entry entirely (skip / dismiss).
-const skipStep = (answers: Map<number, AnswerEntry>, step: number): Map<number, AnswerEntry> => {
-  const next = cloneAnswers(answers);
-  next.delete(step);
-  return next;
+// ---------------------------------------------------------------------------
+// Boundary — the prop parse.
+// ---------------------------------------------------------------------------
+
+/** Keeps the array's identity. An empty array is no questions. */
+export const parseQuestions = (
+  questions: AskUserQuestion[] | null | undefined,
+): Questions | null => (questions && isNonEmpty(questions) ? questions : null);
+
+const isNonEmpty = <T>(items: T[]): items is [T, ...T[]] => items.length > 0;
+
+// ---------------------------------------------------------------------------
+// Reducer — the decide half of the flow, total over phase x event.
+// ---------------------------------------------------------------------------
+
+export const reduceAskUser = (flow: AskUserFlow, event: AskUserEvent): AskUserTransition => {
+  if (event.type === "questions-changed") return changeQuestions(flow, event.questions);
+  if (flow.phase !== "asking") return { flow, effects: [] };
+  return answer(flow, event);
 };
 
-// Toggle an option on the step's entry. Multi-select toggles membership and
-// keeps free text; single-select replaces both (option and text are mutually
-// exclusive).
-const toggleAnswer = (
-  answers: Map<number, AnswerEntry>,
-  step: number,
-  label: string,
-  multiSelect: boolean,
-) => {
-  const next = cloneAnswers(answers);
-  const previous = next.get(step) ?? emptyEntry();
-  const selected = new Set(previous.selected);
-  if (multiSelect) {
-    if (selected.has(label)) selected.delete(label);
-    else selected.add(label);
-  } else {
-    selected.clear();
-    selected.add(label);
+// Idempotent per array: a StrictMode replay or an explicit store's remount sets
+// the same array again and must neither re-ask nor re-focus.
+const changeQuestions = (flow: AskUserFlow, questions: Questions | null): AskUserTransition => {
+  const current = flow.phase === "idle" ? null : flow.questions;
+  if (questions === current) return { flow, effects: [] };
+  if (questions === null) return { flow: IDLE_FLOW, effects: [] };
+  return {
+    flow: { phase: "asking", questions, step: 0, answers: new Map() },
+    effects: [{ type: "focus-options", after: "frame" }],
+  };
+};
+
+// Composed events (select-option = toggle + advance) resolve atomically here,
+// so no caller ever chains transitions across a stale snapshot.
+const answer = (flow: AskingFlow, event: AnswerEvent): AskUserTransition => {
+  const { questions, step, answers } = flow;
+  const multiSelect = questions[step]?.multiSelect === true;
+
+  switch (event.type) {
+    case "toggle-option":
+      return {
+        flow: { ...flow, answers: toggleAnswer(answers, step, event.label, multiSelect) },
+        effects: multiSelect ? [] : [{ type: "clear-input" }],
+      };
+
+    case "select-option": {
+      const toggled = toggleAnswer(answers, step, event.label, multiSelect);
+      if (multiSelect) return { flow: { ...flow, answers: toggled }, effects: [] };
+      return advanceStep(flow, toggled);
+    }
+
+    case "clear-selections": {
+      const previous = answers.get(step);
+      if (!previous || previous.selected.size === 0) return { flow, effects: [] };
+      const next = new Map(answers);
+      next.set(step, { selected: new Set(), freeText: previous.freeText });
+      return { flow: { ...flow, answers: next }, effects: [] };
+    }
+
+    case "continue-step":
+      return advanceStep(flow, writeFreeText(answers, step, event.freeText.trim(), multiSelect));
+
+    case "dismiss-step":
+      return advanceStep(flow, skipStep(answers, step));
+
+    case "step-back":
+      return goToStep(flow, Math.max(0, step - 1), event.currentText);
+
+    case "step-forward":
+      return goToStep(flow, Math.min(questions.length - 1, step + 1), event.currentText);
   }
-  next.set(step, { selected, freeText: multiSelect ? previous.freeText : "" });
-  return next;
 };
 
-// Project the collected answers onto the public ComposerAnswerEntry union, one
-// entry per question in order. The chosen branch encodes the invariant:
-// single-select carries `option` *or* `text`; multi-select carries both;
-// an unanswered question is bare `{ question }`.
-export const compileAnswers = (
-  state: AskUserState,
-  questions: AskUserQuestion[],
-): ComposerAnswerEntry[] =>
+// Commit the step's answers, then either ask the next question or, on the
+// last, end the flow and submit (input focused for a follow-up message).
+const advanceStep = (flow: AskingFlow, answers: Answers): AskUserTransition => {
+  const { questions, step } = flow;
+  if (step < questions.length - 1) {
+    return {
+      flow: { ...flow, step: step + 1, answers },
+      effects: [
+        { type: "clear-input" },
+        { type: "reset-highlight" },
+        { type: "focus-options", after: "microtask" },
+      ],
+    };
+  }
+  return {
+    flow: { phase: "answered", questions, answers },
+    effects: [
+      { type: "clear-input" },
+      { type: "submit-answers", answers: compileAnswers(questions, answers) },
+      { type: "focus-input" },
+    ],
+  };
+};
+
+// Keep any in-progress free text on the step being left and restore the
+// target step's saved text into the input.
+const goToStep = (flow: AskingFlow, targetStep: number, currentText: string): AskUserTransition => {
+  if (targetStep === flow.step) return { flow, effects: [] };
+
+  const trimmed = currentText.trim();
+  const answers = new Map(flow.answers);
+  if (trimmed.length > 0) {
+    const previous = answers.get(flow.step) ?? emptyEntry();
+    answers.set(flow.step, { ...previous, freeText: trimmed });
+  }
+
+  return {
+    flow: { ...flow, step: targetStep, answers },
+    effects: [
+      { type: "set-input-text", text: answers.get(targetStep)?.freeText ?? "" },
+      { type: "reset-highlight" },
+      { type: "focus-options", after: "microtask" },
+    ],
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Projections — the public view and the submitted payload.
+// ---------------------------------------------------------------------------
+
+const NO_ANSWERS: Answers = new Map();
+
+export const viewAskUser = (flow: AskUserFlow): AskUserView => {
+  switch (flow.phase) {
+    case "idle":
+      return {
+        active: false,
+        questions: null,
+        step: 0,
+        answers: NO_ANSWERS,
+        isLastStep: false,
+        isSingle: false,
+      };
+    case "asking":
+      return {
+        active: true,
+        questions: flow.questions,
+        step: flow.step,
+        answers: flow.answers,
+        isLastStep: flow.step === flow.questions.length - 1,
+        isSingle: flow.questions.length === 1,
+      };
+    case "answered":
+      return {
+        active: false,
+        questions: flow.questions,
+        step: flow.questions.length,
+        answers: flow.answers,
+        isLastStep: true,
+        isSingle: flow.questions.length === 1,
+      };
+  }
+};
+
+// One entry per question, in order. The chosen branch encodes the invariant:
+// single-select carries `option` *or* `text`; multi-select carries both; an
+// unanswered question is bare `{ question }`.
+export const compileAnswers = (questions: Questions, answers: Answers): ComposerAnswerEntry[] =>
   questions.map(({ question, multiSelect }, index) => {
-    const entry = state.answers.get(index);
+    const entry = answers.get(index);
     if (!entry) return { question };
 
     const selected = [...entry.selected];
@@ -137,119 +261,48 @@ export const compileAnswers = (
     return { question };
   });
 
-export const isLastStep = (state: AskUserState, questions: AskUserQuestion[]) =>
-  state.step >= questions.length - 1;
-
 // ---------------------------------------------------------------------------
-// Transitions — the decide half of the flow: map an action onto the next state
-// plus the effects to run. transitionAskUser is the single entry point.
+// Answer helpers — immutable operations on the per-step answer map.
 // ---------------------------------------------------------------------------
 
-// Commit `nextAnswers`, advance one step, and reset the input — then either
-// arm the next question (blurred, highlight reset) or compile and submit on
-// the last step (input focused for the follow-up message).
-const advanceStep = (
-  state: AskUserState,
-  questions: AskUserQuestion[],
-  nextAnswers: Map<number, AnswerEntry>,
-): AskUserTransition => {
-  const next: AskUserState = { step: state.step + 1, answers: nextAnswers };
-  if (state.step < questions.length - 1) {
-    return {
-      next,
-      effects: [{ type: "clear-input" }, { type: "reset-highlight" }, { type: "focus-options" }],
-    };
-  }
-  return {
-    next,
-    effects: [
-      { type: "clear-input" },
-      { type: "submit-answers", answers: compileAnswers(next, questions) },
-      { type: "focus-input" },
-    ],
-  };
+const emptyEntry = (): AnswerEntry => ({
+  selected: new Set<string>(),
+  freeText: "",
+});
+
+// Single-select treats text and a chosen option as mutually exclusive, so any
+// selection is dropped; multi-select keeps existing selections alongside the
+// text. Empty text leaves the step's entry as it was.
+const writeFreeText = (answers: Answers, step: number, text: string, multiSelect: boolean) => {
+  const next = new Map(answers);
+  if (text.length === 0) return next;
+  const previous = next.get(step) ?? emptyEntry();
+  next.set(step, {
+    selected: multiSelect ? previous.selected : new Set(),
+    freeText: text,
+  });
+  return next;
 };
 
-// Navigate to `targetStep`, preserving any in-progress free text on the step
-// being left and restoring the target step's saved text into the input.
-const transitionToStep = (
-  state: AskUserState,
-  targetStep: number,
-  currentText: string,
-): AskUserTransition => {
-  if (targetStep === state.step) return { next: state, effects: [] };
-
-  const trimmed = currentText.trim();
-  const answers = cloneAnswers(state.answers);
-  if (trimmed.length > 0) {
-    const previous = answers.get(state.step) ?? emptyEntry();
-    answers.set(state.step, { ...previous, freeText: trimmed });
-  }
-
-  const next: AskUserState = { step: targetStep, answers };
-  return {
-    next,
-    effects: [
-      { type: "set-input-text", text: answers.get(targetStep)?.freeText ?? "" },
-      { type: "reset-highlight" },
-      { type: "focus-options" },
-    ],
-  };
+const skipStep = (answers: Answers, step: number): Answers => {
+  const next = new Map(answers);
+  next.delete(step);
+  return next;
 };
 
-// The decide half of the ask-user flow, mirroring interpretAskUserKey: map an
-// action onto the next state plus the effects to run. Composed actions
-// (select-option = toggle + advance) resolve atomically here, so no caller
-// ever chains transitions across a stale state snapshot.
-export const transitionAskUser = (
-  state: AskUserState,
-  questions: AskUserQuestion[],
-  action: AskUserAction,
-): AskUserTransition => {
-  const multiSelect = !!questions[state.step]?.multiSelect;
-
-  switch (action.type) {
-    case "toggle-option":
-      return {
-        next: {
-          ...state,
-          answers: toggleAnswer(state.answers, state.step, action.label, multiSelect),
-        },
-        effects: multiSelect ? [] : [{ type: "clear-input" }],
-      };
-
-    case "select-option": {
-      const toggled = toggleAnswer(state.answers, state.step, action.label, multiSelect);
-      if (multiSelect) return { next: { ...state, answers: toggled }, effects: [] };
-      return advanceStep(state, questions, toggled);
-    }
-
-    case "clear-selections": {
-      const previous = state.answers.get(state.step);
-      if (!previous || previous.selected.size === 0) return { next: state, effects: [] };
-      const answers = cloneAnswers(state.answers);
-      answers.set(state.step, { selected: new Set(), freeText: previous.freeText });
-      return { next: { ...state, answers }, effects: [] };
-    }
-
-    case "continue-step":
-      return advanceStep(
-        state,
-        questions,
-        writeFreeText(state.answers, state.step, action.freeText.trim(), multiSelect),
-      );
-
-    case "dismiss-step":
-      return advanceStep(state, questions, skipStep(state.answers, state.step));
-
-    case "step-back":
-      return transitionToStep(state, Math.max(0, state.step - 1), action.currentText);
-
-    case "step-forward":
-      return transitionToStep(
-        state,
-        Math.min(questions.length - 1, state.step + 1),
-        action.currentText,
-      );
+// Multi-select toggles membership and keeps free text; single-select replaces
+// both (option and text are mutually exclusive).
+const toggleAnswer = (answers: Answers, step: number, label: string, multiSelect: boolean) => {
+  const next = new Map(answers);
+  const previous = next.get(step) ?? emptyEntry();
+  const selected = new Set(previous.selected);
+  if (multiSelect) {
+    if (selected.has(label)) selected.delete(label);
+    else selected.add(label);
+  } else {
+    selected.clear();
+    selected.add(label);
   }
+  next.set(step, { selected, freeText: multiSelect ? previous.freeText : "" });
+  return next;
 };

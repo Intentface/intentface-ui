@@ -109,13 +109,14 @@ export const ComposerRoot = ({
     store.setIsSubmitting(isSubmitting);
   }, [store, isSubmitting]);
 
-  // Sync the questions prop into the store and arm ask-user mode (editor blur
-  // + document-level keyboard handling) while questions are active.
   useEffect(() => {
     store.setQuestions(questions ?? null);
-    if (!questions?.length) return;
-    return store.activateAskUser();
   }, [store, questions]);
+
+  useEffect(
+    () => store.listenForStrayKeys(store.rootRef.current?.ownerDocument ?? document),
+    [store],
+  );
 
   const { getRegisteredPrefixes } = useCommandRegistry(commands);
 
@@ -140,15 +141,17 @@ export const ComposerRoot = ({
     void store.submit();
   };
 
-  // Escape stops generating. React bubbles keys from portaled parts (a positioned
-  // Panel) here too; a consumer's onKeyDown can skip it with preventPrimitiveHandler().
+  // React bubbles keys from portaled parts (a positioned Panel) here too; a
+  // consumer's onKeyDown can skip it with preventPrimitiveHandler().
   const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    const stopGenerating = store.stopGeneratingRef.current;
-    if (event.key !== "Escape" || event.defaultPrevented || !stopGenerating) return;
-    // While a question is open, Escape dismisses its step instead.
-    if (store.getSnapshot().askUser.questions?.length) return;
-    event.preventDefault();
-    stopGenerating();
+    if (store.handleKeyDown(event.nativeEvent)) event.preventDefault();
+    // Popups from other libraries close on any Escape that reaches them, handled or not.
+    // Their document listener can share React's target, as when Next.js hydrates the
+    // document, and only stopImmediatePropagation skips a listener on the same target.
+    if (event.key === "Escape" && event.defaultPrevented) {
+      event.stopPropagation();
+      event.nativeEvent.stopImmediatePropagation();
+    }
   };
 
   const internalsValue = useMemo<ComposerInternalsValue>(

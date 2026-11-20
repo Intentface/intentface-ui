@@ -221,7 +221,7 @@ const AskUserOptions = () => {
   );
 };
 
-// activateAskUser moves focus into the options one frame past the commit.
+// A new question moves focus into its options one frame past the commit.
 const flushFrames = () =>
   act(
     () =>
