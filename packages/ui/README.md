@@ -101,15 +101,17 @@ tabs are app-shell parts rather than chat parts, and are useful on their own:
 
 The types are framework-agnostic. A Vercel AI SDK `UIMessage` satisfies
 `ChatMessage` structurally, so there's no adapter — pass SDK messages straight
-into the type guards and components:
+into the type guards and components. The package has no tool part types: use
+the AI SDK's `ToolUIPart`, `DynamicToolUIPart` and `isToolUIPart`.
 
 ```tsx
-import { isToolPart } from "@intentface/ui/types";
-import type { UIMessage } from "ai";
+import { isTextPart } from "@intentface/ui/types";
+import { isToolUIPart, type UIMessage } from "ai";
 
 // message: UIMessage
 for (const part of message.parts) {
-  if (isToolPart(part)) track(part.toolCallId, part.state);
+  if (isTextPart(part)) append(part.text);
+  if (isToolUIPart(part)) track(part.toolCallId, part.state);
 }
 ```
 

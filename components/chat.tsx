@@ -1,7 +1,6 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import type { ToolPart } from "@intentface/ui/types";
 import {
   Brain,
   Check,
@@ -15,7 +14,7 @@ import {
 } from "@keyline-icons/react";
 // Keyline has no sandbox icon, so this one stays on Tabler.
 import { IconSandbox } from "@tabler/icons-react";
-import type { ChatStatus } from "ai";
+import { type ChatStatus, getToolName, isToolUIPart } from "ai";
 import { AnimatePresence, spring, stagger } from "motion/react";
 import * as m from "motion/react-m";
 import { useRouter } from "next/navigation";
@@ -63,7 +62,7 @@ import {
 } from "@/lib/ai/message-info";
 import { getAskUserInfo, getAskUserStepInfo, getToolCallInfo } from "@/lib/ai/steps-info";
 import { DEFAULT_TOOL_LABELS } from "@/lib/ai/tool-labels";
-import type { AppPart, AppUIMessage, AskUserQuestion, StepStatus } from "@/lib/ai/types";
+import type { AppPart, AppUIMessage, AskUserQuestion, StepStatus, ToolPart } from "@/lib/ai/types";
 import { applyStopToMessages } from "@/lib/chat-instance";
 import { fetchPlaygroundIssues, GroupedIssueCommands } from "@/lib/playground-demo";
 import { useChatStore } from "@/lib/store/chat";
@@ -305,7 +304,7 @@ const InterleavedSteps = ({
     activeTool?.type === "tool-askUser"
       ? (((activeTool.input as { questions?: unknown[] } | undefined)?.questions ?? []).length ?? 0)
       : 0;
-  const activeToolName = activeTool?.type.replace("tool-", "") ?? "";
+  const activeToolName = activeTool ? getToolName(activeTool) : "";
   const activeToolConfig = DEFAULT_TOOL_LABELS[activeToolName];
   const streamingLabel = !activeTool
     ? "Thinking..."
@@ -486,9 +485,7 @@ const ChatMessageItem = memo(
                 // show text that appears after the last tool/reasoning part.
                 if (chain.hasTools) {
                   const lastChainIdx = parts.findLastIndex(
-                    (p) =>
-                      p.type === "reasoning" ||
-                      (p.type.startsWith("tool-") && p.type !== "tool-askUser"),
+                    (p) => p.type === "reasoning" || (isToolUIPart(p) && p.type !== "tool-askUser"),
                   );
                   if (index <= lastChainIdx) return null;
                 }

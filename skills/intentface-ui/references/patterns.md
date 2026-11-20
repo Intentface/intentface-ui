@@ -93,34 +93,34 @@ import {
   isFilePart,
   isReasoningPart,
   isTextPart,
-  isToolPart,
   type ReasoningPart,
   type TextPart,
-  type ToolPart,
-  type UnknownPart,
 } from "@intentface/ui/types";
+import { type DynamicToolUIPart, isToolUIPart, type ToolUIPart, type UIMessage } from "ai";
+
+type Part = UIMessage["parts"][number];
 
 export type MessageSegment =
   | { type: "reasoning"; parts: ReasoningPart[] }
-  | { type: "tool"; parts: ToolPart[] }
+  | { type: "tool"; parts: (ToolUIPart | DynamicToolUIPart)[] }
   | { type: "text"; parts: TextPart[] }
   | { type: "file"; parts: FilePart[] };
 
-const getSegmentType = (part: UnknownPart): MessageSegment["type"] | null => {
+const getSegmentType = (part: Part): MessageSegment["type"] | null => {
   if (isReasoningPart(part)) return "reasoning";
   if (isTextPart(part)) return "text";
   if (isFilePart(part)) return "file";
-  if (isToolPart(part)) return "tool";
+  if (isToolUIPart(part)) return "tool";
   return null;
 };
 
-export const getSegmentedParts = (parts: readonly UnknownPart[]) => {
+export const getSegmentedParts = (parts: readonly Part[]) => {
   const segments: MessageSegment[] = [];
   for (const part of parts) {
     const type = getSegmentType(part);
     if (!type) continue;
     const last = segments.at(-1);
-    if (last?.type === type) (last.parts as UnknownPart[]).push(part);
+    if (last?.type === type) (last.parts as Part[]).push(part);
     else segments.push({ type, parts: [part] } as MessageSegment);
   }
   return segments;
@@ -137,9 +137,9 @@ export const groupTurns = <M extends { id: string; role: string }>(messages: rea
 };
 ```
 
-- These helpers are the app's own, in a module such as `messages.ts`. The package ships the part types and guards they use.
+- These helpers are the app's own, in a module such as `messages.ts`. The package ships the text, reasoning and file part types and guards they use. The tool part types and `isToolUIPart`, which matches static and dynamic tools, are the AI SDK's.
 - A turn starts at each user message. Its key is the first message's id, so the key stays put while a reply streams.
-- A part no guard matches, such as a source, starts no segment, so the text on either side of it merges into one segment.
+- A part no guard matches, such as a source or a data part, starts no segment, so the text on either side of it merges into one segment.
 
 ## A message row from AI SDK parts
 
@@ -149,7 +149,7 @@ export const groupTurns = <M extends { id: string; role: string }>(messages: rea
 import { Message } from "@intentface/ui/message";
 import { Reasoning, useReasoning } from "@intentface/ui/reasoning";
 import { Steps } from "@intentface/ui/steps";
-import type { ToolUIPart, UIMessage } from "ai";
+import { getToolName, type ToolUIPart, type UIMessage } from "ai";
 import { memo } from "react";
 import { getSegmentedParts } from "./messages";
 
@@ -197,7 +197,7 @@ export const Row = memo(({ message, isLast, isError }: RowProps) => (
             <Steps.Root key={index}>
               {segment.parts.map((part) => (
                 <Steps.Item key={part.toolCallId} status={STEP_STATUS[part.state]}>
-                  <Steps.Label>{part.type.slice("tool-".length)}</Steps.Label>
+                  <Steps.Label>{getToolName(part)}</Steps.Label>
                   <Steps.Status />
                 </Steps.Item>
               ))}
@@ -211,7 +211,7 @@ export const Row = memo(({ message, isLast, isError }: RowProps) => (
 ));
 ```
 
-- The segments keep the parts' order, so reasoning, tool calls and text interleave the way the model produced them. `getSegmentedParts` drops `dynamic-tool` parts, which MCP tools produce, and merges the text on either side of one, so this row never shows them. A chat with dynamic tools renders `message.parts` in one pass instead.
+- The segments keep the parts' order, so reasoning, tool calls and text interleave the way the model produced them. A `dynamic-tool` part, which MCP tools produce, is a tool like any other, and `getToolName` reads its name.
 - Each reasoning segment streams on its own parts' `state`, so an earlier block settles while a later one is still thinking. `Reasoning.Root` reflects it as `data-streaming`.
 - The map covers every AI SDK tool state. A state left out gives `undefined`, and `Steps.Item` shows it as complete.
 - The step status is the app's own vocabulary. `Steps.Item` reflects it as `data-status` on the item, its icon and its label, which is where the per-status styles go. `data-status` reaches no screen reader, so `Steps.Status` reads the status out in a visually hidden span. Pass it children to word each status in the app's copy.

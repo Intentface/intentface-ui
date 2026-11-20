@@ -2,14 +2,13 @@
 // own backend tools (the webSearch findings shape, the askUser output JSON),
 // so it lives in the app, not the generic Steps primitive.
 
-import { isToolPart, type ToolPart, type UnknownPart } from "@intentface/ui/types";
+import { getToolName, isToolUIPart } from "ai";
 import type { ToolLabels } from "@/lib/ai/tool-labels";
-import type { AskUserInput, AskUserQuestion, StepStatus } from "@/lib/ai/types";
+import type { AnyPart, AskUserInput, AskUserQuestion, StepStatus, ToolPart } from "@/lib/ai/types";
 
 // ---------------------------------------------------------------------------
 // Ask-user extraction — this app's askUser tool: its part type name, input
-// schema, and output JSON format. Moved here from the package, which now ships
-// only the generic ToolPart contract.
+// schema, and output JSON format.
 // ---------------------------------------------------------------------------
 
 /** A single answered ask-user exchange with parsed questions and answers. */
@@ -31,10 +30,10 @@ export type AskUserInfo = {
  * Extracts askUser tool parts and returns structured info: whether any are
  * awaiting input, and parsed Q&A pairs for answered ones.
  */
-export const getAskUserInfo = (allParts: readonly UnknownPart[]): AskUserInfo => {
+export const getAskUserInfo = (allParts: readonly AnyPart[]): AskUserInfo => {
   const parts = allParts.filter(
     (p): p is ToolPart =>
-      isToolPart(p) &&
+      isToolUIPart(p) &&
       p.type === "tool-askUser" &&
       (p.state === "input-available" || p.state === "output-available"),
   );
@@ -74,36 +73,48 @@ export type ToolCallInfo = {
   label: string;
   status: StepStatus;
   summary: string | null;
-  /** Present only when the tool failed (state "output-error"). */
+  /** Present only when the tool failed or was denied. */
   errorText: string | null;
   sources: { url: string; title: string; domain: string }[];
 };
 
+// Every tool state has a status here, so a state the AI SDK adds fails the
+// typecheck instead of reaching `Steps.Item` as `undefined`, which shows as
+// complete. A tool waiting for approval hasn't started, and a denied one never ran.
+const TOOL_STEP_STATUS = {
+  "input-streaming": "active",
+  "input-available": "active",
+  "approval-requested": "pending",
+  "approval-responded": "active",
+  "output-available": "complete",
+  "output-error": "error",
+  "output-denied": "error",
+} satisfies Record<ToolPart["state"], StepStatus>;
+
 export const getToolCallInfo = (part: ToolPart, labels: ToolLabels = {}): ToolCallInfo => {
   const input = (part.input as Record<string, unknown>) ?? {};
-  const isActive = part.state === "input-streaming" || part.state === "input-available";
   const isComplete = part.state === "output-available";
-  const isError = part.state === "output-error";
-  const name = part.type.replace("tool-", "");
+  // Only a tool that ran gets the past-tense label.
+  const hasRun = isComplete || part.state === "output-error";
+  const name = getToolName(part);
 
   const labelConfig = labels[name];
   const label = labelConfig
-    ? isActive
-      ? labelConfig.active(input)
-      : labelConfig.complete(input)
-    : isActive
-      ? `Running ${name}`
-      : `Ran ${name}`;
+    ? hasRun
+      ? labelConfig.complete(input)
+      : labelConfig.active(input)
+    : hasRun
+      ? `Ran ${name}`
+      : `Running ${name}`;
 
-  const status: StepStatus = isError
-    ? "error"
-    : isActive
-      ? "active"
-      : isComplete
-        ? "complete"
-        : "pending";
+  const status: StepStatus = TOOL_STEP_STATUS[part.state];
 
-  const errorText = isError ? (part.errorText ?? "Tool call failed") : null;
+  const errorText =
+    part.state === "output-error"
+      ? (part.errorText ?? "Tool call failed")
+      : part.state === "output-denied"
+        ? (part.approval.reason ?? "Tool call denied")
+        : null;
 
   // Extract summary from tool output
   const output = isComplete ? (part.output as Record<string, unknown>) : null;
