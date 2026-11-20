@@ -45,7 +45,6 @@ const composerVariablesOf = (root: HTMLElement) => ({
 const insetOf = (px: number) => `calc(${px}px + var(--thread-composer-gap, 0px))`;
 
 describe("Thread.Composer composer variables", () => {
-  const originalRect = HTMLElement.prototype.getBoundingClientRect;
   const OriginalResizeObserver = globalThis.ResizeObserver;
   let composerTop = 540;
 
@@ -64,7 +63,9 @@ describe("Thread.Composer composer variables", () => {
     };
   });
   afterEach(() => {
-    HTMLElement.prototype.getBoundingClientRect = originalRect;
+    // The stub is an own property; assigning the original back would leave one
+    // that hides a stub another file puts on Element.prototype.
+    Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
     globalThis.ResizeObserver = OriginalResizeObserver;
   });
 

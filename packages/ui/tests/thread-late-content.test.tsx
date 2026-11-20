@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { act, render } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { Thread, type ThreadAutoScrollMode, useThread, useThreadVisibility } from "../src/thread";
 import { AUTO_SCROLL_SETTLE_MS } from "../src/thread/thread";
@@ -269,9 +269,9 @@ describe("Thread.Content mounted after Thread.Root", () => {
       jumpTo("m2");
 
       rerender(<Keyed chat="Second" turns={[]} />);
-      await act(async () => rerender(<Keyed chat="Second" turns={["m1", "m2"]} />));
+      rerender(<Keyed chat="Second" turns={["m1", "m2"]} />);
 
-      expect(scrolls).toEqual([JUMP]);
+      await waitFor(() => expect(scrolls).toEqual([JUMP]));
     });
   });
 
@@ -280,7 +280,6 @@ describe("Thread.Content mounted after Thread.Root", () => {
     const TURN_HEIGHT = 40;
     const READING_TOP = 100;
     const PUSHED_DOWN = 200;
-    const originalRect = HTMLElement.prototype.getBoundingClientRect;
     const rowTops = new Map<string, number>();
 
     beforeEach(() => {
@@ -291,7 +290,9 @@ describe("Thread.Content mounted after Thread.Root", () => {
       };
     });
     afterEach(() => {
-      HTMLElement.prototype.getBoundingClientRect = originalRect;
+      // The stub is an own property; assigning the original back would leave one
+      // that hides a stub another file puts on Element.prototype.
+      Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
     });
 
     test("holds the reading position when older turns load in above", async () => {
