@@ -10,7 +10,8 @@
 // The `placeholder` string is drawn by the consumer's CSS, not by this part:
 // it sets aria-placeholder and stamps data-placeholder on the editable while
 // the hint should show, and the consumer styles ::before from those. Rich or
-// animated hints go through Composer.Placeholder as children instead.
+// animated hints are the consumer's own element, passed as children; rendered
+// children win, so the two never draw on top of each other.
 //
 // The editable div renders with no JSX children — the engine owns its DOM;
 // React never reconciles inside it. The inline white-space styles are load-
@@ -23,7 +24,6 @@ import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRenderElement } from "../internal/render/useRenderElement";
 import type { ComposerSubmitOn } from "./keyboard";
 import { useComposer, useComposerContextStore } from "./store";
-import { ComposerTextareaContext } from "./textarea-context";
 import { useComposerEditor } from "./use-composer-editor";
 
 export type ComposerTextareaState = {
@@ -43,7 +43,7 @@ export type ComposerTextareaProps = Omit<
   onValueChange?: (text: string) => void;
   disabled?: boolean;
   autoFocus?: boolean;
-  /** Native-textarea-style placeholder string. Sets aria-placeholder and stamps data-placeholder on the editable while it should show; the consumer's CSS draws it. For rich content, pass a Composer.Placeholder child instead. */
+  /** Native-textarea-style placeholder string. Sets aria-placeholder and stamps data-placeholder on the editable while it should show; the consumer's CSS draws it. With rendered children it only sets aria-placeholder. */
   placeholder?: string;
   /** Which Enter chord sends the message; the other inserts a soft break. Consider pairing "shift-enter" with enterKeyHint="enter". */
   submitOn?: ComposerSubmitOn;
@@ -63,7 +63,7 @@ export type ComposerTextareaProps = Omit<
   "aria-describedby"?: string;
   /** Custom renderer for committed chips in the editor. Defaults to a label-only Chip. */
   renderChip?: (chip: ChipData) => ReactNode;
-  /** Rendered beside the editable, inside the Textarea's relative wrapper. Typically a Composer.Placeholder. A function receives the editor state, to gate the content yourself. */
+  /** A custom placeholder, rendered beside the editable inside the Textarea's relative wrapper. A function receives the editor state, to hide it while filled or composing. While it renders anything, data-placeholder stays off. */
   children?: ReactNode | ((state: ComposerTextareaState) => ReactNode);
 };
 
@@ -143,10 +143,12 @@ export const ComposerTextarea = ({
   // Hidden during composition too: the browser paints marked text before any
   // model commit, so hasContent alone would lag the preview.
   const state: ComposerTextareaState = { disabled, filled: hasContent, composing: isComposing };
-  const showPlaceholder = !!placeholder && !hasContent && !isComposing;
+  const customPlaceholder = typeof children === "function" ? children(state) : children;
+  const hasCustomPlaceholder = customPlaceholder != null && typeof customPlaceholder !== "boolean";
+  const showPlaceholder = !!placeholder && !hasCustomPlaceholder && !hasContent && !isComposing;
 
   const editorContent = (
-    // Relative wrapper so a Composer.Placeholder overlay sizes to the editable,
+    // Relative wrapper so a custom placeholder overlay sizes to the editable,
     // not the outer slot (which may carry padding/scroll from the styled layer).
     <div style={{ position: "relative" }}>
       <div
@@ -184,7 +186,7 @@ export const ComposerTextarea = ({
         style={{ whiteSpace: "break-spaces", overflowWrap: "break-word" }}
         {...editableProps}
       />
-      {typeof children === "function" ? children(state) : children}
+      {customPlaceholder}
     </div>
   );
 
@@ -197,7 +199,7 @@ export const ComposerTextarea = ({
         {
           "data-composer-textarea": "",
           children: (
-            <ComposerTextareaContext value={state}>
+            <>
               {editorContent}
               {chipPortals}
               {name != null && (
@@ -215,7 +217,7 @@ export const ComposerTextarea = ({
                   style={visuallyHiddenStyle}
                 />
               )}
-            </ComposerTextareaContext>
+            </>
           ),
         },
         elementProps,

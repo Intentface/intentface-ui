@@ -845,15 +845,14 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
   const isAskUser = panelState.type === "ask-user" || demoQuestions != null;
   const askUserQuestions = panelState.type === "ask-user" ? panelState.questions : null;
 
-  // The rotating hint is the custom path; every other hint is the native one.
+  // The rotating hint is a custom overlay; while it shows, the string is only
+  // the accessible placeholder.
   const rotatesPlaceholder = !isAskUser && !hasSubmitted && loopingPlaceholder;
-  const placeholder = rotatesPlaceholder
-    ? undefined
-    : isAskUser
-      ? "Or type your own answer..."
-      : hasSubmitted
-        ? "Ask a follow-up question..."
-        : "Ask me anything...";
+  const placeholder = isAskUser
+    ? "Or type your own answer..."
+    : hasSubmitted
+      ? "Ask a follow-up question..."
+      : "Ask me anything...";
 
   const handleSubmit = useCallback(
     async (data: ComposerSubmitData) => {

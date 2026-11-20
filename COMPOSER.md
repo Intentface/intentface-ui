@@ -91,7 +91,7 @@ The contenteditable editor surface, over the flat segment engine. Handles paste 
 | `disabled` | `boolean` | `false` | Read-only when true. |
 | `autoFocus` | `boolean` | `false` | Focus on mount. |
 | `placeholder` | `string` | — | Sets `aria-placeholder` and stamps `data-placeholder` on the editable while the editor is empty and not composing. Your CSS draws it (see below). |
-| `children` | `ReactNode \| (state) => ReactNode` | — | Typically `<Composer.Placeholder>`. A function receives `{ disabled, filled, composing }`, so you can gate the content yourself. |
+| `children` | `ReactNode \| (state) => ReactNode` | — | A custom placeholder, laid over the editable. A function receives `{ disabled, filled, composing }`, to hide it while filled or composing. While it renders anything, `data-placeholder` stays off. |
 
 The package ships no CSS. Add this rule once, and set the colour at each call site (`::before` inherits the editor's font):
 
@@ -106,16 +106,19 @@ The package ships no CSS. Add this rule once, and set the colour at each call si
 }
 ```
 
-#### `Composer.Placeholder`
-Rich or animated placeholder content, for what a string can't express. It gates itself: rendered inside `Composer.Textarea`, it shows only while the editor is empty and not composing. Throws outside `Composer.Textarea`. `keepMounted` keeps it rendered and marks it `data-hidden` while it would be hidden, for exit animations.
+For rich or animated content, pass your own element as `children`. Rendered children win: `data-placeholder` stays off while they render anything, and `placeholder` still sets `aria-placeholder`.
 
 ```tsx
-<Composer.Textarea>
-  <Composer.Placeholder><CustomNode /></Composer.Placeholder>
+<Composer.Textarea placeholder="Ask anything...">
+  {({ filled, composing }) =>
+    !filled && !composing && (
+      <div aria-hidden className="pointer-events-none absolute inset-0"><CustomNode /></div>
+    )
+  }
 </Composer.Textarea>
 ```
 
-Rotating strings live in the styled layer, not the package: the app's `Composer.Placeholder` takes `placeholder={["Ask...", "Search..."]}` and crossfades every ~3s.
+Rotating strings live in the styled layer, not the package: the app's `Composer.Placeholder` takes `placeholder={["Ask...", "Search..."]}` and crossfades every ~3s. The app's `Composer.Textarea` shows it only while the editor is empty.
 
 #### `Composer.Actions`
 Action-row container. Standard `div` props.

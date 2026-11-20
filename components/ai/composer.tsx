@@ -189,14 +189,20 @@ type ComposerTextareaProps = {
   className?: string;
   disabled?: boolean;
   autoFocus?: boolean;
-  /** Hint shown while the editor is empty; drawn by the editable's ::before (see globals.css). */
+  /** Hint shown while the editor is empty; drawn by the editable's ::before (see globals.css). With a Composer.Placeholder child it is only the accessible placeholder. */
   placeholder?: string;
   /** Which Enter chord sends the message; the other inserts a soft break. */
   submitOn?: ComposerSubmitOn;
+  /** A custom placeholder, typically Composer.Placeholder. Shown only while the editor is empty. */
   children?: ReactNode;
 };
 
-const ComposerTextarea = ({ className, disabled = false, ...props }: ComposerTextareaProps) => (
+const ComposerTextarea = ({
+  className,
+  disabled = false,
+  children,
+  ...props
+}: ComposerTextareaProps) => (
   <ComposerPrimitive.Textarea
     disabled={disabled}
     // The wire format carries the icon as an opaque string; narrow it to this
@@ -229,21 +235,33 @@ const ComposerTextarea = ({ className, disabled = false, ...props }: ComposerTex
       className,
     )}
     {...props}
-  />
+  >
+    {/* Composing counts as not empty: the browser paints IME text before the
+        editor reports content. */}
+    {({ filled, composing }) => (filled || composing ? null : children)}
+  </ComposerPrimitive.Textarea>
 );
 
 type ComposerPlaceholderProps =
   | { placeholder: string[]; children?: never; className?: string }
   | { placeholder?: never; children: ReactNode; className?: string };
 
-// The custom path: rotating strings or arbitrary content, drawn by the
-// primitive's overlay. A single string goes through Composer.Textarea's
-// `placeholder` prop instead. The overlay sits outside the editor, so it
-// repeats the editor's font and line height.
+// The custom path: rotating strings or arbitrary content, overlaid on the
+// editor. A single string goes through Composer.Textarea's `placeholder` prop
+// instead. Composer.Textarea shows it only while the editor is empty. The
+// overlay sits outside the editor, so it repeats the editor's font and line
+// height.
 const ComposerPlaceholder = ({ placeholder, children, className }: ComposerPlaceholderProps) => (
-  <ComposerPrimitive.Placeholder className={cn("font-book text-ink-tertiary leading-6", className)}>
+  <div
+    aria-hidden="true"
+    data-slot="composer-placeholder"
+    className={cn(
+      "pointer-events-none absolute inset-0 font-book text-ink-tertiary leading-6",
+      className,
+    )}
+  >
     {placeholder ? <RotatingPlaceholder items={placeholder} /> : children}
-  </ComposerPrimitive.Placeholder>
+  </div>
 );
 
 const RotatingPlaceholder = ({ items }: { items: string[] }) => {

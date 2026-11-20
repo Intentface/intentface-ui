@@ -1,9 +1,8 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { Composer, type ComposerTextareaState } from "../src/composer";
 
 const editor = () => screen.getByRole("textbox", { name: "Message" });
-const overlay = () => document.querySelector("[data-composer-placeholder]");
 
 describe("the native placeholder", () => {
   test("marks an empty editor and sets aria-placeholder", () => {
@@ -14,7 +13,6 @@ describe("the native placeholder", () => {
     );
     expect(editor().hasAttribute("data-placeholder")).toBe(true);
     expect(editor().getAttribute("aria-placeholder")).toBe("Ask anything");
-    expect(overlay()).toBeNull();
   });
 
   test("is absent once the editor has content", () => {
@@ -48,51 +46,41 @@ describe("the native placeholder", () => {
   });
 });
 
-describe("Composer.Placeholder", () => {
-  const ComposerWith = ({ value, keepMounted }: { value?: string; keepMounted?: boolean }) => (
-    <Composer.Root onSubmit={() => {}}>
-      <Composer.Textarea aria-label="Message" value={value}>
-        <Composer.Placeholder keepMounted={keepMounted}>Ask anything</Composer.Placeholder>
-      </Composer.Textarea>
-    </Composer.Root>
-  );
-
-  test("overlays an empty editor, hidden from assistive tech", () => {
-    render(<ComposerWith />);
-    expect(overlay()?.textContent).toBe("Ask anything");
-    expect(overlay()?.getAttribute("aria-hidden")).toBe("true");
-    expect((overlay() as HTMLElement).style.position).toBe("absolute");
+describe("a custom placeholder passed as children", () => {
+  test("wins over the native one, which keeps only aria-placeholder", () => {
+    render(
+      <Composer.Root onSubmit={() => {}}>
+        <Composer.Textarea aria-label="Message" placeholder="Ask anything">
+          <span data-testid="hint">Ask anything</span>
+        </Composer.Textarea>
+      </Composer.Root>,
+    );
+    expect(screen.getByTestId("hint")).toBeTruthy();
+    expect(editor().hasAttribute("data-placeholder")).toBe(false);
+    expect(editor().getAttribute("aria-placeholder")).toBe("Ask anything");
   });
 
-  test("is gone when the editor is filled", () => {
-    render(<ComposerWith value="Hello" />);
-    expect(overlay()).toBeNull();
+  test("leaves the native one on when it renders nothing", () => {
+    const off = false;
+    render(
+      <Composer.Root onSubmit={() => {}}>
+        <Composer.Textarea aria-label="Message" placeholder="Ask anything">
+          {off && <span>Ask anything</span>}
+        </Composer.Textarea>
+      </Composer.Root>,
+    );
+    expect(editor().hasAttribute("data-placeholder")).toBe(true);
   });
 
-  test("is gone during an IME composition", () => {
-    render(<ComposerWith />);
-    act(() => void fireEvent.compositionStart(editor()));
-    expect(overlay()).toBeNull();
-  });
-
-  test("stays mounted with keepMounted, marked data-hidden while it would be hidden", () => {
-    const { rerender } = render(<ComposerWith keepMounted />);
-    expect(overlay()?.hasAttribute("data-hidden")).toBe(false);
-
-    rerender(<ComposerWith keepMounted value="Hello" />);
-    expect(overlay()?.hasAttribute("data-hidden")).toBe(true);
-  });
-
-  test("throws outside Composer.Textarea", () => {
-    const error = spyOn(console, "error").mockImplementation(() => {});
-    expect(() =>
-      render(
-        <Composer.Root onSubmit={() => {}}>
-          <Composer.Placeholder>Ask anything</Composer.Placeholder>
-        </Composer.Root>,
-      ),
-    ).toThrow("<Composer.Placeholder> must be rendered inside <Composer.Textarea>.");
-    error.mockRestore();
+  test("leaves the native one on when a function child returns nothing", () => {
+    render(
+      <Composer.Root onSubmit={() => {}}>
+        <Composer.Textarea aria-label="Message" placeholder="Ask anything">
+          {() => null}
+        </Composer.Textarea>
+      </Composer.Root>,
+    );
+    expect(editor().hasAttribute("data-placeholder")).toBe(true);
   });
 });
 

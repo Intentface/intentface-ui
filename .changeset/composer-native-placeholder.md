@@ -3,7 +3,6 @@
 ---
 
 - [Composer] [Breaking] `Composer.Textarea`'s `placeholder` no longer renders an overlay. It stamps `data-placeholder` on the editable while the editor is empty, so add the `[data-composer-editor][data-placeholder]::before` rule from the docs and set its colour.
-- [Composer] [Breaking] Remove the `placeholder` prop and `data-composer-placeholder-text` from `Composer.Placeholder`. Pass strings through `Composer.Textarea`'s `placeholder`, and use `Composer.Placeholder` for rich content only.
-- [Composer] Change `Composer.Placeholder` to hide itself while the editor is filled or composing, and add `keepMounted` to keep it rendered with `data-hidden`.
-- [Composer] Add a function form of `Composer.Textarea` `children` that receives `{ disabled, filled, composing }`, and `data-composing` on the wrapper.
-- [Composer] [Breaking] `Composer.Placeholder` outside `Composer.Textarea` now throws.
+- [Composer] [Breaking] Remove `Composer.Placeholder`. Pass a string through `Composer.Textarea`'s `placeholder`, or your own element as its `children` for rich content.
+- [Composer] [Breaking] `Composer.Textarea` renders its `children` always, not only while empty. Pass a function to receive `{ disabled, filled, composing }` and hide them yourself.
+- [Composer] Add `data-composing` on the `Composer.Textarea` wrapper during an IME composition.

@@ -13,7 +13,6 @@ export { filterArrayItems, fuzzyScore, suggestionRemainder } from "./fuzzy";
 export * as Composer from "./index.parts";
 export type { ComposerSubmitOn } from "./keyboard";
 export type { ComposerPanelProps } from "./panel";
-export type { ComposerPlaceholderProps, ComposerPlaceholderState } from "./placeholder";
 export type { ComposerPopoverProps } from "./popover";
 export type { ActiveTokenState, RegisteredPrefix } from "./prefix-detection";
 export { CLOSED_COMMAND_STATE, detectActivePrefix } from "./prefix-detection";

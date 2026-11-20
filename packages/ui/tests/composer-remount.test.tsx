@@ -9,16 +9,19 @@ import { type ComposerStore, useComposer } from "../src/composer/store";
 // composer's state lives on through both, so nothing may be reset there
 // (CHAT-41: the placeholder drew over a controlled value after one).
 
-const placeholder = () => document.querySelector("[data-composer-placeholder]");
+const placeholder = () => document.querySelector("[data-composer-editor][data-placeholder]");
 
 const ControlledComposer = ({ initial }: { initial: string }) => {
   const [value, setValue] = useState(initial);
   return (
     <>
       <Composer.Root onSubmit={() => {}}>
-        <Composer.Textarea aria-label="Message" value={value} onValueChange={setValue}>
-          <Composer.Placeholder>Ask a follow-up…</Composer.Placeholder>
-        </Composer.Textarea>
+        <Composer.Textarea
+          aria-label="Message"
+          placeholder="Ask a follow-up…"
+          value={value}
+          onValueChange={setValue}
+        />
       </Composer.Root>
       <button type="button" onClick={() => setValue("")}>
         Clear
@@ -67,9 +70,7 @@ const AttachmentProbe = () => {
 const HideableComposer = ({ visible }: { visible: boolean }) => (
   <Activity mode={visible ? "visible" : "hidden"}>
     <Composer.Root onSubmit={() => {}}>
-      <Composer.Textarea aria-label="Message" value="A draft">
-        <Composer.Placeholder>Ask anything</Composer.Placeholder>
-      </Composer.Textarea>
+      <Composer.Textarea aria-label="Message" placeholder="Ask anything" value="A draft" />
       <AttachmentProbe />
     </Composer.Root>
   </Activity>
