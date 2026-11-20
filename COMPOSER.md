@@ -18,9 +18,7 @@ const onSubmit = (data: ComposerSubmitData) => {
 
 <Composer onSubmit={onSubmit}>
   <Composer.Container>
-    <Composer.Textarea>
-      <Composer.Placeholder placeholder="Ask anything..." />
-    </Composer.Textarea>
+    <Composer.Textarea placeholder="Ask anything..." />
     <Composer.Actions className="flex justify-end">
       <Composer.Submit />
     </Composer.Actions>
@@ -92,18 +90,32 @@ The contenteditable editor surface, over the flat segment engine. Handles paste 
 | `onValueChange` | `(text) => void` | — | Pair with `value`. |
 | `disabled` | `boolean` | `false` | Read-only when true. |
 | `autoFocus` | `boolean` | `false` | Focus on mount. |
-| `children` | `ReactNode` | — | Typically `<Composer.Placeholder>`. |
+| `placeholder` | `string` | — | Sets `aria-placeholder` and stamps `data-placeholder` on the editable while the editor is empty and not composing. Your CSS draws it (see below). |
+| `children` | `ReactNode \| (state) => ReactNode` | — | Typically `<Composer.Placeholder>`. A function receives `{ disabled, filled, composing }`, so you can gate the content yourself. |
 
-#### `Composer.Placeholder`
-Empty-state placeholder. Three forms:
+The package ships no CSS. Add this rule once, and set the colour at each call site (`::before` inherits the editor's font):
 
-```tsx
-<Composer.Placeholder placeholder="Ask anything..." />
-<Composer.Placeholder placeholder={["Ask...", "Search...", "Generate..."]} />
-<Composer.Placeholder><CustomNode /></Composer.Placeholder>
+```css
+[data-composer-editor][data-placeholder]::before {
+  content: attr(aria-placeholder);
+  content: attr(aria-placeholder) / ""; /* alt text hides it from assistive tech; older Safari and Firefox drop this line, so the plain one goes first */
+  float: left;
+  float: inline-start; /* fixes RTL; newer than Chrome 111, so left goes first */
+  height: 0; /* with float, keeps the caret before the text */
+  pointer-events: none;
+}
 ```
 
-The array form rotates every ~3s with a fade animation.
+#### `Composer.Placeholder`
+Rich or animated placeholder content, for what a string can't express. It gates itself: rendered inside `Composer.Textarea`, it shows only while the editor is empty and not composing. Throws outside `Composer.Textarea`. `keepMounted` keeps it rendered and marks it `data-hidden` while it would be hidden, for exit animations.
+
+```tsx
+<Composer.Textarea>
+  <Composer.Placeholder><CustomNode /></Composer.Placeholder>
+</Composer.Textarea>
+```
+
+Rotating strings live in the styled layer, not the package: the app's `Composer.Placeholder` takes `placeholder={["Ask...", "Search..."]}` and crossfades every ~3s.
 
 #### `Composer.Actions`
 Action-row container. Standard `div` props.
@@ -132,7 +144,7 @@ Button that opens the native file picker. Accepts `IconButton` props.
 ```tsx
 <Composer.Container>
   <Composer.Attachments accept="image/*" maxFiles={3} />
-  <Composer.Textarea><Composer.Placeholder placeholder="..." /></Composer.Textarea>
+  <Composer.Textarea placeholder="..." />
   <Composer.Actions className="flex justify-between">
     <Composer.AttachmentTrigger><PaperClipIcon /></Composer.AttachmentTrigger>
     <Composer.Submit />
@@ -273,9 +285,7 @@ Pass `questions` to switch the composer into structured-question mode. The defau
     </Composer.PanelItem>
   </Composer.Panel>
   <Composer.Container>
-    <Composer.Textarea>
-      <Composer.Placeholder placeholder="Type an answer..." />
-    </Composer.Textarea>
+    <Composer.Textarea placeholder="Type an answer..." />
     <Composer.Actions className="flex justify-end gap-2">
       <Composer.AskUserHints />
       <Composer.AskUserDismiss />

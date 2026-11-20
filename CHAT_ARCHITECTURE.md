@@ -602,9 +602,7 @@ const ChatSurface = ({ chatId }: { chatId: string }) => {
 
           <Composer.Container>
             <Composer.Attachments />
-            <Composer.Textarea autoFocus>
-              <Composer.Placeholder placeholder="Ask anything…" />
-            </Composer.Textarea>
+            <Composer.Textarea autoFocus placeholder="Ask anything…" />
             <Composer.Actions>
               {panelState.type === "ask-user" ? (
                 <>

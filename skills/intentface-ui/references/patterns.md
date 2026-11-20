@@ -45,7 +45,7 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
 - The composer slot keeps to the column's width, `--chat-column`, so it never covers the viewport's scrollbar. `scrollbar-gutter: stable` keeps the column from shifting when the scrollbar appears. The slot is click-through, and only the composer catches the pointer, so clicks and drags around the composer reach the transcript and its scrollbar.
 - `<Composer.Attachments maxFiles={0} />` turns files off. The composer accepts dropped and pasted files by default, and this skeleton has no strip to show them. `references/attachments.md` builds a chat that takes files.
 - The textarea needs its own `aria-label`. Its `placeholder` draws the hint and sets `aria-placeholder`, which describes the field but doesn't name it.
-- The textarea carries the padding and the type, and the placeholder takes only a color. The package lays the placeholder over the editor, so any position or padding on it shifts it away from the caret.
+- The textarea carries the padding and the type, and the placeholder takes only a color. The `::before` rule draws it inside the editor, so it follows the caret. A `Composer.Placeholder` overlay is laid over the editor, so any position or padding on it shifts it away from the caret.
 - `"submitted"` counts as generating, so the button turns to stop the moment the message is sent, before the first token.
 - `48rem` and `1rem` stand for the app's own tokens.
 - `Row` is the app's memoized message row, shown in the section after next.

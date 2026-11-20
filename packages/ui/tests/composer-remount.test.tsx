@@ -17,7 +17,7 @@ const ControlledComposer = ({ initial }: { initial: string }) => {
     <>
       <Composer.Root onSubmit={() => {}}>
         <Composer.Textarea aria-label="Message" value={value} onValueChange={setValue}>
-          <Composer.Placeholder placeholder="Ask a follow-up…" />
+          <Composer.Placeholder>Ask a follow-up…</Composer.Placeholder>
         </Composer.Textarea>
       </Composer.Root>
       <button type="button" onClick={() => setValue("")}>
@@ -68,7 +68,7 @@ const HideableComposer = ({ visible }: { visible: boolean }) => (
   <Activity mode={visible ? "visible" : "hidden"}>
     <Composer.Root onSubmit={() => {}}>
       <Composer.Textarea aria-label="Message" value="A draft">
-        <Composer.Placeholder placeholder="Ask anything" />
+        <Composer.Placeholder>Ask anything</Composer.Placeholder>
       </Composer.Textarea>
       <AttachmentProbe />
     </Composer.Root>

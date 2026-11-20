@@ -1,32 +1,59 @@
 "use client";
 
-// Composer.Placeholder — the textarea's empty-state overlay content. Renders a
-// plain element with a part attribute; it carries no styling. Rotating through
-// several placeholders (and any crossfade) is a presentation concern and lives
-// in the styled layer, not here.
+// Composer.Placeholder — rich or animated placeholder content for the custom
+// path. It overlays the editable and gates itself on the editor's state, so it
+// shows only while the editor is empty and not composing. A plain string hint
+// belongs on Composer.Textarea's `placeholder` prop instead. Beyond the overlay
+// position it carries no styling; rotation and crossfades are a presentation
+// concern for the styled layer.
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRenderElement } from "../internal/render/useRenderElement";
+import { useComposerTextareaState } from "./textarea-context";
 
-export type ComposerPlaceholderProps = Omit<PrimitiveProps<"div">, "children"> &
-  ({ placeholder: string; children?: never } | { placeholder?: never; children: ReactNode });
+export type ComposerPlaceholderState = {
+  /** Present as data-hidden while the placeholder would be hidden. Only visible with keepMounted. */
+  hidden: boolean;
+};
+
+export type ComposerPlaceholderProps = Omit<
+  PrimitiveProps<"div", ComposerPlaceholderState>,
+  "children"
+> & {
+  children: ReactNode;
+  /** Keep rendering while the editor has content or composes, marked data-hidden. Default false. */
+  keepMounted?: boolean;
+};
+
+const overlayStyle: CSSProperties = { position: "absolute", inset: 0, pointerEvents: "none" };
 
 export const ComposerPlaceholder = ({
-  placeholder,
   children,
+  keepMounted = false,
   className,
   render,
   style,
   ...elementProps
-}: ComposerPlaceholderProps) =>
-  useRenderElement(
+}: ComposerPlaceholderProps) => {
+  const { filled, composing } = useComposerTextareaState("Placeholder");
+  const hidden = filled || composing;
+
+  return useRenderElement(
     "div",
     { className, render, style },
     {
+      enabled: !hidden || keepMounted,
+      state: { hidden },
       props: [
-        { "data-composer-placeholder-text": "", children: placeholder ?? children },
+        {
+          "data-composer-placeholder": "",
+          "aria-hidden": true,
+          style: overlayStyle,
+          children,
+        },
         elementProps,
       ],
     },
   );
+};

@@ -7,6 +7,11 @@
 // (data-composer-editor="", data-command-badge, data-mention-chip). No
 // styling crosses this boundary.
 //
+// The `placeholder` string is drawn by the consumer's CSS, not by this part:
+// it sets aria-placeholder and stamps data-placeholder on the editable while
+// the hint should show, and the consumer styles ::before from those. Rich or
+// animated hints go through Composer.Placeholder as children instead.
+//
 // The editable div renders with no JSX children — the engine owns its DOM;
 // React never reconciles inside it. The inline white-space styles are load-
 // bearing, not cosmetic: without break-spaces, the browser corrupts
@@ -18,6 +23,7 @@ import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRenderElement } from "../internal/render/useRenderElement";
 import type { ComposerSubmitOn } from "./keyboard";
 import { useComposer, useComposerContextStore } from "./store";
+import { ComposerTextareaContext } from "./textarea-context";
 import { useComposerEditor } from "./use-composer-editor";
 
 export type ComposerTextareaState = {
@@ -25,6 +31,8 @@ export type ComposerTextareaState = {
   disabled: boolean;
   /** Present as data-filled while the editor has content. */
   filled: boolean;
+  /** Present as data-composing during an IME composition. */
+  composing: boolean;
 };
 
 export type ComposerTextareaProps = Omit<
@@ -35,7 +43,7 @@ export type ComposerTextareaProps = Omit<
   onValueChange?: (text: string) => void;
   disabled?: boolean;
   autoFocus?: boolean;
-  /** Native-textarea-style placeholder string. For rich placeholder content, pass children instead (children win when both are set). */
+  /** Native-textarea-style placeholder string. Sets aria-placeholder and stamps data-placeholder on the editable while it should show; the consumer's CSS draws it. For rich content, pass a Composer.Placeholder child instead. */
   placeholder?: string;
   /** Which Enter chord sends the message; the other inserts a soft break. Consider pairing "shift-enter" with enterKeyHint="enter". */
   submitOn?: ComposerSubmitOn;
@@ -55,8 +63,8 @@ export type ComposerTextareaProps = Omit<
   "aria-describedby"?: string;
   /** Custom renderer for committed chips in the editor. Defaults to a label-only Chip. */
   renderChip?: (chip: ChipData) => ReactNode;
-  /** Placeholder overlay content, shown while the editor is empty. */
-  children?: ReactNode;
+  /** Rendered beside the editable, inside the Textarea's relative wrapper. Typically a Composer.Placeholder. A function receives the editor state, to gate the content yourself. */
+  children?: ReactNode | ((state: ComposerTextareaState) => ReactNode);
 };
 
 // Focusable-but-invisible (not display:none — Chrome refuses to submit forms
@@ -132,9 +140,14 @@ export const ComposerTextarea = ({
       onCut,
     });
 
+  // Hidden during composition too: the browser paints marked text before any
+  // model commit, so hasContent alone would lag the preview.
+  const state: ComposerTextareaState = { disabled, filled: hasContent, composing: isComposing };
+  const showPlaceholder = !!placeholder && !hasContent && !isComposing;
+
   const editorContent = (
-    // Relative wrapper so the placeholder overlay sizes to the editable, not
-    // the outer slot (which may carry padding/scroll from the styled layer).
+    // Relative wrapper so a Composer.Placeholder overlay sizes to the editable,
+    // not the outer slot (which may carry padding/scroll from the styled layer).
     <div style={{ position: "relative" }}>
       <div
         ref={attachRoot}
@@ -162,6 +175,7 @@ export const ComposerTextarea = ({
         aria-controls={commandsActive ? store.listboxId : undefined}
         aria-activedescendant={activeOptionId ?? undefined}
         data-composer-editor=""
+        data-placeholder={showPlaceholder ? "" : undefined}
         spellCheck={spellCheck}
         autoCapitalize={autoCapitalize}
         enterKeyHint={enterKeyHint}
@@ -170,17 +184,7 @@ export const ComposerTextarea = ({
         style={{ whiteSpace: "break-spaces", overflowWrap: "break-word" }}
         {...editableProps}
       />
-      {/* Hidden during composition too: the browser paints marked text before
-          any model commit, so hasContent alone would lag the preview. */}
-      {!hasContent && !isComposing && (children ?? placeholder) && (
-        <div
-          data-composer-placeholder=""
-          style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-          aria-hidden="true"
-        >
-          {children ?? placeholder}
-        </div>
-      )}
+      {typeof children === "function" ? children(state) : children}
     </div>
   );
 
@@ -188,12 +192,12 @@ export const ComposerTextarea = ({
     "div",
     { className, render, style },
     {
-      state: { disabled, filled: hasContent },
+      state,
       props: [
         {
           "data-composer-textarea": "",
           children: (
-            <>
+            <ComposerTextareaContext value={state}>
               {editorContent}
               {chipPortals}
               {name != null && (
@@ -211,7 +215,7 @@ export const ComposerTextarea = ({
                   style={visuallyHiddenStyle}
                 />
               )}
-            </>
+            </ComposerTextareaContext>
           ),
         },
         elementProps,
