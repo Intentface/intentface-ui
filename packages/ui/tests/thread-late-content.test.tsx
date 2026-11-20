@@ -217,6 +217,23 @@ describe("Thread.Content mounted after Thread.Root", () => {
 
       expect(part("output").textContent).toBe("new");
     });
+
+    test("ignores an intersection delivered after Content unmounted", async () => {
+      const { part, showTurns } = renderChat({ turns: ["old"], children: <CurrentMessage /> });
+      const row = part('[data-message-id="old"]');
+      const queued = watching(intersectionWatchers, row);
+      await reportRowInView(row);
+      showTurns([]);
+
+      await act(async () => {
+        for (const { callback } of queued) {
+          callback([{ target: row, isIntersecting: true }] as never[]);
+        }
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      });
+
+      expect(part("output").textContent).toBe("");
+    });
   });
 
   describe("scrollToMessage called before Content mounts", () => {

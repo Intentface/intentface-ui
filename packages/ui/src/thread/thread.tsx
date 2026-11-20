@@ -770,8 +770,11 @@ const useThreadScroll = (
 
     const visibleIds = new Set<string>();
     let frame: number | null = null;
+    // disconnect() leaves an already queued intersection callback to run, so
+    // cleanup also has to stop it publishing rows of a Content that is gone.
+    let isTracking = true;
     const syncVisibility = () => {
-      if (frame !== null) return;
+      if (!isTracking || frame !== null) return;
       frame = requestAnimationFrame(() => {
         frame = null;
         const visible: string[] = [];
@@ -825,6 +828,7 @@ const useThreadScroll = (
     reconcileRows();
 
     return () => {
+      isTracking = false;
       if (frame !== null) cancelAnimationFrame(frame);
       intersections.disconnect();
       rowChanges.disconnect();
