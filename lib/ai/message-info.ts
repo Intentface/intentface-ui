@@ -2,7 +2,8 @@
 // messages group into turns, and how reasoning, tool chains, and sources are
 // grouped and labelled for rendering. These encode this app's conventions
 // (bold `**Header**` reasoning sections, dedup-by-domain sources, the
-// chain-of-thought grouping) over the package's generic part contracts.
+// chain-of-thought grouping) over the package's generic part contracts and the
+// AI SDK's tool parts.
 
 import {
   type ChatMessage,
@@ -11,12 +12,12 @@ import {
   isReasoningPart,
   isSourceUrlPart,
   isTextPart,
-  isToolPart,
   type ReasoningPart,
   type TextPart,
-  type ToolPart,
   type UnknownPart,
 } from "@intentface/ui/types";
+import { isToolUIPart } from "ai";
+import type { AnyPart, ToolPart } from "@/lib/ai/types";
 
 // ---------------------------------------------------------------------------
 // Segmentation
@@ -39,11 +40,11 @@ export type MessageSegment =
  * Maps a single message part to its segment type.
  * Returns `null` for parts that are not rendered chronologically.
  */
-export const partSegmentType = (part: UnknownPart): SegmentType | null => {
+export const partSegmentType = (part: AnyPart): SegmentType | null => {
   if (isReasoningPart(part)) return "reasoning";
   if (isTextPart(part)) return "text";
   if (isFilePart(part)) return "file";
-  if (isToolPart(part)) return "tool";
+  if (isToolUIPart(part)) return "tool";
   return null;
 };
 
@@ -53,7 +54,7 @@ export const partSegmentType = (part: UnknownPart): SegmentType | null => {
  * preserves chronological order for interleaved rendering (e.g. reasoning
  * interspersed with tool calls).
  */
-export const getSegmentedParts = (parts: readonly UnknownPart[]): MessageSegment[] => {
+export const getSegmentedParts = (parts: readonly AnyPart[]): MessageSegment[] => {
   const segments: MessageSegment[] = [];
   for (const part of parts) {
     const segType = partSegmentType(part);

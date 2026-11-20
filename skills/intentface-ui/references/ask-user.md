@@ -39,8 +39,7 @@ export const askUser = tool({
 
 import { useChat } from "@ai-sdk/react";
 import { type AskUserQuestion, Composer, type ComposerSubmitData } from "@intentface/ui/composer";
-import { isToolPart } from "@intentface/ui/types";
-import { lastAssistantMessageIsCompleteWithToolCalls, type UIMessage } from "ai";
+import { isToolUIPart, lastAssistantMessageIsCompleteWithToolCalls, type UIMessage } from "ai";
 import { useState } from "react";
 import { Question } from "./question";
 
@@ -51,10 +50,10 @@ const usePendingAskUser = (messages: UIMessage[]): PendingAskUser | null => {
     .at(-1)
     ?.parts.find(
       (candidate) =>
-        isToolPart(candidate) && candidate.type === "tool-askUser" && candidate.state === "input-available",
+        isToolUIPart(candidate) && candidate.type === "tool-askUser" && candidate.state === "input-available",
     );
   const next =
-    part && isToolPart(part)
+    part && isToolUIPart(part)
       ? { toolCallId: part.toolCallId, ...(part.input as { questions: AskUserQuestion[] }) }
       : null;
   const [pending, setPending] = useState(next);

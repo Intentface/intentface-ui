@@ -35,7 +35,7 @@ Each entry point is its own import and has its own docs page.
 | `@intentface/ui/shell` | A collapsible, resizable sidebar beside the content. https://ui.intentface.com/primitives/shell.md |
 | `@intentface/ui/nav` | A nav tree with roving focus, typeahead and collapsible groups. https://ui.intentface.com/primitives/nav.md |
 | `@intentface/ui/tabs` | Closable tabs whose panel renders in the layout or anchored to its tab. https://ui.intentface.com/primitives/tabs.md |
-| `@intentface/ui/types` | The message types and part type guards, such as `isToolPart`. No page, so read the exported types and their JSDoc. |
+| `@intentface/ui/types` | The message types and part type guards, such as `isTextPart`. It has no tool part types, so use `ToolUIPart`, `DynamicToolUIPart` and `isToolUIPart` from `ai`. No page, so read the exported types and their JSDoc. |
 | `@intentface/ui/chip-markdown` | The chip wire format in message text: `encodeChipMarkdown` and `parseChipSegments`. No page, so read the exported types and their JSDoc. |
 | `@intentface/ui/generative` | Experimental. Checks and reads a model's UI tool call against a catalog of the app's components. https://ui.intentface.com/generative/catalog.md |
 
@@ -141,10 +141,10 @@ An AI SDK message holds a list of parts. Split them into segments in order, and 
 
 | Rule | Summary |
 |------|---------|
-| Segment the parts | Group neighboring parts of one kind into `text`, `reasoning`, `tool` and `file` segments, in order, with a `getSegmentedParts` of the app's own (`references/patterns.md` has one). It skips kinds it doesn't render, such as sources, and `dynamic-tool` parts, which MCP and other dynamic tools produce, and merges the text on either side of a skipped part. A chat with dynamic tools renders `message.parts` in one pass instead, so each tool keeps its place. |
+| Segment the parts | Group neighboring parts of one kind into `text`, `reasoning`, `tool` and `file` segments, in order, with a `getSegmentedParts` of the app's own (`references/patterns.md` has one). The AI SDK's `isToolUIPart` puts static tools and `dynamic-tool` parts, which MCP and other dynamic tools produce, in the `tool` segments. It skips kinds it doesn't render, such as sources and data parts, and merges the text on either side of a skipped part. |
 | Text segments | Render the user's text with `Message.Text`, never a plain markdown renderer. The composer writes chips into the text as `[Label](chip:prefix:value)`, which a markdown renderer shows as links. Render the assistant's text with the app's markdown renderer, through `renderText` when it can hold chips. |
 | Reasoning segments | A reasoning segment becomes a `Reasoning.Root`. Its parts' `state` says whether it is still streaming. |
-| Tool segments | A tool segment becomes `Steps` items, one per tool part, keyed by `toolCallId`. Map each of the AI SDK's tool states to a status of the app's own, including the approval states and `"output-denied"`. A state you don't map gives `undefined`, and `Steps.Item` shows it as complete. The status reaches the DOM as `data-status`. |
+| Tool segments | A tool segment becomes `Steps` items, one per tool part, keyed by `toolCallId`. Map each of the AI SDK's tool states to a status of the app's own, including the approval states and `"output-denied"`. Check the map with `satisfies Record<ToolUIPart["state"], string>`, since a state you don't map gives `undefined`, and `Steps.Item` shows it as complete. The status reaches the DOM as `data-status`. |
 | File segments | A file segment's parts render with the app's own preview. |
 
 ## Chat lifecycle

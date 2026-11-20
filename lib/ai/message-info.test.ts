@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import type { ChatMessage, MessagePart } from "@intentface/ui/types";
+import type { ChatMessage } from "@intentface/ui/types";
 import { getSegmentedParts, groupTurns, type Turn } from "@/lib/ai/message-info";
+import { getToolCallInfo } from "@/lib/ai/steps-info";
+import type { AnyPart, ToolPart } from "@/lib/ai/types";
 
 describe("getSegmentedParts", () => {
   test("groups adjacent same-typed parts and keeps chronology", () => {
-    const parts: MessagePart[] = [
+    const parts: AnyPart[] = [
       { type: "reasoning", text: "thinking" },
       { type: "reasoning", text: "more" },
-      { type: "tool-webSearch", toolCallId: "1", state: "output-available" },
+      { type: "tool-webSearch", toolCallId: "1", state: "output-available", input: {}, output: [] },
       { type: "text", text: "answer" },
       { type: "step-start" },
     ];
@@ -17,9 +19,103 @@ describe("getSegmentedParts", () => {
     expect(segments[0]?.parts).toHaveLength(2);
   });
 
-  test("ignores parts without state/toolCallId even when tool-prefixed", () => {
-    const segments = getSegmentedParts([{ type: "tool-broken" }]);
-    expect(segments).toHaveLength(0);
+  test("keeps a dynamic tool part in place between two texts", () => {
+    const dynamicTool: ToolPart = {
+      type: "dynamic-tool",
+      toolName: "mcpLookup",
+      toolCallId: "1",
+      state: "output-available",
+      input: {},
+      output: {},
+    };
+    const segments = getSegmentedParts([
+      { type: "text", text: "before" },
+      dynamicTool,
+      { type: "text", text: "after" },
+    ]);
+
+    expect(segments.map((s) => s.type)).toEqual(["text", "tool", "text"]);
+    expect(segments[1]?.parts).toEqual([dynamicTool]);
+  });
+
+  test("groups a dynamic tool with the static tool next to it", () => {
+    const segments = getSegmentedParts([
+      { type: "tool-webSearch", toolCallId: "1", state: "input-available", input: {} },
+      {
+        type: "dynamic-tool",
+        toolName: "mcpLookup",
+        toolCallId: "2",
+        state: "input-available",
+        input: {},
+      },
+    ]);
+
+    expect(segments).toHaveLength(1);
+    expect(segments[0]?.parts).toHaveLength(2);
+  });
+});
+
+describe("getToolCallInfo", () => {
+  const call = { type: "tool-deploy", toolCallId: "1", input: {} } as const;
+
+  test("a tool waiting for approval is pending, not complete", () => {
+    const info = getToolCallInfo({
+      ...call,
+      state: "approval-requested",
+      approval: { id: "a1" },
+    });
+
+    expect(info).toMatchObject({ status: "pending", label: "Running deploy", errorText: null });
+  });
+
+  test("an approved tool that hasn't run yet is active", () => {
+    const info = getToolCallInfo({
+      ...call,
+      state: "approval-responded",
+      approval: { id: "a1", approved: true },
+    });
+
+    expect(info.status).toBe("active");
+  });
+
+  test("a denied tool is an error that shows the reason", () => {
+    const denied = { ...call, state: "output-denied" } as const;
+
+    expect(
+      getToolCallInfo({ ...denied, approval: { id: "a1", approved: false, reason: "Not now" } }),
+    ).toMatchObject({ status: "error", label: "Running deploy", errorText: "Not now" });
+    expect(getToolCallInfo({ ...denied, approval: { id: "a1", approved: false } }).errorText).toBe(
+      "Tool call denied",
+    );
+  });
+
+  test("the four older states keep their status", () => {
+    const statusOf = (part: ToolPart) => getToolCallInfo(part).status;
+
+    expect(statusOf({ ...call, state: "input-streaming" })).toBe("active");
+    expect(statusOf({ ...call, state: "input-available" })).toBe("active");
+    expect(statusOf({ ...call, state: "output-available", output: {} })).toBe("complete");
+    expect(statusOf({ ...call, state: "output-error", errorText: "boom" })).toBe("error");
+  });
+
+  test("a dynamic tool is labelled by its tool name", () => {
+    const info = getToolCallInfo(
+      {
+        type: "dynamic-tool",
+        toolName: "mcpLookup",
+        toolCallId: "1",
+        state: "output-available",
+        input: { query: "docs" },
+        output: { summary: "Found 2 pages" },
+      },
+      { mcpLookup: { active: () => "Looking up", complete: (i) => `Looked up ${i.query}` } },
+    );
+
+    expect(info).toMatchObject({
+      status: "complete",
+      label: "Looked up docs",
+      summary: "Found 2 pages",
+    });
   });
 });
 

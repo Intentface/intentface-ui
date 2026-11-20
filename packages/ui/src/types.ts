@@ -11,7 +11,7 @@
 
 /**
  * The minimal part contract. Every part has a `type`; parts this package does
- * not understand (e.g. `step-start`, `dynamic-tool`, future additions) are
+ * not understand (e.g. `step-start`, tool parts, future additions) are
  * carried through untouched.
  */
 export type UnknownPart = { type: string };
@@ -42,21 +42,6 @@ export type SourceUrlPart = {
   title?: string;
 };
 
-export type ToolPartState =
-  | "input-streaming"
-  | "input-available"
-  | "output-available"
-  | "output-error";
-
-export type ToolPart<Input = unknown, Output = unknown> = {
-  type: `tool-${string}`;
-  toolCallId: string;
-  state: ToolPartState;
-  input?: Input;
-  output?: Output;
-  errorText?: string;
-};
-
 export type DataPart = {
   type: `data-${string}`;
   id?: string;
@@ -68,7 +53,6 @@ export type MessagePart =
   | ReasoningPart
   | FilePart
   | SourceUrlPart
-  | ToolPart
   | DataPart
   | UnknownPart;
 
@@ -104,6 +88,3 @@ export const isFilePart = (part: UnknownPart): part is FilePart => part.type ===
 
 export const isSourceUrlPart = (part: UnknownPart): part is SourceUrlPart =>
   part.type === "source-url";
-
-export const isToolPart = (part: UnknownPart): part is ToolPart =>
-  part.type.startsWith("tool-") && "state" in part && "toolCallId" in part;

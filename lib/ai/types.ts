@@ -34,6 +34,12 @@ export type AppPart<Type extends AppUIMessage["parts"][number]["type"]> = Extrac
   { type: Type }
 >;
 
+/** A tool part of any tool: a static one, or a dynamic one such as an MCP server's. */
+export type ToolPart = sdk.ToolUIPart | sdk.DynamicToolUIPart;
+
+/** Any message part, whatever the app's tools and data types. */
+export type AnyPart = sdk.UIMessagePart<sdk.UIDataTypes, sdk.UITools>;
+
 // The askUser tool's input, from its zod schema; the composer's generic question
 // contract is satisfied structurally (see the assignability lock below).
 export type AskUserInput = sdk.InferToolInput<typeof askUser>;
