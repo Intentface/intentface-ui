@@ -522,7 +522,7 @@ const createEditorEngine = (getDependencies: () => EngineDependencies) => {
 
   const handlePaste = (event: ClipboardEvent) => {
     const items = event.clipboardData?.items;
-    if (items) {
+    if (items && getDependencies().store.attachmentConfigRef.current.enabled) {
       const files = [...items]
         .filter((item) => item.kind === "file")
         .map((item) => item.getAsFile())

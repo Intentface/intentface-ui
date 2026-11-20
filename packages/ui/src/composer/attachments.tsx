@@ -5,10 +5,11 @@
 // dropzone, error) is presentation: the styled layer composes it from
 // useComposer((c) => c.attachments) and the Attachments primitives.
 
-import type { ChangeEvent, ReactNode } from "react";
+import { type ChangeEvent, type ReactNode, useEffect } from "react";
 import { type AttachmentItem, revokeAttachmentUrl, toAttachmentItem } from "../attachments";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRenderElement } from "../internal/render/useRenderElement";
+import { useIsomorphicLayoutEffect } from "./internals";
 import { useComposer, useComposerContextStore } from "./store";
 
 export type ComposerAttachmentsProps = {
@@ -19,7 +20,7 @@ export type ComposerAttachmentsProps = {
   // Cleanup for a removed item, or a sent one once onSubmit has settled.
   // Defaults to revoking blob URLs.
   destroy?: (item: AttachmentItem) => void;
-  // Policy — the package imposes none: accept everything, no caps.
+  // Policy — once mounted, accepts every file with no caps unless set.
   accept?: string;
   maxFiles?: number;
   maxFileSize?: number;
@@ -41,8 +42,36 @@ export const ComposerAttachments = ({
   const store = useComposerContextStore();
   const attachments = useComposer((composer) => composer.attachments);
 
-  store.attachmentConfigRef.current = { accept, maxFiles, maxFileSize, convert, destroy };
-  attachments.globalDropRef.current = globalDrop;
+  const { globalDropRef, fileInputRef } = attachments;
+
+  useIsomorphicLayoutEffect(() => {
+    store.attachmentConfigRef.current = {
+      enabled: true,
+      accept,
+      maxFiles,
+      maxFileSize,
+      convert,
+      destroy,
+    };
+    globalDropRef.current = globalDrop;
+    return () => {
+      store.attachmentConfigRef.current = { ...store.attachmentConfigRef.current, enabled: false };
+      globalDropRef.current = false;
+    };
+  }, [store, globalDropRef, accept, maxFiles, maxFileSize, convert, destroy, globalDrop]);
+
+  // Removed while the composer stays: the strip usually goes with it, so the
+  // files it held must not be sent unseen. React also runs this cleanup under
+  // StrictMode and a hidden <Activity>, where the input stays in the document
+  // and the files live on. When the whole composer goes, the root decides.
+  useEffect(() => {
+    const input = fileInputRef.current;
+    return () => {
+      if (input?.isConnected || !store.rootRef.current?.isConnected) return;
+      store.setDragging(false);
+      store.resetAttachments();
+    };
+  }, [store, fileInputRef]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.currentTarget.files) {

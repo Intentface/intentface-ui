@@ -56,7 +56,7 @@ In a non-interactive run, such as `claude -p` or `codex exec`, ask nothing. Buil
 |------|------|------|------|
 | Auto-scroll | `<Thread.Root autoScroll>`: `"follow"` follows the stream and lands each new turn at the top, `"jump"` lands it without following, `"bottom"` keeps the newest message at the bottom, `"off"` does neither | `"follow"` | This file |
 | Send key | `<Composer.Textarea submitOn>`: `"enter"` or `"shift-enter"` | `"enter"` | This file |
-| Attachments | `<Composer.Attachments accept maxFiles maxFileSize globalDrop>` for the accepted types, the limits, and drops anywhere on the page | Off, with `<Composer.Attachments maxFiles={0} />`. Without it, the composer takes every dropped or pasted file, with no limits | `references/attachments.md` |
+| Attachments | `<Composer.Attachments accept maxFiles maxFileSize globalDrop>` for the accepted types, the limits, and drops anywhere on the page | Off until `Composer.Attachments` is mounted. Mounted, it takes every dropped or pasted file, with no limits unless set | `references/attachments.md` |
 | Mentions and commands | `<Composer.Root commands>`: `@` mentions that insert chips, `/` commands that run an action, or a prefix of the app's own, with items listed or loaded as the user types | None | This file |
 | Command list placement | `Composer.Popover` floating at the typed token, or `Composer.Panel` above the input, anchored or in flow with `<Composer.Panel anchor={false}>` | `Composer.Popover` | This file |
 | Questions from the model | `<Composer.Root questions>`, fed by a client-side tool and answered in the composer | Off | `references/ask-user.md` |
