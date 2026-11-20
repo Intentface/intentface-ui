@@ -18,6 +18,9 @@ export type AttachmentStoreAction =
   | { type: "hand-off" };
 
 export type AttachmentStoreConfig = {
+  // Whether this composer takes files at all. Composer.Attachments turns it on
+  // while mounted.
+  enabled: boolean;
   accept: string;
   maxFiles: number;
   maxFileSize: number;
@@ -40,6 +43,8 @@ export const attachmentReducer = (
 ): AttachmentStoreState => {
   switch (action.type) {
     case "add": {
+      if (!config.enabled) return state;
+
       const incoming = [...action.files];
       if (!incoming.length) return state;
 

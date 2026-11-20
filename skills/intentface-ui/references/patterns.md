@@ -22,7 +22,6 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
   </Thread.Viewport>
   <Thread.Composer className="pointer-events-none absolute inset-x-0 bottom-0 mx-auto w-full max-w-(--chat-column)">
     <Composer.Root onSubmit={handleSubmit} className="pointer-events-auto">
-      <Composer.Attachments maxFiles={0} />
       <Composer.Container>
         <Composer.Textarea aria-label="Message" placeholder="Ask anything" />
         <Composer.Actions>
@@ -43,7 +42,7 @@ Code examples for the rules in `SKILL.md`. The examples carry only the classes t
 - `Thread.Content` carries both paddings, and its last turn's minimum height leaves room for a new turn to land at the top. The paddings and the minimum height read the same variables, so the turn lands exactly `--thread-inset-top` below the edge. Any other padding, margin or gap between the viewport and the turns shifts it.
 - `Thread.Viewport` is a size container, so it needs a definite height, here the root's full height. Its `scroll-padding` keeps both insets clear wherever a row scrolls into view, such as through `scrollToMessage`, keyboard paging or a focus move.
 - The composer slot keeps to the column's width, `--chat-column`, so it never covers the viewport's scrollbar. `scrollbar-gutter: stable` keeps the column from shifting when the scrollbar appears. The slot is click-through, and only the composer catches the pointer, so clicks and drags around the composer reach the transcript and its scrollbar.
-- `<Composer.Attachments maxFiles={0} />` turns files off. The composer accepts dropped and pasted files by default, and this skeleton has no strip to show them. `references/attachments.md` builds a chat that takes files.
+- This skeleton mounts no `Composer.Attachments`, so the composer ignores dropped and pasted files. `references/attachments.md` builds a chat that takes files.
 - The textarea needs its own `aria-label`. Its `placeholder` draws the hint and sets `aria-placeholder`, which describes the field but doesn't name it.
 - The textarea carries the padding and the type, and the placeholder takes only a color. The package lays the placeholder over the editor, so any position or padding on it shifts it away from the caret.
 - `"submitted"` counts as generating, so the button turns to stop the moment the message is sent, before the first token.
@@ -333,7 +332,6 @@ const CommandMenu = ({ prefix, empty }: { prefix: string; empty: string }) => (
 
 export const ChatInput = ({ onSubmit }: { onSubmit: (data: ComposerSubmitData) => void }) => (
   <Composer.Root commands={COMMANDS} onSubmit={onSubmit}>
-    <Composer.Attachments maxFiles={0} />
     <Composer.Popover className="data-closed:hidden">
       {(composer) =>
         composer.commands.active && (

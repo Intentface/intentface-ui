@@ -101,7 +101,9 @@ skipping the last one fires `onSubmit` with `{ kind: "answers" }`. Pass a new
 input — it renders no strip of its own. The visible list is yours: read
 `useComposer(c => c.attachments)` and lay the items out with the
 `@intentface/ui/attachments` parts. `Composer.AttachmentTrigger` opens the
-file dialog, and files can also be dropped onto the composer.
+file dialog. While `Composer.Attachments` is mounted, files can also be
+dropped onto the composer or pasted into it. Without it, the composer ignores
+both and leaves drops to the browser.
 
 <Demo component={<AttachmentsDemo />} file="primitives/composer/demos/attachments.tsx" />
 

@@ -7,6 +7,7 @@ import {
 
 // Injected ingestion: hermetic test item factory + destroy spy target.
 const config = {
+  enabled: true,
   accept: "image/*",
   maxFiles: 2,
   maxFileSize: 1024,
@@ -27,6 +28,30 @@ describe("attachmentReducer", () => {
     expect(next.items).toHaveLength(1);
     expect(next.items[0]?.id).toBeTruthy();
     expect(next.error).toBeNull();
+  });
+
+  test("add is ignored without an error while disabled", () => {
+    const next = attachmentReducer(
+      INITIAL_ATTACHMENT_STATE,
+      { type: "add", files: [imageFile("a.png")] },
+      { ...config, enabled: false },
+    );
+    expect(next).toBe(INITIAL_ATTACHMENT_STATE);
+  });
+
+  test("remove still works while disabled", () => {
+    const withItems = attachmentReducer(
+      INITIAL_ATTACHMENT_STATE,
+      { type: "add", files: [imageFile("a.png")] },
+      config,
+    );
+    const id = withItems.items[0]?.id ?? "";
+    const next = attachmentReducer(
+      withItems,
+      { type: "remove", id },
+      { ...config, enabled: false },
+    );
+    expect(next.items).toHaveLength(0);
   });
 
   test("add rejects non-matching types with an error", () => {

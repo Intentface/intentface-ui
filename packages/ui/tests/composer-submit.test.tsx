@@ -11,6 +11,7 @@ type ChatProps = {
   name?: string;
   required?: boolean;
   rootProps?: Partial<ComponentProps<typeof Composer.Root>>;
+  withAttachments?: boolean;
   submitProps?: Partial<ComponentProps<typeof Composer.Submit>>;
   onSubmit?: (data: ComposerSubmitData) => void;
 };
@@ -20,12 +21,14 @@ const Chat = ({
   name,
   required,
   rootProps,
+  withAttachments,
   submitProps,
   onSubmit = () => {},
 }: ChatProps) => {
   const [value, setValue] = useState(initial);
   return (
     <Composer.Root onSubmit={onSubmit} {...rootProps}>
+      {withAttachments && <Composer.Attachments />}
       <Composer.Textarea
         aria-label="Message"
         name={name}
@@ -193,7 +196,7 @@ describe("render={<form />}", () => {
 
   const renderWithAttachment = (props: ChatProps) => {
     const store = createComposerStore();
-    render(<Chat {...props} rootProps={{ ...props.rootProps, store }} />);
+    render(<Chat {...props} withAttachments rootProps={{ ...props.rootProps, store }} />);
     act(() => store.getSnapshot().attachments.add([new File(["x"], "pixel.png")]));
     return store;
   };

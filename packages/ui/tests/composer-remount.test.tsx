@@ -70,6 +70,7 @@ const HideableComposer = ({ visible }: { visible: boolean }) => (
       <Composer.Textarea aria-label="Message" value="A draft">
         <Composer.Placeholder placeholder="Ask anything" />
       </Composer.Textarea>
+      <Composer.Attachments />
       <AttachmentProbe />
     </Composer.Root>
   </Activity>
@@ -104,6 +105,7 @@ describe("a composer that really unmounts", () => {
   const AttachingComposer = ({ store }: { store?: ComposerStore }) => (
     <Composer.Root store={store} onSubmit={() => {}}>
       <Composer.Textarea aria-label="Message" />
+      <Composer.Attachments />
       <AttachmentProbe />
     </Composer.Root>
   );

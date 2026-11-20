@@ -267,11 +267,11 @@ export const createComposerStore = (): ComposerStore => {
   const optionsRef: RefObject<AskUserOptionsHandle | null> = { current: null };
   const fileInputRef: RefObject<HTMLInputElement | null> = { current: null };
   const globalDropRef: RefObject<boolean> = { current: false };
-  // Permissive defaults: accept everything, no caps, platform-default blob
-  // ingestion. Composer.Attachments overwrites this with the consumer's
-  // policy and any custom convert/destroy.
+  // Attachments are off until Composer.Attachments mounts and writes its
+  // policy over this one.
   const attachmentConfigRef: RefObject<AttachmentStoreConfig> = {
     current: {
+      enabled: false,
       accept: "",
       maxFiles: Number.POSITIVE_INFINITY,
       maxFileSize: Number.POSITIVE_INFINITY,
