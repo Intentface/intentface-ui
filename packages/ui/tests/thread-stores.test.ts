@@ -82,19 +82,6 @@ describe("createVisibilityStore", () => {
     expect(store.getSnapshot()).toBe(EMPTY_VISIBILITY);
   });
 
-  test("hasListeners reflects subscription", () => {
-    const store = createVisibilityStore();
-    expect(store.hasListeners()).toBe(false);
-    const unsubscribe = store.subscribe(
-      () => {},
-      () => {},
-      () => {},
-    );
-    expect(store.hasListeners()).toBe(true);
-    unsubscribe();
-    expect(store.hasListeners()).toBe(false);
-  });
-
   test("onFirstSubscribe fires once, onLastUnsubscribe fires on the last unsubscribe", () => {
     const store = createVisibilityStore();
     let firsts = 0;

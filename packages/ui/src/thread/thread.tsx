@@ -498,20 +498,24 @@ const useThreadScroll = (
   );
 
   // Pending jump — a scrollToMessage that arrived before the transcript did
-  // (a deep link while messages load asynchronously). Held until the first
-  // rows mount, then flushed; the watching observer exists only while a jump
-  // is queued, so the queue costs nothing when unused.
+  // (a deep link while messages load asynchronously, Thread.Content mounted or
+  // not). Held until the first rows mount, then flushed; the watching observer
+  // exists only while a jump is queued, so the queue costs nothing when unused.
   const pendingJumpRef = useRef<{
     messageId: string;
     options?: ThreadScrollToMessageOptions;
   } | null>(null);
   const pendingJumpObserverRef = useRef<MutationObserver | null>(null);
 
-  const clearPendingJump = useCallback(() => {
-    pendingJumpRef.current = null;
+  const unwatchPendingJump = useCallback(() => {
     pendingJumpObserverRef.current?.disconnect();
     pendingJumpObserverRef.current = null;
   }, []);
+
+  const clearPendingJump = useCallback(() => {
+    pendingJumpRef.current = null;
+    unwatchPendingJump();
+  }, [unwatchPendingJump]);
 
   // Settle the queued jump once rows exist: jump if the id mounted, or drop
   // the request if the transcript loaded without it — a stale or foreign id
@@ -528,6 +532,20 @@ const useThreadScroll = (
 
   useEffect(() => clearPendingJump, [clearPendingJump]);
 
+  const watchPendingJump = useCallback(
+    (content: HTMLElement) => {
+      if (pendingJumpObserverRef.current) return;
+      const observer = new MutationObserver(() => {
+        flushPendingJump();
+      });
+      // subtree: rows usually mount inside turn wrappers, not as direct
+      // children of the content column.
+      observer.observe(content, { childList: true, subtree: true });
+      pendingJumpObserverRef.current = observer;
+    },
+    [flushPendingJump],
+  );
+
   // Returns true when the jump ran or was queued; false only when the id is
   // absent from an already-loaded transcript.
   const scrollToMessage = useCallback(
@@ -539,20 +557,12 @@ const useThreadScroll = (
       const content = contentRef.current;
       // Queue only while the transcript has produced no rows yet (an async
       // load in flight). An id missing from a loaded transcript is just absent.
-      if (!content || content.querySelector("[data-message-id]")) return false;
+      if (content?.querySelector("[data-message-id]")) return false;
       pendingJumpRef.current = { messageId, options };
-      if (!pendingJumpObserverRef.current) {
-        const observer = new MutationObserver(() => {
-          flushPendingJump();
-        });
-        // subtree: rows usually mount inside turn wrappers, not as direct
-        // children of the content column.
-        observer.observe(content, { childList: true, subtree: true });
-        pendingJumpObserverRef.current = observer;
-      }
+      if (content) watchPendingJump(content);
       return true;
     },
-    [resolveMessageJump, clearPendingJump, flushPendingJump],
+    [resolveMessageJump, clearPendingJump, watchPendingJump],
   );
 
   const releaseFollow = useCallback(() => {
@@ -663,6 +673,16 @@ const useThreadScroll = (
     };
   }, [contentElement, mode, scrollToEnd, flushPendingJump]);
 
+  // A jump still queued when Thread.Content mounts or is replaced moves to the
+  // new element. Declared after the landing effect, whose land() must get the
+  // first flush: a flush here first would let the land scroll past the jump.
+  useLayoutEffect(() => {
+    if (!contentElement) return;
+    flushPendingJump();
+    if (pendingJumpRef.current) watchPendingJump(contentElement);
+    return unwatchPendingJump;
+  }, [contentElement, flushPendingJump, watchPendingJump, unwatchPendingJump]);
+
   // Prepend preservation — hold the reading position while older history loads
   // in above. Native scroll anchoring (Chrome/Firefox) already keeps the
   // viewport-relative position; comparing against the captured anchor makes the
@@ -734,49 +754,45 @@ const useThreadScroll = (
     };
   }, [contentElement, preserveScrollOnPrepend]);
 
-  // Visibility tracking — created lazily by the first useThreadVisibility
-  // subscriber, torn down with the last. An IntersectionObserver maintains the
-  // set of intersecting rows; snapshots are rebuilt on a coalesced frame by
-  // filtering rows in document order (a DOM query, no layout reads).
+  // Visibility tracking — on while a useThreadVisibility subscriber exists and
+  // Thread.Content is mounted, whichever comes first. An IntersectionObserver
+  // maintains the set of intersecting rows; snapshots are rebuilt on a
+  // coalesced frame by filtering rows in document order (a DOM query, no
+  // layout reads).
   const visibilityStore = useRefWithInit(createVisibilityStore).current;
-  const visibleIdsRef = useRef(new Set<string>());
-  const visibilityObserverRef = useRef<IntersectionObserver | null>(null);
-  const visibilityRowsObserverRef = useRef<MutationObserver | null>(null);
-  const visibilityFrameRef = useRef<number | null>(null);
+  const [isTrackingVisibility, setIsTrackingVisibility] = useState(false);
+  const observeVisibility = useCallback(() => setIsTrackingVisibility(true), []);
+  const unobserveVisibility = useCallback(() => setIsTrackingVisibility(false), []);
 
-  const syncVisibility = useCallback(() => {
-    if (visibilityFrameRef.current !== null) return;
-    visibilityFrameRef.current = requestAnimationFrame(() => {
-      visibilityFrameRef.current = null;
-      // A frame can outlive the last unsubscribe; recomputing would overwrite
-      // the empty snapshot teardown just wrote.
-      if (!visibilityStore.hasListeners()) return;
-      const content = contentRef.current;
-      if (!content) return;
-      const visible: string[] = [];
-      for (const row of content.querySelectorAll<HTMLElement>("[data-message-id]")) {
-        const id = row.dataset.messageId;
-        if (id && visibleIdsRef.current.has(id)) visible.push(id);
-      }
-      visibilityStore.setSnapshot({
-        visibleMessageIds: visible,
-        currentMessageId: visible[0] ?? null,
-      });
-    });
-  }, [visibilityStore]);
-
-  const observeVisibility = useCallback(() => {
+  useEffect(() => {
     const scroller = scrollRef.current;
-    const content = contentRef.current;
-    if (!scroller || !content) return;
+    if (!isTrackingVisibility || !scroller || !contentElement) return;
 
-    visibilityObserverRef.current = new IntersectionObserver(
+    const visibleIds = new Set<string>();
+    let frame: number | null = null;
+    const syncVisibility = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        const visible: string[] = [];
+        for (const row of contentElement.querySelectorAll<HTMLElement>("[data-message-id]")) {
+          const id = row.dataset.messageId;
+          if (id && visibleIds.has(id)) visible.push(id);
+        }
+        visibilityStore.setSnapshot({
+          visibleMessageIds: visible,
+          currentMessageId: visible[0] ?? null,
+        });
+      });
+    };
+
+    const intersections = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           const id = (entry.target as HTMLElement).dataset.messageId;
           if (!id) continue;
-          if (entry.isIntersecting) visibleIdsRef.current.add(id);
-          else visibleIdsRef.current.delete(id);
+          if (entry.isIntersecting) visibleIds.add(id);
+          else visibleIds.delete(id);
         }
         syncVisibility();
       },
@@ -787,7 +803,7 @@ const useThreadScroll = (
     // the row list itself changed — streaming inside a row is ignored.
     let observedRows: Element[] = [];
     const reconcileRows = () => {
-      const rows = Array.from(content.querySelectorAll("[data-message-id]"));
+      const rows = Array.from(contentElement.querySelectorAll("[data-message-id]"));
       if (
         rows.length === observedRows.length &&
         rows.every((row, index) => row === observedRows[index])
@@ -796,36 +812,25 @@ const useThreadScroll = (
       }
       observedRows = rows;
       const mountedIds = new Set(rows.map((row) => (row as HTMLElement).dataset.messageId ?? ""));
-      for (const id of visibleIdsRef.current) {
-        if (!mountedIds.has(id)) visibleIdsRef.current.delete(id);
+      for (const id of visibleIds) {
+        if (!mountedIds.has(id)) visibleIds.delete(id);
       }
-      const io = visibilityObserverRef.current;
-      io?.disconnect();
-      for (const row of rows) io?.observe(row);
+      intersections.disconnect();
+      for (const row of rows) intersections.observe(row);
       syncVisibility();
     };
 
-    visibilityRowsObserverRef.current = new MutationObserver(reconcileRows);
-    visibilityRowsObserverRef.current.observe(content, { childList: true, subtree: true });
+    const rowChanges = new MutationObserver(reconcileRows);
+    rowChanges.observe(contentElement, { childList: true, subtree: true });
     reconcileRows();
-  }, [syncVisibility]);
 
-  const unobserveVisibility = useCallback(() => {
-    if (visibilityFrameRef.current !== null) {
-      cancelAnimationFrame(visibilityFrameRef.current);
-      visibilityFrameRef.current = null;
-    }
-    visibilityObserverRef.current?.disconnect();
-    visibilityObserverRef.current = null;
-    visibilityRowsObserverRef.current?.disconnect();
-    visibilityRowsObserverRef.current = null;
-    visibleIdsRef.current.clear();
-    visibilityStore.setSnapshot(EMPTY_VISIBILITY);
-  }, [visibilityStore]);
-
-  // Safety net: subscribers normally tear tracking down on their own unmount,
-  // but the thread itself can unmount first.
-  useEffect(() => unobserveVisibility, [unobserveVisibility]);
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      intersections.disconnect();
+      rowChanges.disconnect();
+      visibilityStore.setSnapshot(EMPTY_VISIBILITY);
+    };
+  }, [isTrackingVisibility, contentElement, visibilityStore]);
 
   return useMemo(
     () => ({
