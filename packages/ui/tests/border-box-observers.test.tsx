@@ -56,41 +56,51 @@ type LayoutProperty = keyof typeof LAYOUT_PROPERTIES;
 const layoutProperties = Object.keys(LAYOUT_PROPERTIES) as LayoutProperty[];
 
 const originalObserver = globalThis.ResizeObserver;
-// On Element, where it is defined: an own copy left on HTMLElement would
-// shadow the next file's fake.
-const originalRect = Element.prototype.getBoundingClientRect;
+// As an own property of HTMLElement, restored by descriptor: it wins over a
+// copy another file left there, and removing it afterwards leaves no copy to
+// shadow a fake the next file puts on Element.
+const originalRect = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "getBoundingClientRect",
+);
 const originalProperties = layoutProperties.map(
   (name) => [name, Object.getOwnPropertyDescriptor(HTMLElement.prototype, name)] as const,
 );
 
-beforeEach(() => {
-  globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver;
-  for (const name of layoutProperties) {
-    Object.defineProperty(HTMLElement.prototype, name, {
-      get(this: HTMLElement) {
-        return LAYOUT_PROPERTIES[name](this);
+describe("a padding or border change alone", () => {
+  beforeEach(() => {
+    globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver;
+    for (const name of layoutProperties) {
+      Object.defineProperty(HTMLElement.prototype, name, {
+        get(this: HTMLElement) {
+          return LAYOUT_PROPERTIES[name](this);
+        },
+        configurable: true,
+      });
+    }
+    Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", {
+      value(this: HTMLElement) {
+        const { width, height } = boxOf(this);
+        return { top: 0, bottom: height, left: 0, right: width, width, height } as DOMRect;
       },
       configurable: true,
+      writable: true,
     });
-  }
-  Element.prototype.getBoundingClientRect = function (this: Element) {
-    const { width, height } = boxOf(this);
-    return { top: 0, bottom: height, left: 0, right: width, width, height } as DOMRect;
-  };
-});
+  });
 
-afterEach(() => {
-  boxes.clear();
-  observers.clear();
-  globalThis.ResizeObserver = originalObserver;
-  Element.prototype.getBoundingClientRect = originalRect;
-  for (const [name, descriptor] of originalProperties) {
-    if (descriptor) Object.defineProperty(HTMLElement.prototype, name, descriptor);
-    else Reflect.deleteProperty(HTMLElement.prototype, name);
-  }
-});
+  afterEach(() => {
+    boxes.clear();
+    observers.clear();
+    globalThis.ResizeObserver = originalObserver;
+    if (originalRect) {
+      Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", originalRect);
+    } else Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
+    for (const [name, descriptor] of originalProperties) {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, name, descriptor);
+      else Reflect.deleteProperty(HTMLElement.prototype, name);
+    }
+  });
 
-describe("a padding or border change alone", () => {
   test("updates the width Shell.Sidebar reports", () => {
     boxes.set("[data-shell-sidebar]", { width: 280, height: 800 });
     const widths: number[] = [];
