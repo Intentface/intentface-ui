@@ -299,7 +299,9 @@ export const ShellSidebar = ({
 
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
-    observer.observe(element);
+    // The border box, to match offsetWidth: padding or a border can change
+    // while the content box, the default, stays the same.
+    observer.observe(element, { box: "border-box" });
     return () => observer.disconnect();
   }, [store]);
 
