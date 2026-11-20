@@ -180,15 +180,11 @@ export const StreamedChat = ({
           <Composer.Root onSubmit={chat.send} className="flex w-full flex-col">
             <Composer.Container className="cursor-text rounded-xl bg-white p-1 shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_1px_2px_-1px_rgb(0_0_0/0.08),0_6px_16px_-6px_rgb(0_0_0/0.1)] dark:bg-zinc-800 dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06),inset_0_0_0_1px_rgb(255_255_255/0.07),0_0_0_1px_rgb(0_0_0/0.2),0_1px_2px_rgb(0_0_0/0.12),0_6px_16px_-6px_rgb(0_0_0/0.22)]">
               <Composer.Textarea
+                placeholder="Ask a follow-up…"
                 value={chat.draft}
                 onValueChange={chat.setDraft}
-                className="max-h-32 min-h-10 overflow-y-auto px-2.5 pt-2.5 text-sm text-zinc-900 dark:text-zinc-100 **:data-composer-editor:w-full **:data-composer-editor:max-w-none **:data-composer-editor:leading-6 [&_[data-composer-editor]:focus]:outline-none"
-              >
-                <Composer.Placeholder
-                  placeholder="Ask a follow-up…"
-                  className="text-zinc-400 leading-6 dark:text-zinc-500"
-                />
-              </Composer.Textarea>
+                className="max-h-32 min-h-10 overflow-y-auto px-2.5 pt-2.5 text-sm text-zinc-900 dark:text-zinc-100 **:data-composer-editor:w-full **:data-composer-editor:max-w-none **:data-composer-editor:leading-6 [&_[data-composer-editor]:focus]:outline-none **:data-composer-editor:[&::before]:text-zinc-400 dark:**:data-composer-editor:[&::before]:text-zinc-500"
+              />
               <Composer.Actions className="flex h-11 items-center justify-end px-2.5">
                 <Composer.Submit
                   disabled={chat.streaming}
