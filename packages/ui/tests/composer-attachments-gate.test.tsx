@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { StrictMode, useState } from "react";
+import { Activity, StrictMode, useState } from "react";
+import type { AttachmentItem } from "../src/attachments";
 import { Composer } from "../src/composer";
 import type { ComposerSubmitData } from "../src/composer/types";
 
@@ -217,5 +218,159 @@ describe("under StrictMode", () => {
     expect(defaultPrevented).toBe(true);
     send();
     expect(sentFiles(onSubmit)).toHaveLength(1);
+  });
+});
+
+describe("two Composer.Attachments at once", () => {
+  const Pair = ({ onSubmit }: Pick<ChatProps, "onSubmit">) => {
+    const [both, setBoth] = useState(true);
+    return (
+      <>
+        <button type="button" onClick={() => setBoth(false)}>
+          drop one
+        </button>
+        <Composer.Root onSubmit={onSubmit}>
+          <Composer.Attachments />
+          {both && <Composer.Attachments />}
+          <Composer.Textarea aria-label="Message" />
+          <Composer.Submit />
+        </Composer.Root>
+      </>
+    );
+  };
+
+  test("removing one leaves intake and the files to the other", () => {
+    const onSubmit = mock();
+    render(<Pair onSubmit={onSubmit} />);
+
+    drop(root());
+    act(() => void fireEvent.click(screen.getByText("drop one")));
+    const { defaultPrevented } = drop(root());
+
+    expect(defaultPrevented).toBe(true);
+    send();
+    expect(sentFiles(onSubmit)).toHaveLength(2);
+  });
+});
+
+describe("a keyed replacement", () => {
+  const Replaced = ({
+    onSubmit,
+    destroys,
+  }: Pick<ChatProps, "onSubmit"> & {
+    destroys: Record<string, (item: AttachmentItem) => void>;
+  }) => {
+    const [key, setKey] = useState("a");
+    return (
+      <>
+        <button type="button" onClick={() => setKey("b")}>
+          replace
+        </button>
+        <Composer.Root onSubmit={onSubmit}>
+          <Composer.Attachments key={key} destroy={destroys[key]} />
+          <Composer.Textarea aria-label="Message" />
+          <Composer.Submit />
+        </Composer.Root>
+      </>
+    );
+  };
+
+  test("keeps the files and releases each with the destroy that took it", async () => {
+    const released: string[] = [];
+    const destroys = {
+      a: () => void released.push("a"),
+      b: () => void released.push("b"),
+    };
+    const onSubmit = mock();
+    render(<Replaced onSubmit={onSubmit} destroys={destroys} />);
+
+    drop(root());
+    act(() => void fireEvent.click(screen.getByText("replace")));
+    drop(root());
+    await act(async () => void fireEvent.click(submitButton()));
+
+    expect(sentFiles(onSubmit)).toHaveLength(2);
+    expect(released.sort()).toEqual(["a", "b"]);
+  });
+});
+
+describe("Composer.Attachments in a hidden <Activity>", () => {
+  const Hideable = ({ onSubmit }: Pick<ChatProps, "onSubmit">) => {
+    const [mode, setMode] = useState<"visible" | "hidden" | "gone">("visible");
+    return (
+      <>
+        <button type="button" onClick={() => setMode("hidden")}>
+          hide
+        </button>
+        <button type="button" onClick={() => setMode("visible")}>
+          show
+        </button>
+        <button type="button" onClick={() => setMode("gone")}>
+          remove
+        </button>
+        <Composer.Root onSubmit={onSubmit}>
+          {mode !== "gone" && (
+            <Activity mode={mode === "hidden" ? "hidden" : "visible"}>
+              <Composer.Attachments />
+            </Activity>
+          )}
+          <Composer.Textarea aria-label="Message" />
+          <Composer.Submit />
+        </Composer.Root>
+      </>
+    );
+  };
+  const click = (label: string) => act(() => void fireEvent.click(screen.getByText(label)));
+
+  test("keeps its files for when it is shown again", () => {
+    const onSubmit = mock();
+    render(<Hideable onSubmit={onSubmit} />);
+
+    drop(root());
+    click("hide");
+    click("show");
+    send();
+
+    expect(sentFiles(onSubmit)).toHaveLength(1);
+  });
+
+  test("clears its files once removed while hidden", () => {
+    const onSubmit = mock();
+    render(<Hideable onSubmit={onSubmit} />);
+
+    drop(root());
+    click("hide");
+    click("remove");
+    send();
+
+    expect(sentFiles(onSubmit)).toHaveLength(0);
+    expect(submitButton().hasAttribute("disabled")).toBe(true);
+  });
+});
+
+describe("a drag cut short by an unmount", () => {
+  test("leaves no depth behind for the next mount", () => {
+    const Remount = () => {
+      const [mounted, setMounted] = useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setMounted((value) => !value)}>
+            toggle
+          </button>
+          <Chat withAttachments={mounted} />
+        </>
+      );
+    };
+    render(<Remount />);
+    const toggle = () => act(() => void fireEvent.click(screen.getByText("toggle")));
+
+    act(() => void fireEvent.dragEnter(root(), dragData()));
+    toggle();
+    act(() => void fireEvent.dragLeave(root(), dragData()));
+    toggle();
+    act(() => void fireEvent.dragEnter(root(), dragData()));
+    act(() => void fireEvent.dragLeave(root(), dragData()));
+
+    expect(root().hasAttribute("data-dragging")).toBe(false);
   });
 });

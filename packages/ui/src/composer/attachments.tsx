@@ -42,35 +42,22 @@ export const ComposerAttachments = ({
   const store = useComposerContextStore();
   const attachments = useComposer((composer) => composer.attachments);
 
-  const { globalDropRef, fileInputRef } = attachments;
+  const { fileInputRef } = attachments;
 
-  useIsomorphicLayoutEffect(() => {
-    store.attachmentConfigRef.current = {
-      enabled: true,
-      accept,
-      maxFiles,
-      maxFileSize,
-      convert,
-      destroy,
-    };
-    globalDropRef.current = globalDrop;
-    return () => {
-      store.attachmentConfigRef.current = { ...store.attachmentConfigRef.current, enabled: false };
-      globalDropRef.current = false;
-    };
-  }, [store, globalDropRef, accept, maxFiles, maxFileSize, convert, destroy, globalDrop]);
+  // Every mounted instance holds intake on; the newest sets the policy, and
+  // files are taken until the last one leaves.
+  useIsomorphicLayoutEffect(
+    () => store.claimAttachments({ accept, maxFiles, maxFileSize, convert, destroy, globalDrop }),
+    [store, accept, maxFiles, maxFileSize, convert, destroy, globalDrop],
+  );
 
   // Removed while the composer stays: the strip usually goes with it, so the
-  // files it held must not be sent unseen. React also runs this cleanup under
-  // StrictMode and a hidden <Activity>, where the input stays in the document
-  // and the files live on. When the whole composer goes, the root decides.
+  // files it held must not be sent unseen. The store keeps them while another
+  // instance shows them, or while this input stays in the document (StrictMode,
+  // a hidden <Activity>) and could come back.
   useEffect(() => {
     const input = fileInputRef.current;
-    return () => {
-      if (input?.isConnected || !store.rootRef.current?.isConnected) return;
-      store.setDragging(false);
-      store.resetAttachments();
-    };
+    return () => store.settleAttachments(input);
   }, [store, fileInputRef]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {

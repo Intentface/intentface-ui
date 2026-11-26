@@ -181,7 +181,19 @@ export type ComposerStore = {
   setHighlight: (index: number) => void;
   setQuestions: (questions: AskUserQuestion[] | null) => void;
   setDragging: (active: boolean) => void;
-  resetAttachments: () => void;
+  /**
+   * Composer.Attachments' hold on file intake, taken in a layout effect. The
+   * latest holder sets the policy, and intake stays on until the last one lets
+   * go. Returns the release.
+   */
+  claimAttachments: (policy: AttachmentPolicy) => () => void;
+  /**
+   * A departing Composer.Attachments' passive cleanup, given the file input it
+   * rendered. Once no holder is left and the root stays, it clears the files,
+   * unless the input is still in the document (StrictMode, a hidden
+   * <Activity>): those are kept for the holder's return.
+   */
+  settleAttachments: (input: HTMLInputElement | null) => void;
   /** Composer.Root's keydown: the question's and generation's keys for anything in its tree. True when it used the key; the caller marks it used. */
   handleKeyDown: (event: KeyboardEvent) => boolean;
   /** The question's keys when focus fell onto the page itself or a container around the composer. Mounted by Composer.Root; returns the cleanup. */
@@ -218,6 +230,8 @@ export type ComposerStore = {
   // CommandList via a callback ref (commit-time), not an effect.
   commandSelectRef: RefObject<(() => void) | null>;
 };
+
+export type AttachmentPolicy = Omit<AttachmentStoreConfig, "enabled"> & { globalDrop: boolean };
 
 // Enter and Composer.Submit send through the store, not a native submit, so a
 // <form> root runs its validation here: a required, empty Composer.Textarea
@@ -373,9 +387,21 @@ export const createComposerStore = (): ComposerStore => {
   };
 
   // --- Attachments
+  // Each item is released by the destroy of the policy that accepted it, even
+  // after another Composer.Attachments has taken over.
+  const destroyers = new WeakMap<AttachmentItem, (item: AttachmentItem) => void>();
+  const destroyItem = (item: AttachmentItem) =>
+    (destroyers.get(item) ?? attachmentConfigRef.current.destroy)(item);
+
   const dispatchAttachments = (action: AttachmentStoreAction) => {
-    const next = attachmentReducer(attachmentState, action, attachmentConfigRef.current);
+    const config = attachmentConfigRef.current;
+    const next = attachmentReducer(attachmentState, action, { ...config, destroy: destroyItem });
     if (next === attachmentState) return;
+    if (action.type === "add") {
+      for (const item of next.items) {
+        if (!destroyers.has(item)) destroyers.set(item, config.destroy);
+      }
+    }
     attachmentState = next;
     snapshot = {
       ...snapshot,
@@ -388,6 +414,55 @@ export const createComposerStore = (): ComposerStore => {
     if (snapshot.attachments.isDragging === active) return;
     snapshot = { ...snapshot, attachments: { ...snapshot.attachments, isDragging: active } };
     notify();
+  };
+
+  // Mounted Composer.Attachments, oldest first; the newest sets the policy.
+  const holders: AttachmentPolicy[] = [];
+  // The input of a holder that left while its input stayed in the document (a
+  // hidden <Activity>). Its files wait for it; once the input is gone for good,
+  // nothing will show them again, so they are cleared.
+  let waitingInput: HTMLInputElement | null = null;
+
+  const clearAbandonedFiles = () => {
+    if (!waitingInput || waitingInput.isConnected) return;
+    waitingInput = null;
+    dispatchAttachments({ type: "reset" });
+  };
+
+  const applyHolders = () => {
+    const top = holders.at(-1);
+    if (top) {
+      const { globalDrop, ...policy } = top;
+      attachmentConfigRef.current = { ...policy, enabled: true };
+      globalDropRef.current = globalDrop;
+    } else {
+      attachmentConfigRef.current = { ...attachmentConfigRef.current, enabled: false };
+      globalDropRef.current = false;
+      setDragging(false);
+    }
+  };
+
+  const claimAttachments = (policy: AttachmentPolicy) => {
+    clearAbandonedFiles();
+    waitingInput = null;
+    holders.push(policy);
+    applyHolders();
+    return () => {
+      const index = holders.indexOf(policy);
+      if (index !== -1) holders.splice(index, 1);
+      applyHolders();
+    };
+  };
+
+  const settleAttachments = (input: HTMLInputElement | null) => {
+    // Another holder took over (a keyed replacement) and shows the files; or
+    // the whole composer went, and the root decides.
+    if (holders.length || !rootRef.current?.isConnected) return;
+    if (input?.isConnected) {
+      waitingInput = input;
+      return;
+    }
+    dispatchAttachments({ type: "reset" });
   };
 
   // --- Ask-user
@@ -562,25 +637,26 @@ export const createComposerStore = (): ComposerStore => {
       return;
     }
 
-    const { attachments, isSubmitting } = snapshot;
+    if (snapshot.isSubmitting || !isRootValid(rootRef.current)) return;
 
-    if (isSubmitting || !isRootValid(rootRef.current)) return;
+    clearAbandonedFiles();
+    // Files go out only while a Composer.Attachments shows them. Ones waiting
+    // for a hidden holder stay behind for its return.
+    const files = holders.length ? attachmentState.items : [];
 
     const serialized = controller.serialize();
     const trimmedText = serialized.text.trim();
-    if (!trimmedText && !attachments.items.length) return;
+    if (!trimmedText && !files.length) return;
 
     // Emit the generic attachment descriptors; the consumer's onSubmit adapts
     // them to its wire format (e.g. FilePart via prepareAttachmentsForSend).
     // Text may be empty on an attachments-only submit — any placeholder copy
     // is the consumer's.
-    const files = attachments.items;
-    const { destroy } = attachmentConfigRef.current;
 
     // From the hand-off on the store no longer holds the files, so everything
     // after it runs inside the try and the finally is their only release.
     try {
-      dispatchAttachments({ type: "hand-off" });
+      if (files.length) dispatchAttachments({ type: "hand-off" });
       controller.clear();
       await onSubmitRef.current?.({
         kind: "message",
@@ -588,7 +664,7 @@ export const createComposerStore = (): ComposerStore => {
         files,
       });
     } finally {
-      for (const item of files) destroy(item);
+      for (const item of files) destroyItem(item);
     }
   };
 
@@ -617,6 +693,7 @@ export const createComposerStore = (): ComposerStore => {
   // revoke attachment object URLs, then restore the pristine snapshot.
   const reset = () => {
     dispatchAttachments({ type: "reset" });
+    waitingInput = null;
     flow = IDLE_FLOW;
     commandSelectRef.current = null;
     snapshot = initialSnapshot;
@@ -649,7 +726,8 @@ export const createComposerStore = (): ComposerStore => {
     setHighlight,
     setQuestions,
     setDragging,
-    resetAttachments: () => dispatchAttachments({ type: "reset" }),
+    claimAttachments,
+    settleAttachments,
     handleKeyDown,
     listenForStrayKeys,
     finalizePanelClose,

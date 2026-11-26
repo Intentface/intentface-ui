@@ -6,7 +6,7 @@ The composer collects files and hands them to `onSubmit`. Storing and sending th
 
 | Rule | Summary |
 |------|---------|
-| Off until mounted | The composer ignores dropped and pasted files until `Composer.Attachments` is mounted, and the browser handles the drop. While mounted it accepts files of every type, with no limits unless set, and sends them in `data.files`. Unmounting it turns files off again and clears the ones it held. `attachments.add` does nothing without it either. |
+| Off until mounted | The composer ignores dropped and pasted files until `Composer.Attachments` is mounted, and the browser handles the drop. While mounted it accepts files of every type, with no limits unless set, and sends them in `data.files`. Removing it turns files off again once no other `Composer.Attachments` is mounted. If the composer root stays mounted, the files it held are cleared too. Files held by one hidden in an `<Activity>` wait for it to show again and are not sent meanwhile. `attachments.add` does nothing without it either. |
 | Render a strip | Render a strip whenever the composer can receive files, so the user sees what will be sent. |
 | Policy, not a strip | `Composer.Attachments` sets the accept rules and renders no strip of its own. Read the items from `useComposer((composer) => composer.attachments)` and render them with the `Attachments` parts. |
 | The picker | Inside a composer, open the file picker with `Composer.AttachmentTrigger`. It clicks the file input that `Composer.Attachments` renders, so it does nothing without one. `Attachments.Trigger` is a bare button with no file input. |

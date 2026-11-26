@@ -85,13 +85,10 @@ export const useDragDropFiles = ({
   const onFilesRef = useAsRef(onFiles);
 
   useEffect(() => {
-    const isInScope = (event: DragEvent) => {
-      if (!configRef.current.enabled) return false;
-      return globalDropRef.current || (rootRef.current?.contains(event.target as Node) ?? false);
-    };
-
     const handlers = createDragHandlers({
-      isInScope,
+      isEnabled: () => configRef.current.enabled,
+      isInScope: (event) =>
+        globalDropRef.current || (rootRef.current?.contains(event.target as Node) ?? false),
       onFiles: (files) => onFilesRef.current(files),
       setDragging,
     });
