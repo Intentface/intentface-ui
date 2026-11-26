@@ -19,7 +19,7 @@
     "lint": "biome check",
     "test": "bun test ./lib",
     "format": "biome format --write",
-    "version-packages": "changeset version && bun install --lockfile-only",
+    "version-packages": "changeset version && bun install --lockfile-only && node scripts/sync-lockfile-versions.mjs",
     "postinstall": "fumadocs-mdx",
     "doctor": "npx -y react-doctor@0.9.17 . --yes --scope changed --no-score",
     "doctor:full": "npx -y react-doctor@0.9.17 . --yes --no-score"

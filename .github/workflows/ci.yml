@@ -41,6 +41,11 @@ jobs:
       # Generates .source (postinstall: fumadocs-mdx) so the docs build compiles.
       - run: bun install --frozen-lockfile
 
+      # --frozen-lockfile does not compare workspace versions, and Bun before
+      # 1.4.1 leaves them stale on a version-only bump, so check them here.
+      - name: bun.lock workspace versions
+        run: node scripts/sync-lockfile-versions.mjs --check
+
       - name: Changeset status
         # A Changesets-generated version PR has consumed its changesets already.
         if: >-
