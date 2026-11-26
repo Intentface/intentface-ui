@@ -123,6 +123,7 @@ export const ComposerRoot = ({
   useDragDropFiles({
     rootRef,
     globalDropRef,
+    configRef: store.attachmentConfigRef,
     onFiles: addAttachments,
     setDragging: store.setDragging,
   });

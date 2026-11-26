@@ -72,22 +72,23 @@ export const useCommandRegistry = (commands: ComposerCommandsMap) => {
 export const useDragDropFiles = ({
   rootRef,
   globalDropRef,
+  configRef,
   onFiles,
   setDragging,
 }: {
   rootRef: RefObject<HTMLElement | null>;
   globalDropRef: RefObject<boolean>;
+  configRef: RefObject<{ enabled: boolean }>;
   onFiles: (files: FileList) => void;
   setDragging: (active: boolean) => void;
 }) => {
   const onFilesRef = useAsRef(onFiles);
 
   useEffect(() => {
-    const isInScope = (event: DragEvent) =>
-      globalDropRef.current || (rootRef.current?.contains(event.target as Node) ?? false);
-
     const handlers = createDragHandlers({
-      isInScope,
+      isEnabled: () => configRef.current.enabled,
+      isInScope: (event) =>
+        globalDropRef.current || (rootRef.current?.contains(event.target as Node) ?? false),
       onFiles: (files) => onFilesRef.current(files),
       setDragging,
     });
@@ -102,7 +103,7 @@ export const useDragDropFiles = ({
       document.removeEventListener("dragleave", handlers.onDragLeave);
       document.removeEventListener("drop", handlers.onDrop);
     };
-  }, [rootRef, globalDropRef, setDragging]);
+  }, [rootRef, globalDropRef, configRef, setDragging]);
 };
 
 export const useComposerSnapshot = ({

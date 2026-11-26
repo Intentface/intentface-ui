@@ -5,10 +5,11 @@
 // dropzone, error) is presentation: the styled layer composes it from
 // useComposer((c) => c.attachments) and the Attachments primitives.
 
-import type { ChangeEvent, ReactNode } from "react";
+import { type ChangeEvent, type ReactNode, useEffect } from "react";
 import { type AttachmentItem, revokeAttachmentUrl, toAttachmentItem } from "../attachments";
 import type { PrimitiveProps } from "../internal/primitive-props";
 import { useRenderElement } from "../internal/render/useRenderElement";
+import { useIsomorphicLayoutEffect } from "./internals";
 import { useComposer, useComposerContextStore } from "./store";
 
 export type ComposerAttachmentsProps = {
@@ -19,7 +20,7 @@ export type ComposerAttachmentsProps = {
   // Cleanup for a removed item, or a sent one once onSubmit has settled.
   // Defaults to revoking blob URLs.
   destroy?: (item: AttachmentItem) => void;
-  // Policy — the package imposes none: accept everything, no caps.
+  // Policy — once mounted, accepts every file with no caps unless set.
   accept?: string;
   maxFiles?: number;
   maxFileSize?: number;
@@ -41,8 +42,23 @@ export const ComposerAttachments = ({
   const store = useComposerContextStore();
   const attachments = useComposer((composer) => composer.attachments);
 
-  store.attachmentConfigRef.current = { accept, maxFiles, maxFileSize, convert, destroy };
-  attachments.globalDropRef.current = globalDrop;
+  const { fileInputRef } = attachments;
+
+  // Every mounted instance holds intake on; the newest sets the policy, and
+  // files are taken until the last one leaves.
+  useIsomorphicLayoutEffect(
+    () => store.claimAttachments({ accept, maxFiles, maxFileSize, convert, destroy, globalDrop }),
+    [store, accept, maxFiles, maxFileSize, convert, destroy, globalDrop],
+  );
+
+  // Removed while the composer stays: the strip usually goes with it, so the
+  // files it held must not be sent unseen. The store keeps them while another
+  // instance shows them, or while this input stays in the document (StrictMode,
+  // a hidden <Activity>) and could come back.
+  useEffect(() => {
+    const input = fileInputRef.current;
+    return () => store.settleAttachments(input);
+  }, [store, fileInputRef]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.currentTarget.files) {

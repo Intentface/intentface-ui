@@ -18,6 +18,9 @@ export type AttachmentStoreAction =
   | { type: "hand-off" };
 
 export type AttachmentStoreConfig = {
+  // Whether this composer takes files at all. Composer.Attachments turns it on
+  // while mounted.
+  enabled: boolean;
   accept: string;
   maxFiles: number;
   maxFileSize: number;
@@ -40,6 +43,8 @@ export const attachmentReducer = (
 ): AttachmentStoreState => {
   switch (action.type) {
     case "add": {
+      if (!config.enabled) return state;
+
       const incoming = [...action.files];
       if (!incoming.length) return state;
 
@@ -88,6 +93,9 @@ export const attachmentReducer = (
 // Drag-and-drop handlers. A depth counter tracks enter/leave so nested
 // elements don't flicker the dragging state.
 export type DragHandlerCallbacks = {
+  // Whether files are taken at all. While off, every event is ignored and the
+  // depth resets, so a drag that ended unseen leaves no count behind.
+  isEnabled?: () => boolean;
   isInScope: (event: DragEvent) => boolean;
   onFiles: (files: FileList) => void;
   setDragging: (active: boolean) => void;
@@ -96,16 +104,23 @@ export type DragHandlerCallbacks = {
 export const createDragHandlers = (callbacks: DragHandlerCallbacks) => {
   const counter = { current: 0 };
   const carriesFiles = (event: DragEvent) => event.dataTransfer?.types?.includes("Files") ?? false;
+  const isInScope = (event: DragEvent) => {
+    if (callbacks.isEnabled && !callbacks.isEnabled()) {
+      counter.current = 0;
+      return false;
+    }
+    return callbacks.isInScope(event);
+  };
 
   return {
     onDragOver: (event: Event) => {
       const dragEvent = event as DragEvent;
-      if (!callbacks.isInScope(dragEvent)) return;
+      if (!isInScope(dragEvent)) return;
       if (carriesFiles(dragEvent)) dragEvent.preventDefault();
     },
     onDragEnter: (event: Event) => {
       const dragEvent = event as DragEvent;
-      if (!callbacks.isInScope(dragEvent)) return;
+      if (!isInScope(dragEvent)) return;
       if (carriesFiles(dragEvent)) {
         counter.current++;
         callbacks.setDragging(true);
@@ -113,13 +128,13 @@ export const createDragHandlers = (callbacks: DragHandlerCallbacks) => {
     },
     onDragLeave: (event: Event) => {
       const dragEvent = event as DragEvent;
-      if (!callbacks.isInScope(dragEvent)) return;
+      if (!isInScope(dragEvent)) return;
       counter.current--;
       if (counter.current === 0) callbacks.setDragging(false);
     },
     onDrop: (event: Event) => {
       const dragEvent = event as DragEvent;
-      if (!callbacks.isInScope(dragEvent)) return;
+      if (!isInScope(dragEvent)) return;
       if (carriesFiles(dragEvent)) dragEvent.preventDefault();
       counter.current = 0;
       callbacks.setDragging(false);
