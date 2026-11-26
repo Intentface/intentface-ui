@@ -40,7 +40,7 @@ A prop in the first column means the app sets the state and the part reflects it
 | `--composer-container-height`, `--composer-container-width` | `Composer.Root` | once measured, while a `Composer.Container` is mounted | The same, for the container. |
 | `data-composer-textarea` | `Composer.Textarea` | always | The padding, the height, the scrolling and the type. The editor and the placeholder inherit them, so their text lines up. |
 | `data-composer-editor` | the editable element inside `Composer.Textarea` | always | The text color, the caret and the focus style. It is the element that takes focus. Font metrics belong on the textarea, or the placeholder won't match. |
-| `data-placeholder` | the editable element inside `Composer.Textarea` | while a `placeholder` string is set, the editor is empty and not composing, and the Textarea's `children` render nothing | The hint. Draw it from `::before` with `content: attr(aria-placeholder)`. Give it a color only. |
+| `data-placeholder` | the editable element inside `Composer.Textarea` | while a `placeholder` string is set, the editor is empty and not composing, and the Textarea's `children` render nothing | The hint. Add the full `[data-composer-editor][data-placeholder]::before` rule from the Composer docs once: `content: attr(aria-placeholder)` alone puts the text in the editor's flow and pushes the caret, so it also needs `float` and `height: 0`. Then set only its color per call site. |
 | `data-filled` | `Composer.Textarea` | while the editor has content | A filled style, such as showing a clear button. |
 | `data-disabled` | `Composer.Textarea` | while disabled | The disabled style. |
 | `data-mention-chip` | committed chips inside the editor | always | Mentions the user inserted from a command list. |

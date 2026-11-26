@@ -729,6 +729,11 @@ const ROTATING_PLACEHOLDERS = [
   "Create a presentation...",
 ];
 
+const getInputPlaceholder = (isAskUser: boolean, hasSubmitted: boolean) => {
+  if (isAskUser) return "Or type your own answer...";
+  return hasSubmitted ? "Ask a follow-up question..." : "Ask me anything...";
+};
+
 const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
   const {
     chatId,
@@ -848,11 +853,7 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
   // The rotating hint is a custom overlay; while it shows, the string is only
   // the accessible placeholder.
   const rotatesPlaceholder = !isAskUser && !hasSubmitted && loopingPlaceholder;
-  const placeholder = isAskUser
-    ? "Or type your own answer..."
-    : hasSubmitted
-      ? "Ask a follow-up question..."
-      : "Ask me anything...";
+  const placeholder = getInputPlaceholder(isAskUser, hasSubmitted);
 
   const handleSubmit = useCallback(
     async (data: ComposerSubmitData) => {
