@@ -49,7 +49,8 @@ jobs:
         id: changesets
         uses: changesets/action@v1
         with:
-          version: bunx changeset version
+          # `changeset version` leaves bun.lock's workspace versions behind.
+          version: bun run version-packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
