@@ -47,14 +47,14 @@ type ComposerSubmitData =
       answers: ComposerAnswer[]; // produced by the question flow
     };
 
-type ComposerAnswer =
-  | { question: string; option: string }                      // single-select, picked an option
-  | { question: string; text: string }                        // single-select, typed free text
-  | { question: string; options: string[]; text: string }     // multi-select (either field may be empty)
-  | { question: string };                                     // skipped or unanswered
+type ComposerAnswer = {
+  id: string;         // the id you minted on the ComposerQuestion
+  selected: string[]; // option values (label fallback); empty when skipped or text-only
+  text?: string;      // present only when the user typed something
+};
 ```
 
-Each entry's shape encodes the invariant: single-select picks have `option` *or* `text`, never both. Multi-select always has both fields and may carry options + free text together. A skipped or unanswered question is `{ question }` with no payload. The branches are discriminated by which fields are present (no `kind` tag).
+One flat shape for every question, one entry per question in order. A skipped question is `{ id, selected: [] }` with no `text`. Single-select never carries both a selection and `text`; multi-select may carry selections and free text together.
 
 If the editor is empty but attachments exist, `text` is set to `"Sent with attachments"`. If both are empty, the form does not submit.
 

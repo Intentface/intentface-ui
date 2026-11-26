@@ -21,7 +21,7 @@ Three ideas keep the surface coherent:
 
 1. **AI SDK parts are the wire format.** Every turn is a list of `UIMessage["parts"]` — `text`, `reasoning`, `tool-{name}`, `source-url`, `file`. Components read parts; they don't own message state. The only custom metadata is `{ stopped?: boolean }` (`AppUIMessage` in `lib/ai/types.ts`); there are no custom `data-*` parts.
 2. **A single `Chat` instance per chat id owns streaming and persistence.** UI primitives are stateless renderers around it. The instance is cached in a module-level `Map`, so navigating between chats reuses in-flight streams.
-3. **The composer panel reflects derived state.** `useActiveComposerState(messages, status)` collapses messages + chat status into one of `idle | active | ask-user`, and the consumer feeds that to `Composer.Panel`.
+3. **The composer panel reflects derived state.** `useActiveComposerState(messages, status)` collapses messages + chat status into one of `idle | active | questions`, and the consumer feeds that to `Composer.Panel`.
 
 ```
 [Composer] → onSubmit(data)
@@ -475,12 +475,12 @@ A function-over-state hook that decides what the panel above the composer should
 type ComposerPanelState =
   | { type: "idle" }
   | { type: "active"; steps: ComposerStepItem[] }
-  | { type: "ask-user"; toolCallId: string; questions: AskUserQuestion[]; isAnswered: boolean };
+  | { type: "questions"; toolCallId: string; questions: Question[] };
 ```
 
 Logic, in order:
 
-1. If the last assistant message has a `tool-askUser` part `state: "input-available"` → **ask-user** (detected even though the chat reports `ready` while the tool waits).
+1. If the last assistant message has a `tool-askUser` part `state: "input-available"` → **questions** (detected even though the chat reports `ready` while the tool waits).
 2. If `status === "ready" | "error"` → **idle**.
 3. If `status === "submitted"`, or streaming with no assistant message yet → **active** with a single "Thinking…" step.
 4. If `status === "streaming"`:
@@ -578,7 +578,7 @@ const ChatSurface = ({ chatId }: { chatId: string }) => {
         <Composer.Root
           onSubmit={(data) => {
             if (data.kind === "answers") {
-              if (panelState.type !== "ask-user") return;
+              if (panelState.type !== "questions") return;
               addToolOutput({
                 tool: "askUser",
                 toolCallId: panelState.toolCallId,
@@ -591,7 +591,7 @@ const ChatSurface = ({ chatId }: { chatId: string }) => {
               { body: tools },
             );
           }}
-          questions={panelState.type === "ask-user" ? panelState.questions : undefined}
+          questions={panelState.type === "questions" ? panelState.questions : undefined}
           commands={{ "@": { kind: "insert", trigger: "word-boundary", items: MENTIONS } }}
         >
           <Composer.Panel value={panelState.type}>
@@ -606,7 +606,7 @@ const ChatSurface = ({ chatId }: { chatId: string }) => {
               <Composer.Placeholder placeholder="Ask anything…" />
             </Composer.Textarea>
             <Composer.Actions>
-              {panelState.type === "ask-user" ? (
+              {panelState.type === "questions" ? (
                 <>
                   <Composer.QuestionHints />
                   <Composer.QuestionDismiss />

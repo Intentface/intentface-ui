@@ -863,10 +863,11 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
         // Project the flat entries back into the question→answer map the tool
         // output is read as (getQuestionsInfo / getQuestionsStepInfo). Ids resolve
         // through the minted questions; skipped entries stay absent.
+        const labels = new Map(composerQuestions?.map((question) => [question.id, question.label]));
         const answers: Record<string, string> = {};
         for (const entry of data.answers) {
           if (entry.selected.length === 0 && entry.text === undefined) continue;
-          const label = composerQuestions?.find((question) => question.id === entry.id)?.label;
+          const label = labels.get(entry.id);
           if (!label) continue;
           answers[label] = [...entry.selected, entry.text].filter(Boolean).join(", ");
         }
