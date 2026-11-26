@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AskUser } from "../src/ask-user";
 import { Composer } from "../src/composer";
 import { useComposer } from "../src/composer/store";
@@ -77,5 +77,46 @@ describe("new questions and focus", () => {
     await askAfter(() => (document.activeElement as HTMLElement | null)?.blur());
 
     expect(document.activeElement).toBe(screen.getByRole("radio", { name: "PostgreSQL" }));
+  });
+});
+
+describe("replacing the questions", () => {
+  afterEach(cleanup);
+
+  // Options are keyed by label, so one carried over keeps its mounted item.
+  test("focuses the new question's first option, not a carried-over highlight", async () => {
+    const { rerender } = render(<Page questions={QUESTIONS} />);
+    await flushFrames();
+    fireEvent.keyDown(screen.getByRole("radio", { name: "PostgreSQL" }), { key: "ArrowDown" });
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "SQLite" }));
+
+    rerender(
+      <Page
+        questions={[
+          { question: "Which fallback?", options: [{ label: "MySQL" }, { label: "SQLite" }] },
+        ]}
+      />,
+    );
+    await flushFrames();
+
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "MySQL" }));
+  });
+
+  // No option re-registers, so the first one in registration order is stale.
+  test("focuses the first option when every label carries over in a new order", async () => {
+    const { rerender } = render(<Page questions={QUESTIONS} />);
+    await flushFrames();
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "PostgreSQL" }));
+
+    rerender(
+      <Page
+        questions={[
+          { question: "Which fallback?", options: [{ label: "SQLite" }, { label: "PostgreSQL" }] },
+        ]}
+      />,
+    );
+    await flushFrames();
+
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "SQLite" }));
   });
 });

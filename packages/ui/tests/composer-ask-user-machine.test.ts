@@ -43,11 +43,14 @@ const ANSWER_EVENTS = [
 ] satisfies [string, AskUserEvent][];
 
 describe("reduceAskUser: questions-changed", () => {
-  test("a new array asks from the first step and focuses its options after a frame", () => {
+  test("a new array asks from the first step, resets the highlight, and focuses its options after a frame", () => {
     const { flow, effects } = reduceAskUser(IDLE_FLOW, { type: "questions-changed", questions });
 
     expect(flow).toEqual({ phase: "asking", questions, step: 0, answers: new Map() });
-    expect(effects).toEqual([{ type: "focus-options", after: "frame" }]);
+    expect(effects).toEqual([
+      { type: "reset-highlight" },
+      { type: "focus-options", after: "frame" },
+    ]);
   });
 
   test("the same array again changes nothing, while asking or once answered", () => {

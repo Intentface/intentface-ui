@@ -251,6 +251,21 @@ export const AskUserOptions = ({
     scrollIntoViewWithin(element, boundary);
   }, []);
 
+  const firstInDocument = useCallback(() => {
+    let first: { value: string; element: HTMLElement } | null = null;
+    for (const value of registeredItems.current) {
+      const element = itemElements.current.get(value)?.();
+      if (!element) continue;
+      if (
+        !first ||
+        element.compareDocumentPosition(first.element) & Node.DOCUMENT_POSITION_FOLLOWING
+      ) {
+        first = { value, element };
+      }
+    }
+    return first?.value;
+  }, []);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -288,7 +303,9 @@ export const AskUserOptions = ({
         setHighlightedValue(null);
       },
       focusHighlighted: () => {
-        const target = highlightedValueRef.current ?? registeredItems.current[0] ?? null;
+        // Registration order is not display order once options carry over
+        // between questions, so fall back to the first in the DOM.
+        const target = highlightedValueRef.current ?? firstInDocument() ?? null;
         if (target !== null && highlightedValueRef.current === null) {
           highlightedValueRef.current = target;
           setHighlightedValue(target);
@@ -300,7 +317,7 @@ export const AskUserOptions = ({
         return highlightedValueRef.current;
       },
     }),
-    [focusValue],
+    [focusValue, firstInDocument],
   );
 
   const element = useRenderElement(
