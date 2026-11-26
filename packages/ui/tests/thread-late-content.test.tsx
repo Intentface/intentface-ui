@@ -183,7 +183,12 @@ describe("Thread.Content mounted after Thread.Root", () => {
     const TURN_HEIGHT = 40;
     const READING_TOP = 100;
     const PUSHED_DOWN = 200;
-    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    // Restored by descriptor, so no copy is left on HTMLElement to shadow a fake
+    // a later file puts on Element.
+    const originalRect = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "getBoundingClientRect",
+    );
     const rowTops = new Map<string, number>();
 
     beforeEach(() => {
@@ -194,7 +199,9 @@ describe("Thread.Content mounted after Thread.Root", () => {
       };
     });
     afterEach(() => {
-      HTMLElement.prototype.getBoundingClientRect = originalRect;
+      if (originalRect) {
+        Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", originalRect);
+      } else Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
     });
 
     test("holds the reading position when older turns load in above", async () => {
