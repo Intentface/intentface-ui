@@ -163,9 +163,10 @@ container's, so the popup closes. A key typed into another field inside the
 composer, such as your own input, is that field's. A command list being open, or
 a question being asked, takes priority over normal typing.
 
-A new question moves focus onto its first option only when nothing outside the
-composer holds it, so a field the user is typing in elsewhere on the page keeps
-it. Its keys still work once focus is back in the composer or on the page.
+A new question moves focus onto its first option unless a field or control
+elsewhere on the page holds it, so a field the user is typing in keeps it. Focus
+on the page itself or on a container around the composer moves to the option.
+Its keys still work once focus is back in the composer or on the page.
 
 **Normal typing**
 
