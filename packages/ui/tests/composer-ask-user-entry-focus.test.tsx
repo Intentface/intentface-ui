@@ -74,7 +74,9 @@ describe("new questions and focus", () => {
   });
 
   test("take focus when nothing holds it", async () => {
-    await askAfter(() => (document.activeElement as HTMLElement | null)?.blur());
+    await askAfter(() => {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
 
     expect(document.activeElement).toBe(screen.getByRole("radio", { name: "PostgreSQL" }));
   });
@@ -102,8 +104,23 @@ describe("replacing the questions", () => {
     expect(document.activeElement).toBe(screen.getByRole("radio", { name: "MySQL" }));
   });
 
-  // No option re-registers, so the first one in registration order is stale.
-  test("focuses the first option when every label carries over in a new order", async () => {
+  test("focuses the first option when a new option is added after a carried-over one", async () => {
+    const { rerender } = render(<Page questions={QUESTIONS} />);
+    await flushFrames();
+
+    rerender(
+      <Page
+        questions={[
+          { question: "Which fallback?", options: [{ label: "SQLite" }, { label: "MySQL" }] },
+        ]}
+      />,
+    );
+    await flushFrames();
+
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "SQLite" }));
+  });
+
+  test("focuses the first option and arrows in display order when every label carries over in a new order", async () => {
     const { rerender } = render(<Page questions={QUESTIONS} />);
     await flushFrames();
     expect(document.activeElement).toBe(screen.getByRole("radio", { name: "PostgreSQL" }));
@@ -118,5 +135,7 @@ describe("replacing the questions", () => {
     await flushFrames();
 
     expect(document.activeElement).toBe(screen.getByRole("radio", { name: "SQLite" }));
+    fireEvent.keyDown(screen.getByRole("radio", { name: "SQLite" }), { key: "ArrowDown" });
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "PostgreSQL" }));
   });
 });
