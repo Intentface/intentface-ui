@@ -45,7 +45,12 @@ const composerVariablesOf = (root: HTMLElement) => ({
 const insetOf = (px: number) => `calc(${px}px + var(--thread-composer-gap, 0px))`;
 
 describe("Thread.Composer composer variables", () => {
-  const originalRect = HTMLElement.prototype.getBoundingClientRect;
+  // Restored by descriptor, so no copy is left on HTMLElement to shadow a fake
+  // a later file puts on Element.
+  const originalRect = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "getBoundingClientRect",
+  );
   const OriginalResizeObserver = globalThis.ResizeObserver;
   let composerTop = 540;
 
@@ -64,7 +69,9 @@ describe("Thread.Composer composer variables", () => {
     };
   });
   afterEach(() => {
-    HTMLElement.prototype.getBoundingClientRect = originalRect;
+    if (originalRect) {
+      Object.defineProperty(HTMLElement.prototype, "getBoundingClientRect", originalRect);
+    } else Reflect.deleteProperty(HTMLElement.prototype, "getBoundingClientRect");
     globalThis.ResizeObserver = OriginalResizeObserver;
   });
 

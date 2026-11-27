@@ -484,7 +484,9 @@ export const NavList = ({
       );
     });
 
-    for (const child of element.children) observer.observe(child);
+    // Their border boxes: a row's padding or border adds to the list's scroll
+    // size while its content box, the default, stays the same.
+    for (const child of element.children) observer.observe(child, { box: "border-box" });
     return () => observer.disconnect();
   }, [size]);
 
