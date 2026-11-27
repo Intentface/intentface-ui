@@ -391,6 +391,17 @@ export const createComposerStore = (): ComposerStore => {
   };
 
   // --- Ask-user
+  // A field or control outside this composer holds focus. The body, an element
+  // around the composer (classifyStrayKey) and the composer's own parts,
+  // portaled options included, do not.
+  const isFocusHeldElsewhere = () => {
+    const root = rootRef.current;
+    const active = root?.ownerDocument.activeElement;
+    if (!root || !active) return false;
+    if (root.contains(active) || optionsRef.current?.getElement()?.contains(active)) return false;
+    return classifyStrayKey(active, root) === null;
+  };
+
   // The execute half of the ask-user flow: replay a transition's effects
   // against the editor controller, the options handle, and the submit
   // callback. Input-content state is the editor engine's own job — engines
@@ -412,7 +423,11 @@ export const createComposerStore = (): ComposerStore => {
           // never on <body>, once its options have registered. The flow may
           // have left asking by then.
           deferBy(effect.after, () => {
-            if (flow.phase === "asking") optionsRef.current?.focusHighlighted();
+            if (flow.phase !== "asking") return;
+            // New questions arrive unbidden, so they leave focus where the user
+            // put it; a step change follows the user's own answer.
+            if (effect.after === "frame" && isFocusHeldElsewhere()) return;
+            optionsRef.current?.focusHighlighted();
           });
           break;
         case "reset-highlight":

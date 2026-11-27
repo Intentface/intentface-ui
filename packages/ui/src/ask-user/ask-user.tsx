@@ -186,6 +186,19 @@ export type AskUserOptionsProps = Omit<PrimitiveProps<"fieldset">, "value" | "re
   ref?: RefObject<AskUserOptionsHandle | null>;
 };
 
+// Registration order drifts from display order once options carry over between
+// questions, because a kept option does not register again.
+const getDisplayOrder = (values: string[], elements: Map<string, () => HTMLElement | null>) =>
+  values
+    .flatMap((value) => {
+      const element = elements.get(value)?.();
+      return element?.isConnected ? [{ value, element }] : [];
+    })
+    .sort((a, b) =>
+      a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+    )
+    .map(({ value }) => value);
+
 export const AskUserOptions = ({
   multiSelect = false,
   groupName = "",
@@ -219,8 +232,9 @@ export const AskUserOptions = ({
     // interleave old-item cleanups with new-item setups, so the new first
     // option may arrive when the list is not exactly length 1.
     if (highlightedValueRef.current === null) {
-      highlightedValueRef.current = itemValue;
-      setHighlightedValue(itemValue);
+      const first = getDisplayOrder(registeredItems.current, itemElements.current)[0] ?? itemValue;
+      highlightedValueRef.current = first;
+      setHighlightedValue(first);
     }
     return () => {
       registeredItems.current = registeredItems.current.filter((v) => v !== itemValue);
@@ -255,7 +269,7 @@ export const AskUserOptions = ({
     ref,
     () => ({
       navigate: (direction: number): string | null => {
-        const items = registeredItems.current;
+        const items = getDisplayOrder(registeredItems.current, itemElements.current);
         if (items.length === 0) return null;
         const previous = highlightedValueRef.current;
         let next: string | null;
@@ -288,7 +302,10 @@ export const AskUserOptions = ({
         setHighlightedValue(null);
       },
       focusHighlighted: () => {
-        const target = highlightedValueRef.current ?? registeredItems.current[0] ?? null;
+        const target =
+          highlightedValueRef.current ??
+          getDisplayOrder(registeredItems.current, itemElements.current)[0] ??
+          null;
         if (target !== null && highlightedValueRef.current === null) {
           highlightedValueRef.current = target;
           setHighlightedValue(target);

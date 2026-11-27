@@ -110,7 +110,9 @@ const changeQuestions = (flow: AskUserFlow, questions: Questions | null): AskUse
   if (questions === null) return { flow: IDLE_FLOW, effects: [] };
   return {
     flow: { phase: "asking", questions, step: 0, answers: new Map() },
-    effects: [{ type: "focus-options", after: "frame" }],
+    // Options are keyed by label, so one carried over from the last question
+    // would keep its highlight.
+    effects: [{ type: "reset-highlight" }, { type: "focus-options", after: "frame" }],
   };
 };
 

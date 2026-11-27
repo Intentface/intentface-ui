@@ -163,6 +163,11 @@ container's, so the popup closes. A key typed into another field inside the
 composer, such as your own input, is that field's. A command list being open, or
 a question being asked, takes priority over normal typing.
 
+A new question moves focus to its first option, unless a field or control
+elsewhere on the page has focus. Focus on the page itself or on a container
+around the composer moves to the option. The question's keyboard controls still
+work after focus returns to the composer or the page.
+
 **Normal typing**
 
 export const normalKeys = [
