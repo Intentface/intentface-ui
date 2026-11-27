@@ -114,6 +114,18 @@ skipping the last one fires `onSubmit` with `{ kind: "answers" }` — one flat
 answer per question, keyed by the id you minted, carrying option values. Passing
 a fresh `questions` array re-arms it from the first step.
 
+The editor is also the free-text answer field, so each mode keeps its own
+buffer. Arming saves the message being typed, chips included, and every step
+keeps what was typed on it through Back and Next. When the flow ends, by the
+last answer, a skip, or `questions` being removed, the message is back in the
+editor. It never ends up in an answer, and a step's text never reaches
+`onValueChange`.
+
+An editor that has focus when questions arm keeps it, and ArrowDown still enters
+the options. A user typing in another field keeps that field. Otherwise the
+first option takes focus. When the flow ends, the editor takes focus back if
+focus was still in the composer.
+
 <Demo component={<QuestionFlow />} file="primitives/composer/demos/question-flow.tsx" />
 
 A tool approval is the same mechanism, not a feature: mint the tool call id as
@@ -192,7 +204,7 @@ the question flow being active, takes priority over normal typing.
 export const normalKeys = [
   { keys: "Enter", description: "Submit the form (requestSubmit)." },
   { keys: "Shift + Enter", description: "Insert a soft line break." },
-  { keys: "Backspace", description: "When the editor is empty and attachments exist, remove the last attachment." },
+  { keys: "Backspace", description: "When the editor is empty and attachments exist, remove the last attachment. Not while a question is open." },
 ];
 
 <KeysTable rows={normalKeys} />
@@ -213,7 +225,7 @@ export const commandKeys = [
 export const requestKeys = [
   { keys: "ArrowUp / ArrowDown", description: "Navigate options; up past the first refocuses the editor." },
   { keys: "ArrowLeft / ArrowRight", description: "Go to the previous / next question." },
-  { keys: "Enter", description: "Select the highlighted option." },
+  { keys: "Enter", description: "Select the highlighted option. In the editor, continue with the typed answer, or do nothing while nothing is typed or selected." },
   { keys: "Escape", description: "Dismiss the current step." },
   { keys: "Any character", description: "Focus the editor and start typing a free-text answer." },
 ];
@@ -246,7 +258,7 @@ prop → store bridges. Renders `data-composer-root`.
 export const rootProps = [
   { name: "onSubmit", type: "(data: ComposerSubmitData) => void | Promise<void>", description: "Fires on message submit and on answers. Discriminate on data.kind." },
   { name: "commands", type: "ComposerCommandsMap", default: "{}", description: "Prefix → command config (kind, trigger, items, suggestion, placeholder). suggestion: false disables ghost-text completion; placeholder sets the per-prefix empty-query hint (never shown alongside a suggestion — the suggestion wins)." },
-  { name: "questions", type: "ComposerQuestion[]", description: "When set, arms the question flow (blurs the editor, flips questions.active)." },
+  { name: "questions", type: "ComposerQuestion[]", description: "When set, arms the question flow: saves the message being typed, gives each step its own editor buffer, and flips questions.active." },
   { name: "isSubmitting", type: "boolean", default: "false", description: "Flips Submit to a stop affordance and gates re-submits." },
   { name: "value", type: "ComposerSnapshot", description: "Controlled editor content." },
   { name: "defaultValue", type: "ComposerSnapshot", description: "Uncontrolled initial editor content." },
@@ -591,9 +603,9 @@ drafts — but renders none of the prompt UI. Compose that from the
 on `questions.active`.
 
 `Composer.QuestionDismiss` is a plain button you wire to `questions.dismissStep`;
-`Composer.QuestionContinue` is `type="submit"`, so the enclosing `Composer.Root` form
-drives it. Neither ships copy — supply the labels as children, and read
-`questions.isLastStep` to switch the continue wording.
+`Composer.QuestionContinue` calls `questions.continueStep` itself, and does
+nothing once the flow has ended. Neither ships copy — supply the labels as
+children, and read `questions.isLastStep` to switch the continue wording.
 
 ### Composer.QuestionHeader
 

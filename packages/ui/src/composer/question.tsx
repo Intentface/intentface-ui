@@ -552,7 +552,7 @@ export const ComposerQuestionDismiss = ({
     { props: [{ type: "button" as const, "data-composer-question-dismiss": "" }, elementProps] },
   );
 
-/** Continue/submit button — `type=submit` so the enclosing form drives it. */
+/** Continue button: continues the current step through `questions.continueStep`. A plain button, not a form submit, so a click after the answers went out never sends the message. */
 export type ComposerQuestionContinueProps = PrimitiveProps<"button">;
 
 export const ComposerQuestionContinue = ({
@@ -560,9 +560,20 @@ export const ComposerQuestionContinue = ({
   render,
   style,
   ...elementProps
-}: ComposerQuestionContinueProps) =>
-  useRenderElement(
+}: ComposerQuestionContinueProps) => {
+  const continueStep = useComposer((composer) => composer.questions.continueStep);
+  return useRenderElement(
     "button",
     { className, render, style },
-    { props: [{ type: "submit" as const, "data-composer-question-continue": "" }, elementProps] },
+    {
+      props: [
+        {
+          type: "button" as const,
+          "data-composer-question-continue": "",
+          onClick: () => continueStep(),
+        },
+        elementProps,
+      ],
+    },
   );
+};

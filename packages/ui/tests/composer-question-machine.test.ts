@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   compileAnswers,
+  type EditorBuffer,
   INITIAL_QUESTIONS_STATE,
   isLastStep,
   type QuestionsState,
   transitionQuestions,
 } from "../src/composer/question-machine";
-import type { ComposerQuestion } from "../src/composer/types";
+import type { ComposerQuestion, ComposerSnapshot } from "../src/composer/types";
 
 const questions: ComposerQuestion[] = [
   { id: "q1", label: "Q1?", options: [{ label: "A", description: "a" }] },
@@ -21,8 +22,18 @@ const questions: ComposerQuestion[] = [
   },
 ];
 
+const bufferOf = (text: string): EditorBuffer => ({
+  snapshot: { __doc: { text }, __brand: "ComposerSnapshot" } satisfies ComposerSnapshot,
+  text,
+});
+
+const draftOf = (selected: string[], buffer: EditorBuffer | null = null) => ({
+  selected: new Set(selected),
+  buffer,
+});
+
 describe("transitionQuestions", () => {
-  test("select-option on single-select advances a step and clears input", () => {
+  test("select-option on single-select advances a step and shows an empty editor", () => {
     const { next, effects } = transitionQuestions(INITIAL_QUESTIONS_STATE, questions, {
       type: "select-option",
       label: "A",
@@ -30,7 +41,22 @@ describe("transitionQuestions", () => {
 
     expect(next.step).toBe(1);
     expect(next.drafts.get(0)?.selected.has("A")).toBe(true);
-    expect(effects.map((e) => e.type)).toEqual(["clear-input", "reset-highlight", "focus-options"]);
+    expect(effects).toEqual([
+      { type: "load-buffer", buffer: null },
+      { type: "reset-highlight" },
+      { type: "focus-options" },
+    ]);
+  });
+
+  test("advancing into a step visited earlier shows what was typed there", () => {
+    const saved = bufferOf("typed on q2 earlier");
+    const state: QuestionsState = { step: 0, drafts: new Map([[1, draftOf([], saved)]]) };
+    const { effects } = transitionQuestions(state, questions, {
+      type: "continue-step",
+      buffer: bufferOf("q1 answer"),
+    });
+
+    expect(effects[0]).toEqual({ type: "load-buffer", buffer: saved });
   });
 
   test("select-option on the last step compiles and submits", () => {
@@ -46,37 +72,72 @@ describe("transitionQuestions", () => {
     expect(next.drafts.get(1)?.selected.has("B")).toBe(true);
   });
 
-  test("continue-step on the last step emits submit-questions with compiled payload", () => {
-    const state: QuestionsState = {
-      step: 1,
-      drafts: new Map([[0, { selected: new Set(["A"]), freeText: "" }]]),
-    };
+  test("continue-step on the last step emits only submit-answers with the compiled payload", () => {
+    const state: QuestionsState = { step: 1, drafts: new Map([[0, draftOf(["A"])]]) };
     const withToggle = transitionQuestions(state, questions, { type: "toggle-option", label: "B" });
     const { effects } = transitionQuestions(withToggle.next, questions, {
       type: "continue-step",
-      freeText: "extra context",
+      buffer: bufferOf("extra context"),
     });
 
-    const submit = effects.find((e) => e.type === "submit-answers");
-    expect(submit).toBeDefined();
-    if (submit?.type !== "submit-answers") throw new Error("unreachable");
-    expect(submit.answers).toEqual([
-      { id: "q1", selected: ["A"] },
-      { id: "q2", selected: ["B"], text: "extra context" },
+    expect(effects).toEqual([
+      {
+        type: "submit-answers",
+        answers: [
+          { id: "q1", selected: ["A"] },
+          { id: "q2", selected: ["B"], text: "extra context" },
+        ],
+      },
     ]);
-    expect(effects.at(-1)).toEqual({ type: "focus-input" });
   });
 
-  test("multiSelect toggle flips membership and keeps free text", () => {
-    const first = transitionQuestions({ step: 1, drafts: new Map() }, questions, {
-      type: "toggle-option",
-      label: "B",
+  test("continue-step with text on single-select drops the selection", () => {
+    const state: QuestionsState = { step: 0, drafts: new Map([[0, draftOf(["A"])]]) };
+    const { next } = transitionQuestions(state, questions, {
+      type: "continue-step",
+      buffer: bufferOf("my own answer"),
     });
+    expect(next.drafts.get(0)).toEqual(draftOf([], bufferOf("my own answer")));
+  });
+
+  test("continue-step with an empty editor keeps the selection", () => {
+    const state: QuestionsState = { step: 0, drafts: new Map([[0, draftOf(["A"])]]) };
+    const { next } = transitionQuestions(state, questions, {
+      type: "continue-step",
+      buffer: bufferOf(""),
+    });
+    expect(next.drafts.get(0)?.selected.has("A")).toBe(true);
+  });
+
+  test("single-select toggle replaces the typed text with the option and empties the editor", () => {
+    const state: QuestionsState = {
+      step: 0,
+      drafts: new Map([[0, draftOf([], bufferOf("typed"))]]),
+    };
+    const { next, effects } = transitionQuestions(state, questions, {
+      type: "toggle-option",
+      label: "A",
+    });
+    expect(next.drafts.get(0)).toEqual(draftOf(["A"]));
+    expect(effects).toEqual([{ type: "load-buffer", buffer: null }]);
+  });
+
+  test("multiSelect toggle flips membership and keeps the buffer", () => {
+    const typed = bufferOf("notes");
+    const first = transitionQuestions(
+      { step: 1, drafts: new Map([[1, draftOf([], typed)]]) },
+      questions,
+      { type: "toggle-option", label: "B" },
+    );
+    expect(first.effects).toEqual([]);
+    expect(first.next.drafts.get(1)?.buffer).toBe(typed);
+
     const second = transitionQuestions(first.next, questions, {
       type: "toggle-option",
       label: "B",
     });
     expect(second.next.drafts.get(1)?.selected.size).toBe(0);
+    expect(second.next.drafts.get(1)?.buffer).toBe(typed);
   });
 
   test("dismiss-step skips the draft entirely", () => {
@@ -87,25 +148,24 @@ describe("transitionQuestions", () => {
     expect(next.drafts.has(0)).toBe(false);
   });
 
-  test("step-back preserves in-progress free text and restores the target's", () => {
-    const state: QuestionsState = {
-      step: 1,
-      drafts: new Map([[0, { selected: new Set(), freeText: "saved" }]]),
-    };
+  test("step-back saves the buffer being left and shows the target's", () => {
+    const saved = bufferOf("saved");
+    const typing = bufferOf("typing on q2");
+    const state: QuestionsState = { step: 1, drafts: new Map([[0, draftOf([], saved)]]) };
     const { next, effects } = transitionQuestions(state, questions, {
       type: "step-back",
-      currentText: "typing on q2",
+      buffer: typing,
     });
 
     expect(next.step).toBe(0);
-    expect(next.drafts.get(1)?.freeText).toBe("typing on q2");
-    expect(effects[0]).toEqual({ type: "set-input-text", text: "saved" });
+    expect(next.drafts.get(1)?.buffer).toBe(typing);
+    expect(effects[0]).toEqual({ type: "load-buffer", buffer: saved });
   });
 
   test("step navigation clamps at the ends", () => {
     const atStart = transitionQuestions(INITIAL_QUESTIONS_STATE, questions, {
       type: "step-back",
-      currentText: "",
+      buffer: null,
     });
     expect(atStart.next).toBe(INITIAL_QUESTIONS_STATE);
     expect(atStart.effects).toEqual([]);
@@ -120,10 +180,10 @@ describe("compileAnswers", () => {
     ]);
   });
 
-  test("free text on single-select compiles to a text entry", () => {
+  test("free text on single-select compiles to a trimmed text entry", () => {
     const state: QuestionsState = {
       step: 0,
-      drafts: new Map([[0, { selected: new Set(), freeText: " custom " }]]),
+      drafts: new Map([[0, draftOf([], bufferOf(" custom "))]]),
     };
     expect(compileAnswers(state, questions)[0]).toEqual({ id: "q1", selected: [], text: "custom" });
   });
@@ -131,7 +191,7 @@ describe("compileAnswers", () => {
   test("text is omitted entirely when the user typed nothing", () => {
     const state: QuestionsState = {
       step: 0,
-      drafts: new Map([[0, { selected: new Set(["A"]), freeText: "" }]]),
+      drafts: new Map([[0, draftOf(["A"], bufferOf("  "))]]),
     };
     const entry = compileAnswers(state, questions)[0];
     expect(entry).toBeDefined();
@@ -150,7 +210,7 @@ describe("compileAnswers", () => {
     // Toggle keys are labels (how the widget wires Option value today).
     const state: QuestionsState = {
       step: 0,
-      drafts: new Map([[0, { selected: new Set(["Next.js", "Remix"]), freeText: "" }]]),
+      drafts: new Map([[0, draftOf(["Next.js", "Remix"])]]),
     };
     expect(compileAnswers(state, valued)[0]).toEqual({
       id: "framework",
@@ -172,10 +232,7 @@ describe("compileAnswers", () => {
     // The widget stores an option's identity (value ?? label) — here, "b" for
     // the second option. A cross-field lookup would match the first option's
     // label instead and wrongly emit "c".
-    const state: QuestionsState = {
-      step: 0,
-      drafts: new Map([[0, { selected: new Set(["b"]), freeText: "" }]]),
-    };
+    const state: QuestionsState = { step: 0, drafts: new Map([[0, draftOf(["b"])]]) };
     expect(compileAnswers(state, colliding)[0]).toEqual({ id: "pick", selected: ["b"] });
   });
 
@@ -183,10 +240,7 @@ describe("compileAnswers", () => {
     const valued: ComposerQuestion[] = [
       { id: "db", label: "Database?", options: [{ value: "pg", label: "PostgreSQL" }] },
     ];
-    const state: QuestionsState = {
-      step: 0,
-      drafts: new Map([[0, { selected: new Set(["pg"]), freeText: "" }]]),
-    };
+    const state: QuestionsState = { step: 0, drafts: new Map([[0, draftOf(["pg"])]]) };
     expect(compileAnswers(state, valued)[0]).toEqual({ id: "db", selected: ["pg"] });
   });
 });

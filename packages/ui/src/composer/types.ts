@@ -59,6 +59,7 @@ export type RegisteredEditor = ComposerEditorHandle & {
   /** The editable root element — event scoping and badge queries anchor to it. */
   getRootElement: () => HTMLElement | null;
   getSnapshot: () => ComposerSnapshot;
+  /** Show a saved buffer. Never takes focus: the DOM selection moves only while the editor already has it. */
   applySnapshot: (snapshot: ComposerSnapshot) => void;
   /** Replace the active trigger token with a chip, plus a trailing space unless one follows. */
   insertChipAtTrigger: (chip: ChipData) => void;

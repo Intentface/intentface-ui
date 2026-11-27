@@ -31,16 +31,19 @@ import { interpretQuestionKey } from "./keyboard";
 import type { ComposerQuestionOptionsHandle } from "./question";
 import {
   type AnswerDraft,
+  type EditorBuffer,
   INITIAL_QUESTIONS_STATE,
   isLastStep,
   type QuestionsAction,
   type QuestionsEffect,
   transitionQuestions,
 } from "./question-machine";
+import { segmentsToSnapshot } from "./segments";
 import type {
   ComposerAnswer,
   ComposerEditorHandle,
   ComposerQuestion,
+  ComposerSnapshot,
   RegisteredEditor,
 } from "./types";
 
@@ -95,7 +98,8 @@ export type ComposerQuestionsState = ComposerPanelSlice & {
   step: number;
   drafts: Map<number, AnswerDraft>;
   toggleOption: (label: string) => void;
-  continueStep: (freeText?: string) => void;
+  /** Continue with the editor's content as the step's free-text answer (plus any selection). */
+  continueStep: () => void;
   dismissStep: () => void;
   isLastStep: boolean;
   isSingle: boolean;
@@ -138,6 +142,10 @@ export type ComposerState = {
   questions: ComposerQuestionsState;
 };
 
+export type EditorMode =
+  | { kind: "message" }
+  | { kind: "questions"; savedMessage: ComposerSnapshot | null };
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -160,6 +168,8 @@ export type ComposerStore = {
   moveHighlight: (direction: number) => void;
   setHighlight: (index: number) => void;
   setQuestions: (questions: ComposerQuestion[] | null) => void;
+  getEditorMode: () => EditorMode;
+  setMessageSnapshot: (snapshot: ComposerSnapshot) => void;
   setDragging: (active: boolean) => void;
   resetAttachments: () => void;
   activateQuestions: () => () => void;
@@ -186,6 +196,7 @@ export type ComposerStore = {
   // Invokes the active list's current selection. Registered by the mounted
   // CommandList via a callback ref (commit-time), not an effect.
   commandSelectRef: RefObject<(() => void) | null>;
+  lastFocusedPartRef: RefObject<Element | null>;
 };
 
 // ---------------------------------------------------------------------------
@@ -197,6 +208,8 @@ export type ComposerStore = {
 // an option. The composer is on screen already, and the browser's
 // focus-scroll would also move the page around an embedded composer.
 const FOCUS_IN_PLACE: FocusOptions = { preventScroll: true };
+
+const EMPTY_BUFFER = segmentsToSnapshot([]);
 
 // Scope a document-level listener to this composer: keystrokes aimed at
 // another editable or inside another composer's options are theirs; our own
@@ -218,6 +231,34 @@ const isEventForComposer = (
   return target === null || target === document.body;
 };
 
+// The page body counts as the composer's: focus drops there when the focused
+// option goes away.
+type FocusOwner = "editor" | "field" | "composer" | "page";
+
+const isEditableElement = (element: Element) =>
+  element instanceof HTMLElement &&
+  (element.isContentEditable || element.matches("input, textarea, select"));
+
+const getFocusOwner = ({
+  editorDom,
+  lastFocusedPart,
+}: {
+  editorDom: HTMLElement | null;
+  lastFocusedPart: Element | null;
+}): FocusOwner => {
+  const active = document.activeElement;
+  if (active === null || active === document.body) return "composer";
+  if (active === editorDom) return "editor";
+  if (isEditableElement(active)) return "field";
+  return active === lastFocusedPart ? "composer" : "page";
+};
+
+const readEditorBuffer = (editorRef: RefObject<RegisteredEditor | null>): EditorBuffer | null => {
+  const editor = editorRef.current;
+  if (!editor) return null;
+  return { snapshot: editor.getSnapshot(), text: editor.getText() };
+};
+
 type QuestionsKeydownDeps = {
   controller: ComposerEditorState;
   optionsRef: RefObject<ComposerQuestionOptionsHandle | null>;
@@ -231,15 +272,9 @@ const createQuestionsKeydownHandler =
   ({ controller, optionsRef, editorRef, dispatch }: QuestionsKeydownDeps) =>
   (event: KeyboardEvent) => {
     const scopedOptionsElement = optionsRef.current?.getElement() ?? null;
-    if (
-      !isEventForComposer(
-        event,
-        editorRef.current?.getRootElement() ?? undefined,
-        scopedOptionsElement,
-      )
-    ) {
-      return;
-    }
+    const editorDom = editorRef.current?.getRootElement() ?? undefined;
+    if (!isEventForComposer(event, editorDom, scopedOptionsElement)) return;
+    if (editorDom?.contains(event.target as Node)) return;
 
     const optionsHandle = optionsRef.current;
     const action = interpretQuestionKey(
@@ -270,10 +305,10 @@ const createQuestionsKeydownHandler =
         return;
       }
       case "go-back":
-        dispatch({ type: "step-back", currentText: controller.getText() });
+        dispatch({ type: "step-back", buffer: readEditorBuffer(editorRef) });
         return;
       case "go-next":
-        dispatch({ type: "step-forward", currentText: controller.getText() });
+        dispatch({ type: "step-forward", buffer: readEditorBuffer(editorRef) });
         return;
       case "insert-character":
         optionsHandle?.clearHighlight();
@@ -297,12 +332,6 @@ export const createComposerStore = (): ComposerStore => {
   // Per-store editor engine behind a null-safe controller.
   const editorRef: RefObject<RegisteredEditor | null> = { current: null };
   const controller = createEditorController(editorRef);
-  const registerEditor = (editor: RegisteredEditor) => {
-    editorRef.current = editor;
-    return () => {
-      if (editorRef.current === editor) editorRef.current = null;
-    };
-  };
 
   // Imperative refs co-located with the store; not reactive.
   const containerRef: RefObject<HTMLElement | null> = { current: null };
@@ -326,10 +355,12 @@ export const createComposerStore = (): ComposerStore => {
   };
   const commandSelectRef: RefObject<(() => void) | null> = { current: null };
   const stopGeneratingRef: RefObject<(() => void) | null> = { current: null };
+  const lastFocusedPartRef: RefObject<Element | null> = { current: null };
 
   // Canonical machine states; the snapshot mirrors them on every update.
   let attachmentState = INITIAL_ATTACHMENT_STATE;
   let questionsMachine = INITIAL_QUESTIONS_STATE;
+  let mode: EditorMode = { kind: "message" };
   let snapshot: ComposerState;
 
   // --- Setters
@@ -417,22 +448,68 @@ export const createComposerStore = (): ComposerStore => {
     notify();
   };
 
+  const loadEditorSnapshot = (snapshot: ComposerSnapshot | null) => {
+    editorRef.current?.applySnapshot(snapshot ?? EMPTY_BUFFER);
+  };
+
+  const registerEditor = (editor: RegisteredEditor) => {
+    editorRef.current = editor;
+    if (mode.kind === "questions") {
+      loadEditorSnapshot(
+        questionsMachine.drafts.get(questionsMachine.step)?.buffer?.snapshot ?? null,
+      );
+    }
+    return () => {
+      if (editorRef.current === editor) editorRef.current = null;
+    };
+  };
+
+  const readFocusOwner = () =>
+    getFocusOwner({
+      editorDom: editorRef.current?.getRootElement() ?? null,
+      lastFocusedPart: lastFocusedPartRef.current,
+    });
+
+  let entryFocusFrame = 0;
+
+  const enterQuestions = () => {
+    if (mode.kind === "message") {
+      mode = { kind: "questions", savedMessage: editorRef.current?.getSnapshot() ?? null };
+    }
+    loadEditorSnapshot(null);
+
+    cancelAnimationFrame(entryFocusFrame);
+    entryFocusFrame = requestAnimationFrame(() => {
+      const owner = readFocusOwner();
+      if (owner === "editor") optionsRef.current?.clearHighlight();
+      if (owner === "composer" || owner === "page") optionsRef.current?.focusHighlighted();
+    });
+  };
+
+  const endQuestions = () => {
+    if (mode.kind !== "questions") return;
+    cancelAnimationFrame(entryFocusFrame);
+    const owner = readFocusOwner();
+    const { savedMessage } = mode;
+    mode = { kind: "message" };
+    loadEditorSnapshot(savedMessage);
+    if (owner === "editor" || owner === "composer") controller.focus(FOCUS_IN_PLACE);
+  };
+
+  const setMessageSnapshot = (snapshot: ComposerSnapshot) => {
+    if (mode.kind === "questions") {
+      mode = { kind: "questions", savedMessage: snapshot };
+      return;
+    }
+    editorRef.current?.applySnapshot(snapshot);
+  };
+
   // --- Questions
-  // The execute half of the question flow: replay a transition's effects
-  // against the editor controller, the options handle, and the submit
-  // callback. Input-content state is the editor engine's own job — engines
-  // report programmatic setText/clear through their update path.
   const executeQuestionsEffects = (effects: QuestionsEffect[]) => {
     for (const effect of effects) {
       switch (effect.type) {
-        case "clear-input":
-          controller.clear();
-          break;
-        case "set-input-text":
-          controller.setText(effect.text);
-          break;
-        case "focus-input":
-          controller.focus(FOCUS_IN_PLACE);
+        case "load-buffer":
+          loadEditorSnapshot(effect.buffer?.snapshot ?? null);
           break;
         case "focus-options":
           // Step advance / navigation: focus lands on the new step's
@@ -445,6 +522,7 @@ export const createComposerStore = (): ComposerStore => {
           optionsRef.current?.resetHighlight();
           break;
         case "submit-answers":
+          endQuestions();
           submitAnswersRef.current?.(effect.answers);
           break;
       }
@@ -453,7 +531,7 @@ export const createComposerStore = (): ComposerStore => {
 
   const dispatchQuestions = (action: QuestionsAction) => {
     const questions = snapshot.questions.items;
-    if (!questions || questions.length === 0) return;
+    if (mode.kind !== "questions" || !questions?.length) return;
     const { next, effects } = transitionQuestions(questionsMachine, questions, action);
     if (next !== questionsMachine) {
       questionsMachine = next;
@@ -489,11 +567,12 @@ export const createComposerStore = (): ComposerStore => {
       },
     };
     notify();
+    if (questions) enterQuestions();
+    else endQuestions();
   };
 
-  // Question mode: while questions are active the options own the keyboard.
-  // Entering moves DOM focus onto the highlighted option (roving tabindex),
-  // and the keydown listener sits at the document, scoped by containment
+  // Question mode: while questions are active the options own the keys typed
+  // outside the editor. The keydown listener sits at the document, scoped by containment
   // (isEventForComposer) — so keys keep flowing after a chrome click drops
   // focus to <body>, while a second composer's editor/options never hear them.
   const activateQuestions = () => {
@@ -504,15 +583,7 @@ export const createComposerStore = (): ComposerStore => {
       dispatch: dispatchQuestions,
     });
     document.addEventListener("keydown", handleKeyDown);
-
-    // The Options part renders in reaction to setQuestions' notify — one
-    // commit after this call — so the entry focus defers a frame.
-    const frame = requestAnimationFrame(() => {
-      optionsRef.current?.focusHighlighted();
-    });
-
     return () => {
-      cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
     };
   };
@@ -548,12 +619,13 @@ export const createComposerStore = (): ComposerStore => {
       isLastStep: false,
       isSingle: false,
       toggleOption: (label) => dispatchQuestions({ type: "toggle-option", label }),
-      continueStep: (freeText) =>
-        dispatchQuestions({ type: "continue-step", freeText: freeText ?? "" }),
+      continueStep: () =>
+        dispatchQuestions({ type: "continue-step", buffer: readEditorBuffer(editorRef) }),
       dismissStep: () => dispatchQuestions({ type: "dismiss-step" }),
       clearSelections: () => dispatchQuestions({ type: "clear-selections" }),
-      goBack: () => dispatchQuestions({ type: "step-back", currentText: controller.getText() }),
-      goNext: () => dispatchQuestions({ type: "step-forward", currentText: controller.getText() }),
+      goBack: () => dispatchQuestions({ type: "step-back", buffer: readEditorBuffer(editorRef) }),
+      goNext: () =>
+        dispatchQuestions({ type: "step-forward", buffer: readEditorBuffer(editorRef) }),
       optionsRef,
     },
   };
@@ -586,6 +658,8 @@ export const createComposerStore = (): ComposerStore => {
   const reset = () => {
     dispatchAttachments({ type: "reset" });
     questionsMachine = INITIAL_QUESTIONS_STATE;
+    cancelAnimationFrame(entryFocusFrame);
+    mode = { kind: "message" };
     commandSelectRef.current = null;
     snapshot = initialSnapshot;
     notify();
@@ -607,6 +681,8 @@ export const createComposerStore = (): ComposerStore => {
     moveHighlight,
     setHighlight,
     setQuestions,
+    getEditorMode: () => mode,
+    setMessageSnapshot,
     setDragging,
     resetAttachments: () => dispatchAttachments({ type: "reset" }),
     activateQuestions,
@@ -620,6 +696,7 @@ export const createComposerStore = (): ComposerStore => {
     submitAnswersRef,
     stopGeneratingRef,
     commandSelectRef,
+    lastFocusedPartRef,
   };
 };
 

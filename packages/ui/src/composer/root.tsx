@@ -127,7 +127,7 @@ export const ComposerRoot = ({
   });
 
   const { reportEditorUpdate } = useComposerSnapshot({
-    editorRef: store.editorRef,
+    store,
     defaultValue,
     value,
     onValueChange,
@@ -137,8 +137,8 @@ export const ComposerRoot = ({
     event.preventDefault();
     const { questions, attachments } = store.getSnapshot();
 
-    if (questions.items?.length) {
-      questions.continueStep(store.controller.getText());
+    if (store.getEditorMode().kind === "questions") {
+      questions.continueStep();
       return;
     }
 
@@ -170,9 +170,15 @@ export const ComposerRoot = ({
     const stopGenerating = store.stopGeneratingRef.current;
     if (event.key !== "Escape" || event.defaultPrevented || !stopGenerating) return;
     // While a question is open, Escape dismisses its step instead.
-    if (store.getSnapshot().questions.items?.length) return;
+    if (store.getEditorMode().kind === "questions") return;
     event.preventDefault();
     stopGenerating();
+  };
+
+  // React bubbles focus from portaled parts (a positioned Panel) here too, so
+  // the store can tell a focused part of this composer from the rest of the page.
+  const handleFocus = (event: React.FocusEvent<HTMLFormElement>) => {
+    store.lastFocusedPartRef.current = event.target;
   };
 
   const internalsValue = useMemo<ComposerInternalsValue>(
@@ -191,7 +197,12 @@ export const ComposerRoot = ({
       state: { submitting: isSubmitting, dragging: isDragging },
       ref: formRef,
       props: [
-        { "data-composer-root": "", onSubmit: handleFormSubmit, onKeyDown: handleKeyDown },
+        {
+          "data-composer-root": "",
+          onSubmit: handleFormSubmit,
+          onKeyDown: handleKeyDown,
+          onFocus: handleFocus,
+        },
         elementProps,
       ],
     },

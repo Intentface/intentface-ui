@@ -11,6 +11,7 @@
 // guarantee that a token can never span a chip).
 
 import { type ChipData, type ChipSegment, encodeChipMarkdown } from "../chip-markdown";
+import type { ComposerSnapshot } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -474,6 +475,11 @@ export const segmentsToParagraphJSON = (doc: SegmentDoc): SnapshotParagraphNode[
   // path filters them; the snapshot path must not.)
   return paragraphs;
 };
+
+export const segmentsToSnapshot = (doc: SegmentDoc): ComposerSnapshot => ({
+  __doc: { type: "doc", content: segmentsToParagraphJSON(doc) },
+  __brand: "ComposerSnapshot",
+});
 
 export const segmentsFromParagraphJSON = (
   paragraphs: readonly SnapshotParagraphNode[],
