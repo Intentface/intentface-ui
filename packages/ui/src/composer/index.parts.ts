@@ -26,7 +26,6 @@ export {
 } from "./command-list";
 export { ComposerContainer as Container } from "./container";
 export { ComposerPanel as Panel } from "./panel";
-export { ComposerPlaceholder as Placeholder } from "./placeholder";
 export { ComposerPopover as Popover } from "./popover";
 export { ComposerRoot as Root } from "./root";
 /** Create a standalone store handle: `<Composer.Root store={…}>` + `useComposerStore(store, selector)` + `store.controller` for imperative access. */

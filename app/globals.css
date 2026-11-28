@@ -505,6 +505,25 @@
   @apply max-w-full rounded-md;
 }
 
+/* Composer placeholder: the package stamps data-placeholder on the editable
+   while the hint should show; this draws it. Colour is set at each call site.
+   Each doubled declaration is a fallback and must keep its order:
+   - content: the plain form first, because Safari < 17.4 and Firefox < 128
+     drop the `/ ""` alt-text form. The alt text keeps the generated text out
+     of the accessibility tree.
+   - float: inline-start fixes RTL (left leaves the hint on the wrong side) but
+     is newer than Chrome 111, so left comes first.
+   float + height 0 keeps the caret before the text. */
+[data-composer-editor][data-placeholder]::before {
+  content: attr(aria-placeholder);
+  /* biome-ignore lint/suspicious/noDuplicateProperties: fallback pair, see above */
+  content: attr(aria-placeholder) / "";
+  float: left;
+  float: inline-start;
+  height: 0;
+  pointer-events: none;
+}
+
 /* Scroll masks fade the edges a scroller can still scroll past. Scroll-driven
    animations size each fade, so an axis that can't scroll (or a browser without
    scroll timelines) gets none. */

@@ -96,8 +96,8 @@ The nesting hierarchy at a glance:
   <Composer.Container>
     <Composer.Attachments />
     <Composer.AttachmentTrigger />
-    <Composer.Textarea>
-      <Composer.Placeholder />
+    <Composer.Textarea placeholder="Ask anything…">
+      <Composer.Placeholder placeholder={["Ask anything…", "Search the web…"]} />
     </Composer.Textarea>
     <Composer.Actions>
       <Composer.AskUserHints />
@@ -172,8 +172,8 @@ The same controller surface is also exported as the module singleton **`composer
 | `Composer.Container`         | The visible shell — clicking it focuses the editor (unless the click lands on a button/link/input) |
 | `Composer.Attachments`       | Hidden file input + animated tray of pending uploads + dropzone + error. Props: `accept`, `maxFiles`, `maxFileSize`, `multiple`, `globalDrop` |
 | `Composer.AttachmentTrigger` | Icon button that opens the file dialog                                          |
-| `Composer.Textarea`          | The contenteditable editor surface; finds a child `Placeholder` and overlays it while empty |
-| `Composer.Placeholder`       | Shown over an empty editor. `placeholder` is `string \| string[]` — an array cycles every 3s with an animated transition |
+| `Composer.Textarea`          | The contenteditable editor surface; `placeholder` is the string hint, and its children (typically `Composer.Placeholder`) render only while empty |
+| `Composer.Placeholder`       | The custom placeholder: `placeholder` is `string[]` and cycles every 3s with an animated transition, or pass children. A single string goes on `Composer.Textarea`'s `placeholder` |
 | `Composer.Actions`           | Trailing flex row for the bottom action bar                                     |
 | `Composer.Submit`            | Send button; auto-disabled with no content and no attachments. With `isGenerating` it morphs into a Stop control (cross-fades to a stop icon; click or Escape calls `onStop`) |
 | `Composer.ContextWindow`     | A peeking strip behind the container's top edge; collapses when a panel opens   |
@@ -602,9 +602,7 @@ const ChatSurface = ({ chatId }: { chatId: string }) => {
 
           <Composer.Container>
             <Composer.Attachments />
-            <Composer.Textarea autoFocus>
-              <Composer.Placeholder placeholder="Ask anything…" />
-            </Composer.Textarea>
+            <Composer.Textarea autoFocus placeholder="Ask anything…" />
             <Composer.Actions>
               {panelState.type === "ask-user" ? (
                 <>

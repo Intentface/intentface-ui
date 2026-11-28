@@ -48,9 +48,7 @@ The bare nesting — every part is optional except `Composer` and `Container`:
     }
   </Composer.Panel>
   <Composer.Container>
-    <Composer.Textarea>
-      <Composer.Placeholder />
-    </Composer.Textarea>
+    <Composer.Textarea />
     <Composer.Actions>
       <Composer.Submit />
     </Composer.Actions>
@@ -112,6 +110,37 @@ file dialog, and files can also be dropped onto the composer.
 back.
 
 <Demo component={<Controlled />} file="primitives/composer/demos/controlled.tsx" />
+
+### Drawing the placeholder
+
+`Composer.Textarea`'s `placeholder` sets `aria-placeholder` and stamps `data-placeholder` on the editable while the editor is empty and not composing. The package ships no CSS, so add this rule once and set the colour where you use it. Each doubled line is a fallback and must keep its order: older Safari and Firefox drop the `/ ""` alt text that hides the generated text from assistive tech, and `float: inline-start` fixes right-to-left layouts but is newer than Chrome 111.
+
+```css
+[data-composer-editor][data-placeholder]::before {
+  content: attr(aria-placeholder);
+  content: attr(aria-placeholder) / "";
+  float: left;
+  float: inline-start;
+  height: 0;
+  pointer-events: none;
+}
+```
+
+Because `::before` sits inside the editable, it inherits the editor's font and line height and the caret starts before it.
+
+For rich or animated content, pass your own element as `children`. It renders beside the editable in a relatively positioned wrapper, so `inset: 0` lays it over the text. Rendered children win: `data-placeholder` stays off while they render anything, and `placeholder` still sets `aria-placeholder` for screen readers. Hide the element while `filled` or `composing`, because the browser paints IME text before the editor has content.
+
+```tsx
+<Composer.Textarea placeholder="Ask anything…">
+  {({ filled, composing }) =>
+    !filled && !composing && (
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <RotatingHint />
+      </div>
+    )
+  }
+</Composer.Textarea>
+```
 
 ### Reaching a composer from outside
 
@@ -340,10 +369,10 @@ export const textareaProps = [
   { name: "onValueChange", type: "(text: string) => void", description: "Fires on each editor update with plain text." },
   { name: "disabled", type: "boolean", default: "false", description: "Makes the editor non-editable." },
   { name: "autoFocus", type: "boolean", default: "false", description: "Focus the editor on mount." },
-  { name: "placeholder", type: "string", description: "Native-textarea-style placeholder (also sets aria-placeholder). For rich content, pass children instead." },
+  { name: "placeholder", type: "string", description: "Native-textarea-style placeholder string. Sets aria-placeholder and stamps data-placeholder on the editable while it should show; your CSS draws it. With rendered children it only sets aria-placeholder." },
   { name: "submitOn", type: '"enter" | "shift-enter"', default: '"enter"', description: "Which Enter chord sends the message; the other inserts a soft break. Pair \"shift-enter\" with enterKeyHint=\"enter\"." },
   { name: "renderChip", type: "(chip: ChipData) => ReactNode", description: "Custom renderer for a committed chip. ChipData carries prefix, value, label, and icon — the default renders label only; add chip.prefix in front to show the trigger." },
-  { name: "children", type: "ReactNode", description: "Placeholder overlay, shown while empty." },
+  { name: "children", type: "ReactNode | ((state: { disabled: boolean; filled: boolean; composing: boolean }) => ReactNode)", description: "A custom placeholder, rendered beside the editable inside the Textarea's relative wrapper. A function receives the editor state, to hide it while filled or composing. While it renders anything, data-placeholder stays off." },
   { name: "maxLength", type: "number", description: "Logical-length cap — one per character, one per chip. IME input is capped at composition commit." },
   { name: "required", type: "boolean", default: "false", description: "Native form validation via the hidden input (requires name)." },
   { name: "name", type: "string", description: "Mirrors the serialized text (chips as chip-markdown) into FormData." },
@@ -358,24 +387,14 @@ export const textareaAttrs = [
   { attribute: "data-composer-editor", description: "The contenteditable editor element." },
   { attribute: "data-filled", description: "Present when the editor has content." },
   { attribute: "data-disabled", description: "Present when disabled." },
+  { attribute: "data-composing", description: "Present on the wrapper during an IME composition." },
+  { attribute: "data-placeholder", description: "On the editable element while a placeholder string is set and the editor is empty and not composing." },
   { attribute: "data-command-badge", description: "On the active trigger token decoration (e.g. the leading @)." },
   { attribute: "data-command-placeholder", description: "On the inline hint decoration after a trigger." },
   { attribute: "data-command-hint", description: "The badge's hint element — ghost-text completion of the highlighted item, or the empty-query placeholder. A real span, engine-owned like the badge." },
 ];
 
 <AttributesTable rows={textareaAttrs} />
-
-### Composer.Placeholder
-
-Static or custom placeholder. Renders `data-composer-placeholder-text`.
-Pass **either** `placeholder` or `children`, not both.
-
-export const placeholderProps = [
-  { name: "placeholder", type: "string", description: "Static placeholder text (mutually exclusive with children)." },
-  { name: "children", type: "ReactNode", description: "Custom placeholder content (mutually exclusive with placeholder)." },
-];
-
-<PropsTable rows={placeholderProps} />
 
 ### Composer.ContextWindow
 

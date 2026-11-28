@@ -714,6 +714,26 @@ type ChatInputInnerProps = {
   status: ChatStatus;
 };
 
+const ROTATING_PLACEHOLDERS = [
+  "Ask me anything...",
+  "Recall past conversations...",
+  "Search the web...",
+  "Generate a report...",
+  "Explain a concept...",
+  "Help with a project...",
+  "Give a tutorial...",
+  "Provide a recommendation...",
+  "Translate text...",
+  "Summarize a document...",
+  "Write a story...",
+  "Create a presentation...",
+];
+
+const getInputPlaceholder = (isAskUser: boolean, hasSubmitted: boolean) => {
+  if (isAskUser) return "Or type your own answer...";
+  return hasSubmitted ? "Ask a follow-up question..." : "Ask me anything...";
+};
+
 const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
   const {
     chatId,
@@ -829,6 +849,11 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
 
   const isAskUser = panelState.type === "ask-user" || demoQuestions != null;
   const askUserQuestions = panelState.type === "ask-user" ? panelState.questions : null;
+
+  // The rotating hint is a custom overlay; while it shows, the string is only
+  // the accessible placeholder.
+  const rotatesPlaceholder = !isAskUser && !hasSubmitted && loopingPlaceholder;
+  const placeholder = getInputPlaceholder(isAskUser, hasSubmitted);
 
   const handleSubmit = useCallback(
     async (data: ComposerSubmitData) => {
@@ -986,31 +1011,8 @@ const ChatInputInner = memo(({ panelState, status }: ChatInputInnerProps) => {
       </Composer.ContextWindow>
       <Composer.Container>
         <Composer.Attachments />
-        <Composer.Textarea autoFocus submitOn={submitOn}>
-          <Composer.Placeholder
-            placeholder={
-              isAskUser
-                ? "Or type your own answer..."
-                : !hasSubmitted
-                  ? loopingPlaceholder
-                    ? [
-                        "Ask me anything...",
-                        "Recall past conversations...",
-                        "Search the web...",
-                        "Generate a report...",
-                        "Explain a concept...",
-                        "Help with a project...",
-                        "Give a tutorial...",
-                        "Provide a recommendation...",
-                        "Translate text...",
-                        "Summarize a document...",
-                        "Write a story...",
-                        "Create a presentation...",
-                      ]
-                    : "Ask me anything..."
-                  : "Ask a follow-up question..."
-            }
-          />
+        <Composer.Textarea autoFocus submitOn={submitOn} placeholder={placeholder}>
+          {rotatesPlaceholder && <Composer.Placeholder placeholder={ROTATING_PLACEHOLDERS} />}
         </Composer.Textarea>
         {isAskUser ? (
           <Composer.Actions className="flex items-center justify-end gap-2">

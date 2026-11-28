@@ -19,7 +19,7 @@ import {
 } from "@intentface/ui/composer";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
-import { Children, type ComponentProps, type ReactNode, useMemo, useRef } from "react";
+import { type ComponentProps, type ReactNode, useRef } from "react";
 import { AskUser } from "@/components/ai/ask-user";
 import { Attachments } from "@/components/ai/attachments";
 import { Chip } from "@/components/ai/chip";
@@ -189,12 +189,20 @@ type ComposerTextareaProps = {
   className?: string;
   disabled?: boolean;
   autoFocus?: boolean;
+  /** Hint shown while the editor is empty; drawn by the editable's ::before (see globals.css). With a Composer.Placeholder child it is only the accessible placeholder. */
+  placeholder?: string;
   /** Which Enter chord sends the message; the other inserts a soft break. */
   submitOn?: ComposerSubmitOn;
+  /** A custom placeholder, typically Composer.Placeholder. Shown only while the editor is empty. */
   children?: ReactNode;
 };
 
-const ComposerTextarea = ({ className, disabled = false, ...props }: ComposerTextareaProps) => (
+const ComposerTextarea = ({
+  className,
+  disabled = false,
+  children,
+  ...props
+}: ComposerTextareaProps) => (
   <ComposerPrimitive.Textarea
     disabled={disabled}
     // The wire format carries the icon as an opaque string; narrow it to this
@@ -214,6 +222,8 @@ const ComposerTextarea = ({ className, disabled = false, ...props }: ComposerTex
       "mask-[linear-gradient(to_bottom,transparent,black_16px,black_calc(100%-16px),transparent)]",
       // The editor element — engine-owned DOM, out of JSX reach.
       "**:data-composer-editor:w-full **:data-composer-editor:max-w-none **:data-composer-editor:font-book **:data-composer-editor:leading-6 [&_[data-composer-editor]:focus]:outline-none",
+      // The placeholder's colour; globals.css draws it from the editable's ::before.
+      "**:data-composer-editor:[&::before]:text-ink-tertiary",
       // Active-prefix badge: the same surface as the committed chip above, so
       // the badge and the chip it becomes share one baseline — no jump on commit.
       "**:data-command-badge:box-decoration-clone **:data-command-badge:inline **:data-command-badge:rounded **:data-command-badge:px-1.5 **:data-command-badge:py-0.5 **:data-command-badge:align-baseline **:data-command-badge:font-book **:data-command-badge:leading-[inherit] **:data-command-badge:whitespace-nowrap **:data-command-badge:bg-ink-primary/6 **:data-command-badge:text-ink-primary",
@@ -225,37 +235,40 @@ const ComposerTextarea = ({ className, disabled = false, ...props }: ComposerTex
       className,
     )}
     {...props}
-  />
+  >
+    {/* Composing counts as not empty: the browser paints IME text before the
+        editor reports content. */}
+    {({ filled, composing }) => (filled || composing ? null : children)}
+  </ComposerPrimitive.Textarea>
 );
 
 type ComposerPlaceholderProps =
-  | { placeholder: string | string[]; children?: never; className?: string }
+  | { placeholder: string[]; children?: never; className?: string }
   | { placeholder?: never; children: ReactNode; className?: string };
 
-const ComposerPlaceholder = ({ placeholder, children, className }: ComposerPlaceholderProps) => {
-  // Rotation lives here, in the styled layer — the headless Composer.Placeholder
-  // just renders content. Resolve the items and loop over the string ones.
-  const items = useMemo<ReactNode[]>(() => {
-    if (placeholder !== undefined) return Array.isArray(placeholder) ? placeholder : [placeholder];
-    if (children) return Children.toArray(children);
-    return [];
-  }, [placeholder, children]);
+// The custom path: rotating strings or arbitrary content, overlaid on the
+// editor. A single string goes through Composer.Textarea's `placeholder` prop
+// instead. Composer.Textarea shows it only while the editor is empty. The
+// overlay sits outside the editor, so it repeats the editor's font and line
+// height.
+const ComposerPlaceholder = ({ placeholder, children, className }: ComposerPlaceholderProps) => (
+  <div
+    aria-hidden="true"
+    data-slot="composer-placeholder"
+    className={cn(
+      "pointer-events-none absolute inset-0 font-book text-ink-tertiary leading-6",
+      className,
+    )}
+  >
+    {placeholder ? <RotatingPlaceholder items={placeholder} /> : children}
+  </div>
+);
 
-  const isLooping = items.length > 1;
-  const loopItems = useMemo(
-    () => items.map((item) => (typeof item === "string" ? item : "")),
-    [items],
-  );
-  const { currentItem, key } = useLoop(loopItems);
-
-  if (!isLooping && items.length === 1) {
-    return <div className={cn("min-h-lh text-ink-tertiary leading-6", className)}>{items[0]}</div>;
-  }
-
-  if (!isLooping && items.length === 0) return null;
+const RotatingPlaceholder = ({ items }: { items: string[] }) => {
+  const { currentItem, key } = useLoop(items);
 
   return (
-    <div className="pointer-events-none flex min-h-lh">
+    <div className="flex min-h-lh">
       <AnimatePresence mode="popLayout" initial={false}>
         <m.span
           key={key}
@@ -263,9 +276,8 @@ const ComposerPlaceholder = ({ placeholder, children, className }: ComposerPlace
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           exit={{ opacity: 0, y: "-100%", filter: "blur(4px)" }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className={cn("text-ink-tertiary font-book leading-6", className)}
         >
-          {typeof items[0] === "string" ? currentItem : items[key % items.length]}
+          {currentItem}
         </m.span>
       </AnimatePresence>
     </div>
